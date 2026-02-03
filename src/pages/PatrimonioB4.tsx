@@ -13,7 +13,7 @@ const PatrimonioB4: React.FC = () => {
 
   // Form State for Manual Entry (Vehicles)
   const [newItemName, setNewItemName] = useState("");
-  const [newItemType, setNewItemType] = useState<Vehicle['type']>('Viatura');
+  const [newItemType, setNewItemType] = useState<Vehicle['type']>('Equipamento');
   const [newItemStatus, setNewItemStatus] = useState<Vehicle['status']>('active');
   const [newItemDetails, setNewItemDetails] = useState("");
   const [newItemViaturaId, setNewItemViaturaId] = useState("");
@@ -103,13 +103,17 @@ const PatrimonioB4: React.FC = () => {
     try {
       await SupabaseService.addVehicle(newItem);
 
-      // 2. If it's an Equipment or Viatura, also add to Daily Conference (itens_conferencia)
+      // 2. If it's an Equipment, Viatura or Material, also add to Daily Conference (itens_conferencia)
       // This links it to the Operational module
-      if (newItemType === 'Equipamento' || newItemType === 'Viatura') {
+      if (newItemType === 'Equipamento' || newItemType === 'Viatura' || newItemType === 'Material') {
+        let category: 'materiais' | 'equipamentos' | 'viaturas' = 'materiais';
+        if (newItemType === 'Equipamento') category = 'equipamentos';
+        else if (newItemType === 'Viatura') category = 'viaturas';
+
         await SupabaseService.addChecklistItem({
           id: itemId,
           nome_item: newItemName,
-          categoria: newItemType === 'Viatura' ? 'viaturas' : 'equipamentos',
+          categoria: category,
           viatura_id: newItemViaturaId || undefined,
           ativo: true,
           descricao: newItemDetails
@@ -437,104 +441,117 @@ const PatrimonioB4: React.FC = () => {
                   <div className="space-y-4">
                     <input value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border" placeholder="Nome do Item" />
                     <select value={newItemType} onChange={e => setNewItemType(e.target.value as any)} className="w-full h-11 px-4 rounded-lg border border-rustic-border">
-                      <option value="Viatura">Viatura</option>
                       <option value="Equipamento">Equipamento</option>
+                      <option value="Material">Material (Conserto/Consumo)</option>
+                      <option value="Viatura">Viatura</option>
                     </select>
 
-                    {newItemType === 'Equipamento' && (
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-rustic-brown/60 ml-1">Vincular à Viatura (opcional)</label>
+                    {(newItemType === 'Equipamento' || newItemType === 'Material') && (
+                      <div className="space-y-1 p-3 bg-white border border-rustic-border/50 rounded-xl shadow-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="material-symbols-outlined text-primary text-sm">link</span>
+                          <label className="text-xs font-bold text-rustic-brown">Vincular à Viatura</label>
+                        </div>
                         <select
                           value={newItemViaturaId}
                           onChange={e => setNewItemViaturaId(e.target.value)}
-                          className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-white"
+                          className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                         >
-                          <option value="">Material de Uso Geral (Sem Viatura)</option>
+                          <option value="">Item de Uso Geral (Quartel)</option>
                           {fleet.filter(v => v.type === 'Viatura').map(v => (
                             <option key={v.id} value={v.id}>{v.name}</option>
                           ))}
                         </select>
+                        <p className="text-[10px] text-gray-400 italic">O item aparecerá na conferência diária da viatura selecionada.</p>
                       </div>
                     )}
-
-                    <textarea value={newItemDetails} onChange={e => setNewItemDetails(e.target.value)} className="w-full h-32 p-4 rounded-lg border border-rustic-border" placeholder="Detalhes" />
-                    <button onClick={handleSaveItem} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110">Salvar no Patrimônio e Conferência</button>
-                  </div>
+                        >
+                    <option value="">Material de Uso Geral (Sem Viatura)</option>
+                    {fleet.filter(v => v.type === 'Viatura').map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
                 </div>
               )}
 
-              {activeTab === 'compras' && (
-                <div className="space-y-8">
-                  {/* Notifications Section */}
-                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
-                    <h3 className="text-lg font-bold text-orange-900 mb-4 flex items-center gap-2">
-                      <span className="material-symbols-outlined">notification_important</span>
-                      Solicitações de Compra Pendentes (Operacional)
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {notices.filter(n => n.tipo === 'material' && n.status === 'pendente').map(notice => (
-                        <div key={notice.id} className="bg-white border border-orange-200 p-4 rounded-lg shadow-sm flex items-start justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-bold text-rustic-brown">{notice.descricao}</p>
-                            <span className="text-[10px] text-gray-500">{new Date(notice.created_at!).toLocaleDateString('pt-BR')}</span>
-                          </div>
-                          <button
-                            onClick={() => handleCreatePurchaseRequest(notice)}
-                            className="flex flex-col items-center gap-1 p-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200 transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
-                            <span className="text-[9px] font-black">GERAR PEDIDO</span>
-                          </button>
-                        </div>
-                      ))}
-                      {notices.filter(n => n.tipo === 'material' && n.status === 'pendente').length === 0 && (
-                        <p className="text-sm text-orange-700 italic col-span-2">Nenhuma nova necessidade de material reportada.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Existing Purchases List */}
-                  <div className="bg-white border border-rustic-border rounded-xl p-6">
-                    <h3 className="text-lg font-bold mb-4">Histórico de Aquisições</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
-                        <thead className="border-b border-rustic-border text-xs font-bold uppercase text-rustic-brown/50">
-                          <tr>
-                            <th className="py-3 px-4">Item</th>
-                            <th className="py-3 px-4">Status</th>
-                            <th className="py-3 px-4 text-right">Custo</th>
-                            <th className="py-3 px-4 text-right">Ação</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-rustic-border/30">
-                          {purchases.map(p => (
-                            <tr key={p.id}>
-                              <td className="py-3 px-4 font-bold">{p.item_name}</td>
-                              <td className="py-3 px-4">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.status === 'Aprovado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                  {p.status}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 text-right">R$ {p.cost.toFixed(2)}</td>
-                              <td className="py-3 px-4 text-right">
-                                <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded">
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
+              <textarea value={newItemDetails} onChange={e => setNewItemDetails(e.target.value)} className="w-full h-32 p-4 rounded-lg border border-rustic-border" placeholder="Detalhes" />
+              <button onClick={handleSaveItem} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110">Salvar no Patrimônio e Conferência</button>
             </div>
           </div>
+              )}
+
+          {activeTab === 'compras' && (
+            <div className="space-y-8">
+              {/* Notifications Section */}
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
+                <h3 className="text-lg font-bold text-orange-900 mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined">notification_important</span>
+                  Solicitações de Compra Pendentes (Operacional)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {notices.filter(n => n.tipo === 'material' && n.status === 'pendente').map(notice => (
+                    <div key={notice.id} className="bg-white border border-orange-200 p-4 rounded-lg shadow-sm flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-bold text-rustic-brown">{notice.descricao}</p>
+                        <span className="text-[10px] text-gray-500">{new Date(notice.created_at!).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCreatePurchaseRequest(notice)}
+                        className="flex flex-col items-center gap-1 p-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+                        <span className="text-[9px] font-black">GERAR PEDIDO</span>
+                      </button>
+                    </div>
+                  ))}
+                  {notices.filter(n => n.tipo === 'material' && n.status === 'pendente').length === 0 && (
+                    <p className="text-sm text-orange-700 italic col-span-2">Nenhuma nova necessidade de material reportada.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Existing Purchases List */}
+              <div className="bg-white border border-rustic-border rounded-xl p-6">
+                <h3 className="text-lg font-bold mb-4">Histórico de Aquisições</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-rustic-border text-xs font-bold uppercase text-rustic-brown/50">
+                      <tr>
+                        <th className="py-3 px-4">Item</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Custo</th>
+                        <th className="py-3 px-4 text-right">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-rustic-border/30">
+                      {purchases.map(p => (
+                        <tr key={p.id}>
+                          <td className="py-3 px-4 font-bold">{p.item_name}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.status === 'Aprovado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">R$ {p.cost.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-right">
+                            <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded">
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
+      </div >
+    </div >
   );
 };
 

@@ -11,7 +11,7 @@ export interface Mission {
 export interface Vehicle {
     id: string;
     name: string;
-    type: 'Viatura' | 'Equipamento' | 'Outro';
+    type: 'Viatura' | 'Equipamento' | 'Material' | 'Outro';
     status: 'active' | 'down' | 'maintenance';
     details: string;
     plate?: string;
