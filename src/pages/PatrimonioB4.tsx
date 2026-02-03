@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel } from '../services/SupabaseService';
+import { toast } from 'sonner';
+import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 
 const PatrimonioB4: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
-  const [notices, setNotices] = useState<PendingNotice[]>([]);
+  const [initialNotices, setInitialNotices] = useState<PendingNotice[]>([]);
+  const { notices, setNotices } = useRealtimeNotices(initialNotices);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -48,7 +51,7 @@ const PatrimonioB4: React.FC = () => {
         SupabaseService.getPersonnel()
       ]);
       setFleet(fleetData);
-      setNotices(noticesData);
+      setInitialNotices(noticesData);
       setPurchases(purchasesData);
       setDailyMissions(missionsData);
       setPersonnel(personnelData);
@@ -87,7 +90,7 @@ const PatrimonioB4: React.FC = () => {
   };
 
   const handleSaveItem = async () => {
-    if (!newItemName) return alert("Nome é obrigatório!");
+    if (!newItemName) return toast.error("Nome é obrigatório!");
 
     const itemId = `ITEM-${Date.now()}`;
 
@@ -120,7 +123,7 @@ const PatrimonioB4: React.FC = () => {
         });
       }
 
-      alert("Item salvo com sucesso!");
+      toast.success("Item salvo com sucesso!");
       setNewItemName("");
       setNewItemDetails("");
       setNewItemViaturaId("");
@@ -128,7 +131,7 @@ const PatrimonioB4: React.FC = () => {
       loadData();
     } catch (error: any) {
       console.error("Error saving item:", error);
-      alert(`Erro ao salvar item: ${error.message || error.details || JSON.stringify(error)}`);
+      toast.error(`Erro ao salvar item: ${error.message || error.details || JSON.stringify(error)}`);
     }
   };
 

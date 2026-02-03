@@ -9,6 +9,7 @@ import SocialB5 from './pages/SocialB5';
 import SSCI from './pages/SSCI';
 import Login from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { Toaster } from 'sonner';
 
 // Sidebar Component
 const SidebarLink = ({
@@ -120,6 +121,7 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster position="top-right" richColors />
         <ProtectedApp />
       </AuthProvider>
     </BrowserRouter>

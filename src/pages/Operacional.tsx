@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseService, ProductReceipt, ChecklistItem, DailyChecklist } from '../services/SupabaseService';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 const Operacional: React.FC = () => {
   // New States for Advanced Features
@@ -9,6 +11,7 @@ const Operacional: React.FC = () => {
   const [selectedViaturaId, setSelectedViaturaId] = useState<string>("");
   const [receipts, setReceipts] = useState<ProductReceipt[]>([]);
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
 
   // Receipt Form State
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -52,7 +55,7 @@ const Operacional: React.FC = () => {
 
   const handleRegisterReceipt = async () => {
     if (!receiptFile || !receiptNF) {
-      alert("Por favor, selecione uma foto e insira o número da nota fiscal.");
+      toast.error("Por favor, selecione uma foto e insira o número da nota fiscal.");
       return;
     }
 
@@ -69,14 +72,14 @@ const Operacional: React.FC = () => {
         data_recebimento: new Date().toISOString()
       });
 
-      alert("Recebimento registrado com sucesso!");
+      toast.success("Recebimento registrado com sucesso!");
       setReceiptFile(null);
       setReceiptNF("");
       setReceiptObs("");
       loadOperationalData();
     } catch (error) {
       console.error("Error uploading product:", error);
-      alert("Erro ao registrar recebimento.");
+      toast.error("Erro ao registrar recebimento.");
     } finally {
       setIsUploading(false);
     }
@@ -99,15 +102,17 @@ const Operacional: React.FC = () => {
           viatura_id: selectedViaturaId || item.viatura_id,
           status: report.status,
           observacoes: report.obs,
-          responsavel: "Chefe de Socorro" // Default or from Auth
+          responsavel: user?.email || "Usuário não identificado"
         });
       });
       await Promise.all(promises);
-      alert("Conferência salva com sucesso! Pendências foram notificadas ao B4.");
+      toast.success("Conferência salva com sucesso!", {
+        description: "As pendências foram enviadas automaticamente ao módulo B4."
+      });
       loadOperationalData();
     } catch (error) {
       console.error("Error saving checklist:", error);
-      alert("Erro ao salvar conferência.");
+      toast.error("Erro ao salvar conferência.");
     } finally {
       setLoading(false);
     }
