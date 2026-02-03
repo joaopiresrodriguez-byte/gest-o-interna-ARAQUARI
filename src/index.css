@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/container-queries";
+
+@theme {
+    /* Core System Colors */
+    --color-primary: #d81818;
+    --color-primary-dark: #b01010;
+
+    /* Module Specific: Avisos */
+    --color-sidebar-bg: #2c2c2c;
+    --color-content-bg: #E5E5E5;
+    --color-status-green: #2E7D32;
+
+    /* Module Specific: Operacional & Others */
+    --color-secondary-green: #2e7d32;
+    --color-background-light: #f8f6f6;
+    --color-background-dark: #211111;
+    --color-rustic-border: #e5dcdc;
+
+    /* Module Specific: B3 (Forest) */
+    --color-forest: #2e5c3e;
+    --color-forest-dark: #1f422b;
+    --color-border-warm: #e5dcdc;
+
+    /* Module Specific: B4 (Rustic) */
+    --color-rustic-brown: #5d4037;
+    --color-status-good: #2e7d32;
+    --color-status-bad: #d32f2f;
+    --color-status-warn: #ed6c02;
+
+    /* General Text */
+    --color-text-main: #181111;
+    --color-text-muted: #886363;
+    --color-surface: #ffffff;
+
+    /* Fonts */
+    --font-display: "Work Sans", "sans-serif";
+    --font-body: "Noto Sans", "sans-serif";
+
+    /* Background Images */
+    --background-image-wood-pattern: url('https://www.transparenttextures.com/patterns/wood-pattern.png');
+}
+
+/* Global styles for Material Icons */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.material-symbols-outlined.filled {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Wood Border Effect */
+.wood-border-top {
+    position: relative;
+    border-top: 4px solid var(--color-rustic-brown);
+    /* Approximate match for #8B5A2B */
+}
+
+/* Override specifically for the hardcoded color if needed, or use a new variable */
+.wood-border-top {
+    border-top-color: #8B5A2B;
+}
+
+.wood-border-top::before {
+    content: "";
+    position: absolute;
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuCzI412n1gmNIaBLE3iUxDv_CyulTD-eL8ysx5K6cTxoHgTYgJCTKqHNKCa9qrF4mmmUgeKCM4FQI0Di_X3p_iOhPvqEhROFYS7n9t1id-UiNWHPcKQU3UK3BWL6Yzn-iKdAPghDmZlr8t6x03fTHaFnslujmpAZybobeAZhcNSHtSqlUdVk8FxuJr1neQ0AvRIeVLLzQPee5bP_lELKtGr_up-lMjoBKltULqug7jsf2nPuke53H3Cxizp9BJxcmaoEpiFax4jx9w);
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* App Container Resets */
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    /* Prevent double scrollbars, let App.tsx handle scrolling */
+    font-family: var(--font-display);
+}
+
+#root {
+    height: 100%;
+}
