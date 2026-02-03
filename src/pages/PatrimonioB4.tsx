@@ -126,9 +126,9 @@ const PatrimonioB4: React.FC = () => {
       setNewItemViaturaId("");
       setActiveTab('listagem');
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving item:", error);
-      alert("Erro ao salvar item.");
+      alert(`Erro ao salvar item: ${error.message || error.details || JSON.stringify(error)}`);
     }
   };
 
