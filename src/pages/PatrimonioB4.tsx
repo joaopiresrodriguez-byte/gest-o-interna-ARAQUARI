@@ -16,6 +16,7 @@ const PatrimonioB4: React.FC = () => {
   const [newItemType, setNewItemType] = useState<Vehicle['type']>('Viatura');
   const [newItemStatus, setNewItemStatus] = useState<Vehicle['status']>('active');
   const [newItemDetails, setNewItemDetails] = useState("");
+  const [newItemViaturaId, setNewItemViaturaId] = useState("");
 
   // Mission Form State
   const [missionTitle, setMissionTitle] = useState("");
@@ -87,18 +88,44 @@ const PatrimonioB4: React.FC = () => {
 
   const handleSaveItem = async () => {
     if (!newItemName) return alert("Nome é obrigatório!");
+
+    const itemId = `ITEM-${Date.now()}`;
+
+    // 1. Add to Fleet (Patrimony)
     const newItem: Vehicle = {
-      id: `ITEM-${Date.now()}`,
+      id: itemId,
       name: newItemName,
       type: newItemType,
       status: newItemStatus,
       details: newItemDetails || "Sem detalhes adicionais"
     };
-    await SupabaseService.addVehicle(newItem);
-    alert("Item salvo com sucesso!");
-    setNewItemName("");
-    setNewItemDetails("");
-    setActiveTab('listagem');
+
+    try {
+      await SupabaseService.addVehicle(newItem);
+
+      // 2. If it's an Equipment or Viatura, also add to Daily Conference (itens_conferencia)
+      // This links it to the Operational module
+      if (newItemType === 'Equipamento' || newItemType === 'Viatura') {
+        await SupabaseService.addChecklistItem({
+          id: itemId,
+          nome_item: newItemName,
+          categoria: newItemType === 'Viatura' ? 'viaturas' : 'equipamentos',
+          viatura_id: newItemViaturaId || undefined,
+          ativo: true,
+          descricao: newItemDetails
+        });
+      }
+
+      alert("Item salvo com sucesso!");
+      setNewItemName("");
+      setNewItemDetails("");
+      setNewItemViaturaId("");
+      setActiveTab('listagem');
+      loadData();
+    } catch (error) {
+      console.error("Error saving item:", error);
+      alert("Erro ao salvar item.");
+    }
   };
 
   const handleCreateMission = async () => {
@@ -413,8 +440,25 @@ const PatrimonioB4: React.FC = () => {
                       <option value="Viatura">Viatura</option>
                       <option value="Equipamento">Equipamento</option>
                     </select>
+
+                    {newItemType === 'Equipamento' && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-rustic-brown/60 ml-1">Vincular à Viatura (opcional)</label>
+                        <select
+                          value={newItemViaturaId}
+                          onChange={e => setNewItemViaturaId(e.target.value)}
+                          className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-white"
+                        >
+                          <option value="">Material de Uso Geral (Sem Viatura)</option>
+                          {fleet.filter(v => v.type === 'Viatura').map(v => (
+                            <option key={v.id} value={v.id}>{v.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <textarea value={newItemDetails} onChange={e => setNewItemDetails(e.target.value)} className="w-full h-32 p-4 rounded-lg border border-rustic-border" placeholder="Detalhes" />
-                    <button onClick={handleSaveItem} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110">Salvar Item</button>
+                    <button onClick={handleSaveItem} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110">Salvar no Patrimônio e Conferência</button>
                   </div>
                 </div>
               )}

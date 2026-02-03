@@ -5,6 +5,8 @@ const Operacional: React.FC = () => {
   // New States for Advanced Features
   const [activeChecklistTab, setActiveChecklistTab] = useState<'materiais' | 'equipamentos' | 'viaturas'>('materiais');
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [fleet, setFleet] = useState<{ id: string, name: string }[]>([]);
+  const [selectedViaturaId, setSelectedViaturaId] = useState<string>("");
   const [receipts, setReceipts] = useState<ProductReceipt[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -19,17 +21,19 @@ const Operacional: React.FC = () => {
 
   useEffect(() => {
     loadOperationalData();
-  }, [activeChecklistTab]);
+  }, [activeChecklistTab, selectedViaturaId]);
 
   const loadOperationalData = async () => {
     setLoading(true);
     try {
-      const [items, recs] = await Promise.all([
-        SupabaseService.getChecklistItems(activeChecklistTab),
-        SupabaseService.getProductsReceipts()
+      const [items, recs, fleetData] = await Promise.all([
+        SupabaseService.getChecklistItems(activeChecklistTab, selectedViaturaId),
+        SupabaseService.getProductsReceipts(),
+        SupabaseService.getFleet()
       ]);
       setChecklistItems(items);
       setReceipts(recs);
+      setFleet(fleetData.filter(v => v.type === 'Viatura'));
 
       // Initialize statuses if not set
       const initial: typeof reportStatuses = {};
@@ -92,6 +96,7 @@ const Operacional: React.FC = () => {
         const report = reportStatuses[item.id];
         return SupabaseService.saveDailyChecklist({
           item_id: item.id,
+          viatura_id: selectedViaturaId || item.viatura_id,
           status: report.status,
           observacoes: report.obs,
           responsavel: "Chefe de Socorro" // Default or from Auth
@@ -221,6 +226,31 @@ const Operacional: React.FC = () => {
                       {tab}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Vehicle Selection for Filtering */}
+              <div className="flex flex-col gap-2 p-4 bg-stone-50 rounded-xl border border-rustic-border/50 mb-2">
+                <label className="text-[10px] font-black uppercase text-rustic-brown/60 ml-1">Conferir Viatura Específica (Filtrar Materiais)</label>
+                <div className="flex gap-3">
+                  <select
+                    value={selectedViaturaId}
+                    onChange={e => setSelectedViaturaId(e.target.value)}
+                    className="flex-1 h-11 px-4 rounded-xl border border-rustic-border bg-white text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all"
+                  >
+                    <option value="">Todos os Materiais / Sem Viatura Específica</option>
+                    {fleet.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                  {selectedViaturaId && (
+                    <button
+                      onClick={() => setSelectedViaturaId("")}
+                      className="px-4 py-2 text-primary font-bold text-xs hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      LIMPAR FILTRO
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

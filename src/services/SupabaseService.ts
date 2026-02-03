@@ -130,6 +130,7 @@ export interface ChecklistItem {
     id: string;
     categoria: 'materiais' | 'equipamentos' | 'viaturas';
     nome_item: string;
+    viatura_id?: string; // Link to fleet.id
     descricao?: string;
     ativo?: boolean;
     ordem?: number;
@@ -138,6 +139,7 @@ export interface ChecklistItem {
 export interface DailyChecklist {
     id?: string;
     item_id: string;
+    viatura_id?: string; // ID of the vehicle being checked
     data_conferencia?: string;
     status: 'ok' | 'faltante';
     observacoes?: string;
@@ -548,12 +550,27 @@ export const SupabaseService = {
     },
 
     // Conferência
-    getChecklistItems: async (categoria?: string): Promise<ChecklistItem[]> => {
+    getChecklistItems: async (categoria?: string, viaturaId?: string): Promise<ChecklistItem[]> => {
         let query = supabase.from('itens_conferencia').select('*').eq('ativo', true).order('ordem', { ascending: true });
+
         if (categoria) query = query.eq('categoria', categoria);
+
         const { data, error } = await query;
-        if (error) console.error('Error fetching items:', error);
-        return (data as ChecklistItem[]) || [];
+        if (error) {
+            console.error('Error fetching items:', error);
+            return [];
+        }
+
+        let items = (data as ChecklistItem[]) || [];
+
+        // Apply filtering logic: 
+        // 1. Items with no viatura_id (general items)
+        // 2. Items specifically linked to the selected viaturaId
+        if (viaturaId) {
+            items = items.filter(it => !it.viatura_id || it.viatura_id === viaturaId);
+        }
+
+        return items;
     },
 
     saveDailyChecklist: async (entry: DailyChecklist) => {
@@ -568,16 +585,22 @@ export const SupabaseService = {
                     conferencia_id: data[0].id,
                     tipo: itemData.categoria === 'viaturas' ? 'viatura' : 'material',
                     destino_modulo: 'B4',
+                    viatura_id: entry.viatura_id || itemData.viatura_id,
                     descricao: `Faltante: ${itemData.nome_item} reportado na conferência diária.`,
                     status: 'pendente'
                 };
 
-                // If it's a vehicle, we might need a more complex way to link viatura_id if not evident from item name
-                // For now, let's keep it simple.
                 await supabase.from('avisos_pendencias').insert([notice]);
             }
         }
         return data;
+    },
+
+    // New method to add conference item directly (used in B4)
+    addChecklistItem: async (item: Partial<ChecklistItem>) => {
+        const { data, error } = await supabase.from('itens_conferencia').insert([item]).select();
+        if (error) throw error;
+        return data[0];
     },
 
     // Avisos/Pendências
