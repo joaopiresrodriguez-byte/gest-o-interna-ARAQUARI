@@ -20,10 +20,18 @@ export interface Vehicle {
 export interface Personnel {
     id?: number;
     name: string;
+    nome_guerra?: string;
     rank: string;
     role: string;
     status: 'ATIVO' | 'FÉRIAS' | 'EM CURSO';
     type: 'BM' | 'BC';
+    endereco?: string;
+    email?: string;
+    data_nascimento?: string;
+    telefone?: string;
+    tipo_sanguineo?: string;
+    cnh?: string;
+    porte_arma?: boolean;
     image?: string;
 }
 

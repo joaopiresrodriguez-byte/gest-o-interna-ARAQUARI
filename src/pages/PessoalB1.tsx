@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseService, Personnel, DocumentB1, Vacation } from '../services/SupabaseService';
+import { toast } from 'sonner';
 
 const PessoalB1: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'LISTAGEM' | 'CADASTRO' | 'DOCUMENTOS' | 'FERIAS' | 'ESCALA' | 'REUNIAO'>('LISTAGEM');
@@ -12,7 +13,20 @@ const PessoalB1: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   // Form State Personnel
-  const [formData, setFormData] = useState({ nome: '', nascimento: '', status: 'ATIVO', tipo: 'BM' });
+  const [formData, setFormData] = useState<Partial<Personnel>>({
+    name: '',
+    nome_guerra: '',
+    status: 'ATIVO',
+    type: 'BM',
+    endereco: '',
+    email: '',
+    data_nascimento: '',
+    telefone: '',
+    tipo_sanguineo: '',
+    cnh: '',
+    porte_arma: false,
+    role: 'Serviço Ativo'
+  });
 
   // Form State Documents
   const [docFile, setDocFile] = useState<File | null>(null);
@@ -48,16 +62,38 @@ const PessoalB1: React.FC = () => {
   };
 
   const handleSavePersonnel = async () => {
-    if (!formData.nome) return alert("Nome é obrigatório!");
-    await SupabaseService.addPersonnel({
-      name: formData.nome,
-      rank: formData.tipo === 'BM' ? 'Sd.' : 'BC',
-      role: 'Novo Cadastro',
-      status: formData.status as any,
-      type: formData.tipo as any
-    });
-    alert("Militar cadastrado!");
-    setActiveTab('LISTAGEM');
+    if (!formData.name) return toast.error("Nome é obrigatório!");
+
+    setLoading(true);
+    try {
+      await SupabaseService.addPersonnel({
+        ...formData,
+        rank: formData.type === 'BM' ? 'Sd.' : 'BC',
+      } as Personnel);
+
+      toast.success("Militar cadastrado com sucesso!");
+      setFormData({
+        name: '',
+        nome_guerra: '',
+        status: 'ATIVO',
+        type: 'BM',
+        endereco: '',
+        email: '',
+        data_nascimento: '',
+        telefone: '',
+        tipo_sanguineo: '',
+        cnh: '',
+        porte_arma: false,
+        role: 'Serviço Ativo'
+      });
+      setActiveTab('LISTAGEM');
+      loadData();
+    } catch (error) {
+      console.error("Error saving personnel:", error);
+      toast.error("Erro ao cadastrar militar.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUploadDocument = async () => {
@@ -76,11 +112,11 @@ const PessoalB1: React.FC = () => {
         data_upload: new Date().toISOString(),
         observacoes: docObs
       });
-      alert("Documento anexado!");
+      toast.success("Documento anexado!");
       setDocFile(null);
       loadData();
     } catch (error) {
-      alert("Erro no upload.");
+      toast.error("Erro no upload.");
     } finally {
       setLoading(false);
     }
@@ -131,9 +167,10 @@ const PessoalB1: React.FC = () => {
     if (!confirm("Excluir este militar da base de dados? Esta ação não pode ser desfeita.")) return;
     try {
       await SupabaseService.deletePersonnel(id);
+      toast.success("Militar removido com sucesso.");
       loadData();
     } catch (error) {
-      alert("Erro ao excluir militar. Verifique se existem dependências (como férias agendadas).");
+      toast.error("Erro ao excluir militar. Verifique se existem dependências.");
     }
   };
 
@@ -141,9 +178,10 @@ const PessoalB1: React.FC = () => {
     if (!confirm("Cancelar esta programação de férias?")) return;
     try {
       await SupabaseService.deleteVacation(id);
+      toast.success("Férias canceladas.");
       loadData();
     } catch (error) {
-      alert("Erro ao cancelar férias.");
+      toast.error("Erro ao cancelar férias.");
     }
   };
 
@@ -163,7 +201,7 @@ const PessoalB1: React.FC = () => {
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 rounded-lg text-xs font-black transition-all uppercase tracking-widest ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
               >
-                {tab === 'LISTAGEM' ? 'Efetivo' : tab === 'DOCUMENTOS' ? 'Docs' : tab === 'FERIAS' ? 'Férias' : tab === 'CADASTRO' ? 'Novo' : 'Escala'}
+                {tab === 'LISTAGEM' ? 'Efetivo' : tab === 'DOCUMENTOS' ? 'Docs' : tab === 'FERIAS' ? 'Férias' : tab === 'CADASTRO' ? 'Cadastrar' : 'Escala'}
               </button>
             ))}
           </div>
@@ -176,20 +214,124 @@ const PessoalB1: React.FC = () => {
           {/* TAB: LISTAGEM */}
           {activeTab === 'LISTAGEM' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {personnelList.map(p => (
-                <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center">
+              {personnelList.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.nome_guerra?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group">
                   <div className="w-20 h-20 rounded-full bg-cover bg-center mb-4 border-2 border-primary/20" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
-                  <h4 className="font-bold text-lg leading-tight">{p.rank} {p.name}</h4>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-primary mt-1">{p.type} • {p.status}</span>
-                  <button
-                    onClick={() => handleDeletePersonnel(p.id!)}
-                    className="mt-4 p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                    title="Excluir Militar"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">person_remove</span>
-                  </button>
+                  <h4 className="font-bold text-lg leading-tight">{p.rank} {p.nome_guerra || p.name.split(' ')[0]}</h4>
+                  <p className="text-xs text-gray-400 mb-2 truncate w-full px-4">{p.name}</p>
+                  <div className="flex flex-wrap justify-center gap-1.5 mb-4">
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${p.type === 'BM' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>{p.type}</span>
+                    <span className="text-[9px] font-black px-2 py-0.5 rounded bg-stone-100 text-gray-600 uppercase">{p.status}</span>
+                  </div>
+                  <div className="grid grid-cols-2 w-full gap-2 border-t border-stone-50 pt-4 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => toast.info(`Detalhes: ${p.role}`)} className="text-[10px] font-bold text-primary hover:bg-red-50 py-1.5 rounded-lg transition-colors">DETALHES</button>
+                    <button onClick={() => handleDeletePersonnel(p.id!)} className="text-[10px] font-bold text-red-600 hover:bg-red-50 py-1.5 rounded-lg transition-colors">EXCLUIR</button>
+                  </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {activeTab === 'CADASTRO' && (
+            <div className="max-w-4xl mx-auto bg-white p-10 rounded-3xl border border-rustic-border shadow-sm">
+              <div className="mb-10 text-center">
+                <h3 className="text-2xl font-black text-[#181111] mb-2">Cadastrar Efetivo</h3>
+                <p className="text-sm text-gray-400">Preencha os dados do militar (BM) ou bombeiro comunitário (BC).</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Basic Info */}
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2 mb-4">Informações Básicas</h4>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome Completo *</label>
+                    <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome de Guerra</label>
+                    <input value={formData.nome_guerra} onChange={e => setFormData({ ...formData, nome_guerra: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Ex: Sd. Pires" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo</label>
+                      <select value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                        <option value="BM">Militares (BM)</option>
+                        <option value="BC">Comunitário (BC)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Status</label>
+                      <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as any })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                        <option value="ATIVO">Ativo</option>
+                        <option value="FÉRIAS">Férias</option>
+                        <option value="EM CURSO">Em Curso</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">E-mail</label>
+                    <input value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="email@exemplo.com" />
+                  </div>
+                </div>
+
+                {/* Additional Info */}
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2 mb-4">Dados Adicionais</h4>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Data de Nasc.</label>
+                      <input type="date" value={formData.data_nascimento} onChange={e => setFormData({ ...formData, data_nascimento: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Telefone</label>
+                      <input value={formData.telefone} onChange={e => setFormData({ ...formData, telefone: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="(47) 99999-9999" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo Sanguíneo</label>
+                      <select value={formData.tipo_sanguineo} onChange={e => setFormData({ ...formData, tipo_sanguineo: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                        <option value="">Selecione...</option>
+                        <option value="A+">A+</option><option value="A-">A-</option>
+                        <option value="B+">B+</option><option value="B-">B-</option>
+                        <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                        <option value="O+">O+</option><option value="O-">O-</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">CNH / Categoria</label>
+                      <input value={formData.cnh} onChange={e => setFormData({ ...formData, cnh: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: ABC - AD" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Endereço Residencial</label>
+                    <input value={formData.endereco} onChange={e => setFormData({ ...formData, endereco: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Rua, Número, Bairro, Cidade" />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-rustic-border/50">
+                    <input type="checkbox" checked={formData.porte_arma} onChange={e => setFormData({ ...formData, porte_arma: e.target.checked })} className="w-4 h-4 text-primary rounded" />
+                    <label className="text-xs font-bold text-gray-600">Possui Porte de Arma / Acautelamento</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-12 flex justify-center">
+                <button
+                  onClick={handleSavePersonnel}
+                  disabled={loading}
+                  className="px-12 py-4 bg-primary text-white font-black rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined">{loading ? 'sync' : 'how_to_reg'}</span>
+                  {loading ? 'SALVANDO...' : 'FINALIZAR CADASTRO'}
+                </button>
+              </div>
             </div>
           )}
 
