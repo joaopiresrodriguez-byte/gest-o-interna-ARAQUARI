@@ -11,6 +11,7 @@ const PessoalB1: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentB1[]>([]);
   const [vacations, setVacations] = useState<Vacation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
 
   // Form State Personnel
   const [formData, setFormData] = useState<Partial<Personnel>>({
@@ -224,7 +225,7 @@ const PessoalB1: React.FC = () => {
                     <span className="text-[9px] font-black px-2 py-0.5 rounded bg-stone-100 text-gray-600 uppercase">{p.status}</span>
                   </div>
                   <div className="grid grid-cols-2 w-full gap-2 border-t border-stone-50 pt-4 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => toast.info(`Detalhes: ${p.role}`)} className="text-[10px] font-bold text-primary hover:bg-red-50 py-1.5 rounded-lg transition-colors">DETALHES</button>
+                    <button onClick={() => setSelectedPerson(p)} className="text-[10px] font-bold text-primary hover:bg-red-50 py-1.5 rounded-lg transition-colors">DETALHES</button>
                     <button onClick={() => handleDeletePersonnel(p.id!)} className="text-[10px] font-bold text-red-600 hover:bg-red-50 py-1.5 rounded-lg transition-colors">EXCLUIR</button>
                   </div>
                 </div>
@@ -440,6 +441,124 @@ const PessoalB1: React.FC = () => {
 
         </div>
       </div>
+
+      {/* MODAL: DETALHES DO PESSOAL */}
+      {selectedPerson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#2c1810] to-[#4a2c20] p-8 text-white relative">
+              <button onClick={() => setSelectedPerson(null)} className="absolute top-6 right-6 text-white/60 hover:text-white transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 bg-cover bg-center" style={{ backgroundImage: `url(${selectedPerson.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 bg-primary/20 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.rank}</span>
+                    <span className="px-2 py-0.5 bg-white/10 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.type}</span>
+                  </div>
+                  <h3 className="text-3xl font-black tracking-tight">{selectedPerson.name}</h3>
+                  <p className="text-white/60 font-bold uppercase text-[11px] tracking-widest mt-1">Guerra: {selectedPerson.nome_guerra || 'Não informado'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-8 grid grid-cols-2 gap-8 bg-stone-50/50">
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-3 border-b border-primary/10 pb-1">Informações de Contato</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary/40 text-[20px]">mail</span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">E-mail</p>
+                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.email || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary/40 text-[20px]">call</span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Telefone</p>
+                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.telefone || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="material-symbols-outlined text-primary/40 text-[20px] mt-1">home</span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Endereço</p>
+                        <p className="text-sm font-bold text-rustic-brown leading-snug">{selectedPerson.endereco || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-3 border-b border-primary/10 pb-1">Dados Funcionais</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary/40 text-[20px]">badge</span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Função/Role</p>
+                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.role || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-3 border-b border-primary/10 pb-1">Identificação & Saúde</h4>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-primary/40 text-[20px]">cake</span>
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Nascimento</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.data_nascimento ? new Date(selectedPerson.data_nascimento).toLocaleDateString('pt-BR') : 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-primary/40 text-[20px]">water_drop</span>
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo Sanguíneo</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.tipo_sanguineo || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary/40 text-[20px]">drive_eta</span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">CNH</p>
+                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cnh || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 bg-red-50/50 rounded-xl border border-red-100/50">
+                      <span className={`material-symbols-outlined ${selectedPerson.porte_arma ? 'text-green-600' : 'text-gray-400'}`}>
+                        {selectedPerson.porte_arma ? 'verified_user' : 'cancel'}
+                      </span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Porte de Arma</p>
+                        <p className={`text-[10px] font-black uppercase ${selectedPerson.porte_arma ? 'text-green-600' : 'text-gray-400'}`}>
+                          {selectedPerson.porte_arma ? 'AUTORIZADO / ACAUTELADO' : 'NÃO POSSUI'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-auto pt-6 flex justify-end">
+                  <button onClick={() => setSelectedPerson(null)} className="px-6 py-2 bg-stone-200 text-rustic-brown font-black text-xs rounded-xl hover:bg-stone-300 transition-colors">FECHAR</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

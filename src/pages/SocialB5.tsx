@@ -1,19 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { SupabaseService, SocialPost } from '../services/SupabaseService';
+import { SupabaseService, SocialPost, Personnel } from '../services/SupabaseService';
+import { toast } from 'sonner';
 
 const SocialB5: React.FC = () => {
   const [prompt, setPrompt] = useState("");
   const [generatedContent, setGeneratedContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [posts, setPosts] = useState<SocialPost[]>([]);
+  const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
+  const [filterDay, setFilterDay] = useState<number | "">("");
 
   useEffect(() => {
     loadPosts();
   }, []);
 
   const loadPosts = async () => {
-    const data = await SupabaseService.getSocialPosts();
-    setPosts(data);
+    const [postsData, personnelData] = await Promise.all([
+      SupabaseService.getSocialPosts(),
+      SupabaseService.getPersonnel()
+    ]);
+    setPosts(postsData);
+    setPersonnel(personnelData);
   };
 
   const handleAlert = (msg: string) => alert(msg);
@@ -190,14 +198,83 @@ const SocialB5: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Column: Sidebar Widgets (Kept Static for now as user didn't ask for generic events DB yet, but could expand) */}
+            {/* Right Column: Sidebar Widgets */}
             <div className="space-y-6">
               <div className="bg-surface rounded-xl border border-rustic-border p-5 shadow-sm">
-                <h3 className="font-bold text-[#2c1810] mb-4 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-amber-500">cake</span>
-                  Aniversariantes
-                </h3>
-                <p className="text-sm text-gray-400">Funcionalidade conectada ao módulo de Pessoal.</p>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-black text-[#2c1810] flex items-center gap-2">
+                    <span className="material-symbols-outlined text-amber-500">cake</span>
+                    Aniversariantes
+                  </h3>
+                  <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-black rounded uppercase">B1 Link</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                  <select
+                    value={filterMonth}
+                    onChange={(e) => setFilterMonth(Number(e.target.value))}
+                    className="h-9 px-2 rounded-lg border border-rustic-border bg-background-light text-[11px] font-bold"
+                  >
+                    {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => (
+                      <option key={m} value={i + 1}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterDay}
+                    onChange={(e) => setFilterDay(e.target.value === "" ? "" : Number(e.target.value))}
+                    className="h-9 px-2 rounded-lg border border-rustic-border bg-background-light text-[11px] font-bold"
+                  >
+                    <option value="">Todos os dias</option>
+                    {Array.from({ length: 31 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>{i + 1}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {personnel
+                    .filter(p => {
+                      if (!p.data_nascimento) return false;
+                      // Safe parsing of YYYY-MM-DD
+                      const [year, month, day] = p.data_nascimento.split('-').map(Number);
+                      const monthMatch = month === filterMonth;
+                      const dayMatch = filterDay === "" || day === filterDay;
+                      return monthMatch && dayMatch;
+                    })
+                    .sort((a, b) => {
+                      const dayA = Number(a.data_nascimento!.split('-')[2]);
+                      const dayB = Number(b.data_nascimento!.split('-')[2]);
+                      return dayA - dayB;
+                    })
+                    .map(p => {
+                      const day = p.data_nascimento!.split('-')[2];
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-stone-50 transition-colors border border-transparent hover:border-stone-100">
+                          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-amber-600 font-black text-xs border border-amber-100">
+                            {day}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-xs text-[#2c1810] truncate uppercase">{p.nome_guerra || p.name.split(' ')[0]}</p>
+                            <p className="text-[10px] text-rustic-brown/60 uppercase font-black">{p.rank} • {p.type}</p>
+                          </div>
+                          <button onClick={() => toast.success(`Mandar parabéns para ${p.nome_guerra || p.name}!`)} className="p-1.5 text-rustic-brown/20 hover:text-amber-500 transition-colors">
+                            <span className="material-symbols-outlined text-[18px]">celebration</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  {personnel.filter(p => {
+                    if (!p.data_nascimento) return false;
+                    const month = Number(p.data_nascimento.split('-')[1]);
+                    const day = Number(p.data_nascimento.split('-')[2]);
+                    return month === filterMonth && (filterDay === "" || day === filterDay);
+                  }).length === 0 && (
+                      <div className="py-10 text-center space-y-2 opacity-40">
+                        <span className="material-symbols-outlined text-4xl">event_busy</span>
+                        <p className="text-[10px] font-black uppercase">Sem aniversariantes</p>
+                      </div>
+                    )}
+                </div>
               </div>
             </div>
 
