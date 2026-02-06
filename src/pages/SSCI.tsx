@@ -118,7 +118,7 @@ const SSCI: React.FC = () => {
                 usuario_responsavel: "Capitão Técnico",
                 fonte_web: geminiResult.fonte_web,
                 links_cbmsc: geminiResult.links_cbmsc,
-                modelo_ia: 'gemini-1.5-flash',
+                modelo_ia: 'gemini-pro',
                 normativas_citadas: GeminiService.extrairNormativas(geminiResult.resposta)
             };
 
