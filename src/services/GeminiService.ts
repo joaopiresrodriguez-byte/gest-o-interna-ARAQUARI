@@ -3,7 +3,7 @@ import { SearchService } from "./SearchService";
 
 const genAI = new GoogleGenerativeAI((import.meta as any).env.VITE_GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-1.5-flash-latest",
     generationConfig: {
         temperature: 0.7,
         topK: 40,
