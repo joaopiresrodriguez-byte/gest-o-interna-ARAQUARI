@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseService, Personnel, DocumentB1, Vacation } from '../services/SupabaseService';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 const PessoalB1: React.FC = () => {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'LISTAGEM' | 'CADASTRO' | 'DOCUMENTOS' | 'FERIAS' | 'ESCALA' | 'REUNIAO'>('LISTAGEM');
   const [searchTerm, setSearchTerm] = useState("");
   const [isJoinedMeeting, setIsJoinedMeeting] = useState(false);
@@ -224,9 +226,11 @@ const PessoalB1: React.FC = () => {
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${p.type === 'BM' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>{p.type}</span>
                     <span className="text-[9px] font-black px-2 py-0.5 rounded bg-stone-100 text-gray-600 uppercase">{p.status}</span>
                   </div>
-                  <div className="grid grid-cols-2 w-full gap-2 border-t border-stone-50 pt-4 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className={`grid ${profile?.p_pessoal === 'editor' ? 'grid-cols-2' : 'grid-cols-1'} w-full gap-2 border-t border-stone-50 pt-4 mt-auto opacity-0 group-hover:opacity-100 transition-opacity`}>
                     <button onClick={() => setSelectedPerson(p)} className="text-[10px] font-bold text-primary hover:bg-red-50 py-1.5 rounded-lg transition-colors">DETALHES</button>
-                    <button onClick={() => handleDeletePersonnel(p.id!)} className="text-[10px] font-bold text-red-600 hover:bg-red-50 py-1.5 rounded-lg transition-colors">EXCLUIR</button>
+                    {profile?.p_pessoal === 'editor' && (
+                      <button onClick={() => handleDeletePersonnel(p.id!)} className="text-[10px] font-bold text-red-600 hover:bg-red-50 py-1.5 rounded-lg transition-colors">EXCLUIR</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -324,14 +328,22 @@ const PessoalB1: React.FC = () => {
               </div>
 
               <div className="mt-12 flex justify-center">
-                <button
-                  onClick={handleSavePersonnel}
-                  disabled={loading}
-                  className="px-12 py-4 bg-primary text-white font-black rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined">{loading ? 'sync' : 'how_to_reg'}</span>
-                  {loading ? 'SALVANDO...' : 'FINALIZAR CADASTRO'}
-                </button>
+                {profile?.p_pessoal === 'editor' && (
+                  <button
+                    onClick={handleSavePersonnel}
+                    disabled={loading}
+                    className="px-12 py-4 bg-primary text-white font-black rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined">{loading ? 'sync' : 'how_to_reg'}</span>
+                    {loading ? 'SALVANDO...' : 'FINALIZAR CADASTRO'}
+                  </button>
+                )}
+                {profile?.p_pessoal === 'reader' && (
+                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-700">
+                    <span className="material-symbols-outlined">lock</span>
+                    <p className="text-xs font-bold uppercase tracking-tight">Você possui apenas permissão de LEITURA neste módulo.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

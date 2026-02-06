@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
+import { useAuth } from '../context/AuthContext';
 
 const PatrimonioB4: React.FC = () => {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
@@ -266,35 +268,42 @@ const PatrimonioB4: React.FC = () => {
                   <div className="xl:col-span-4 space-y-6">
                     <div className="bg-stone-50 border border-rustic-border p-6 rounded-2xl shadow-inner">
                       <h3 className="font-bold mb-4 flex items-center gap-2"><span className="material-symbols-outlined text-primary">add_task</span> Nova Missão</h3>
-                      <div className="space-y-4">
-                        <input value={missionTitle} onChange={e => setMissionTitle(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" placeholder="Título da Missão *" />
-                        <textarea value={missionDesc} onChange={e => setMissionDesc(e.target.value)} className="w-full h-24 p-3 rounded-lg border border-rustic-border text-sm" placeholder="Descrição Detalhada" />
-                        <div className="grid grid-cols-2 gap-4">
-                          <input type="date" value={missionDate} onChange={e => setMissionDate(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
-                          <select value={missionPriority} onChange={e => setMissionPriority(e.target.value as any)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
-                            <option value="baixa">Baixa</option>
-                            <option value="media">Média</option>
-                            <option value="alta">Alta</option>
-                            <option value="urgente">Urgente</option>
+                      {profile?.p_logistica === 'editor' ? (
+                        <div className="space-y-4">
+                          <input value={missionTitle} onChange={e => setMissionTitle(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" placeholder="Título da Missão *" />
+                          <textarea value={missionDesc} onChange={e => setMissionDesc(e.target.value)} className="w-full h-24 p-3 rounded-lg border border-rustic-border text-sm" placeholder="Descrição Detalhada" />
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="date" value={missionDate} onChange={e => setMissionDate(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
+                            <select value={missionPriority} onChange={e => setMissionPriority(e.target.value as any)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
+                              <option value="baixa">Baixa</option>
+                              <option value="media">Média</option>
+                              <option value="alta">Alta</option>
+                              <option value="urgente">Urgente</option>
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="time" value={missionStart} onChange={e => setMissionStart(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
+                            <input type="time" value={missionEnd} onChange={e => setMissionEnd(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
+                          </div>
+                          <select value={missionRespId} onChange={e => setMissionRespId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
+                            <option value="">Selecionar Responsável</option>
+                            {personnel.map(p => <option key={p.id} value={p.id}>{p.rank} {p.name}</option>)}
                           </select>
+                          <select value={missionStatus} onChange={e => setMissionStatus(e.target.value as any)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
+                            <option value="agendada">Agendada</option>
+                            <option value="em_andamento">Em Andamento</option>
+                          </select>
+                          <textarea value={missionObs} onChange={e => setMissionObs(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-sm" placeholder="Observações" />
+                          <button onClick={handleCreateMission} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">
+                            CADASTRAR MISSÃO
+                          </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <input type="time" value={missionStart} onChange={e => setMissionStart(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
-                          <input type="time" value={missionEnd} onChange={e => setMissionEnd(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
+                      ) : (
+                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                          <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>
+                          <p className="text-[10px] font-black uppercase text-amber-700">Apenas leitura</p>
                         </div>
-                        <select value={missionRespId} onChange={e => setMissionRespId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
-                          <option value="">Selecionar Responsável</option>
-                          {personnel.map(p => <option key={p.id} value={p.id}>{p.rank} {p.name}</option>)}
-                        </select>
-                        <select value={missionStatus} onChange={e => setMissionStatus(e.target.value as any)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
-                          <option value="agendada">Agendada</option>
-                          <option value="em_andamento">Em Andamento</option>
-                        </select>
-                        <textarea value={missionObs} onChange={e => setMissionObs(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-sm" placeholder="Observações" />
-                        <button onClick={handleCreateMission} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">
-                          CADASTRAR MISSÃO
-                        </button>
-                      </div>
+                      )}
                     </div>
                   </div>
 
@@ -334,9 +343,11 @@ const PatrimonioB4: React.FC = () => {
                                 {mission.prioridade}
                               </span>
                               <div className="flex gap-1">
-                                <button onClick={() => handleDeleteMission(mission.id!)} className="text-gray-300 hover:text-red-500 transition-colors">
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
+                                {profile?.p_logistica === 'editor' && (
+                                  <button onClick={() => handleDeleteMission(mission.id!)} className="text-gray-300 hover:text-red-500 transition-colors">
+                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div>
@@ -396,12 +407,14 @@ const PatrimonioB4: React.FC = () => {
                             </span>
                             <div className="flex gap-2">
                               <span className="text-[10px] font-bold text-rustic-brown/40">{item.id}</span>
-                              <button
-                                onClick={() => handleDeleteItem(item.id)}
-                                className="text-gray-300 hover:text-red-500 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">delete</span>
-                              </button>
+                              {profile?.p_logistica === 'editor' && (
+                                <button
+                                  onClick={() => handleDeleteItem(item.id)}
+                                  className="text-gray-300 hover:text-red-500 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                           <h3 className="text-lg font-bold mb-1">{item.name}</h3>
@@ -416,12 +429,14 @@ const PatrimonioB4: React.FC = () => {
                                     <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">warning</span>
                                     <div className="flex-1">
                                       <p className="text-[10px] font-bold text-primary">{notice.descricao}</p>
-                                      <button
-                                        onClick={() => handleResolveNotice(notice.id!)}
-                                        className="mt-1 text-[9px] font-bold text-white bg-primary px-2 py-0.5 rounded hover:bg-red-700"
-                                      >
-                                        MARCAR COMO RESOLVIDO
-                                      </button>
+                                      {profile?.p_logistica === 'editor' && (
+                                        <button
+                                          onClick={() => handleResolveNotice(notice.id!)}
+                                          className="mt-1 text-[9px] font-bold text-white bg-primary px-2 py-0.5 rounded hover:bg-red-700"
+                                        >
+                                          MARCAR COMO RESOLVIDO
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -470,7 +485,14 @@ const PatrimonioB4: React.FC = () => {
                     )}
 
                     <textarea value={newItemDetails} onChange={e => setNewItemDetails(e.target.value)} className="w-full h-32 p-4 rounded-lg border border-rustic-border" placeholder="Detalhes" />
-                    <button onClick={handleSaveItem} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110">Salvar no Patrimônio e Conferência</button>
+                    {profile?.p_logistica === 'editor' ? (
+                      <button onClick={handleSaveItem} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110">Salvar no Patrimônio e Conferência</button>
+                    ) : (
+                      <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                        <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>
+                        <p className="text-xs font-black uppercase text-amber-700">Apenas leitura</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -491,13 +513,15 @@ const PatrimonioB4: React.FC = () => {
                             <p className="text-sm font-bold text-rustic-brown">{notice.descricao}</p>
                             <span className="text-[10px] text-gray-500">{new Date(notice.created_at!).toLocaleDateString('pt-BR')}</span>
                           </div>
-                          <button
-                            onClick={() => handleCreatePurchaseRequest(notice)}
-                            className="flex flex-col items-center gap-1 p-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200 transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
-                            <span className="text-[9px] font-black">GERAR PEDIDO</span>
-                          </button>
+                          {profile?.p_logistica === 'editor' && (
+                            <button
+                              onClick={() => handleCreatePurchaseRequest(notice)}
+                              className="flex flex-col items-center gap-1 p-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200 transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+                              <span className="text-[9px] font-black">GERAR PEDIDO</span>
+                            </button>
+                          )}
                         </div>
                       ))}
                       {notices.filter(n => n.tipo === 'material' && n.status === 'pendente').length === 0 && (
@@ -530,9 +554,11 @@ const PatrimonioB4: React.FC = () => {
                               </td>
                               <td className="py-3 px-4 text-right">R$ {p.cost.toFixed(2)}</td>
                               <td className="py-3 px-4 text-right">
-                                <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded">
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
+                                {profile?.p_logistica === 'editor' && (
+                                  <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded">
+                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}

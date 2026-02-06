@@ -33,12 +33,30 @@ const INITIAL_FLEET: Vehicle[] = [
     { id: 'R-12', name: 'Rádio HT', type: 'Equipamento', status: 'active', details: 'Bateria Carregada' },
 ];
 
+// Safe storage helper
+const safeStorage = {
+    getItem: (key: string) => {
+        try {
+            return localStorage.getItem(key);
+        } catch {
+            return null;
+        }
+    },
+    setItem: (key: string, value: string) => {
+        try {
+            localStorage.setItem(key, value);
+        } catch {
+            // ignore
+        }
+    }
+};
+
 export const MockDataService = {
     // MISSIONS
     getMissions: (): Mission[] => {
-        const stored = localStorage.getItem(MISSIONS_KEY);
+        const stored = safeStorage.getItem(MISSIONS_KEY);
         if (!stored) {
-            localStorage.setItem(MISSIONS_KEY, JSON.stringify(INITIAL_MISSIONS));
+            safeStorage.setItem(MISSIONS_KEY, JSON.stringify(INITIAL_MISSIONS));
             return INITIAL_MISSIONS;
         }
         return JSON.parse(stored);
@@ -47,22 +65,22 @@ export const MockDataService = {
     addMission: (mission: Mission) => {
         const missions = MockDataService.getMissions();
         const newMissions = [...missions, mission];
-        localStorage.setItem(MISSIONS_KEY, JSON.stringify(newMissions));
+        safeStorage.setItem(MISSIONS_KEY, JSON.stringify(newMissions));
         return newMissions;
     },
 
     toggleMission: (id: number) => {
         const missions = MockDataService.getMissions();
         const newMissions = missions.map(m => m.id === id ? { ...m, completed: !m.completed } : m);
-        localStorage.setItem(MISSIONS_KEY, JSON.stringify(newMissions));
+        safeStorage.setItem(MISSIONS_KEY, JSON.stringify(newMissions));
         return newMissions;
     },
 
     // FLEET
     getFleet: (): Vehicle[] => {
-        const stored = localStorage.getItem(FLEET_KEY);
+        const stored = safeStorage.getItem(FLEET_KEY);
         if (!stored) {
-            localStorage.setItem(FLEET_KEY, JSON.stringify(INITIAL_FLEET));
+            safeStorage.setItem(FLEET_KEY, JSON.stringify(INITIAL_FLEET));
             return INITIAL_FLEET;
         }
         return JSON.parse(stored);
@@ -71,17 +89,18 @@ export const MockDataService = {
     addVehicle: (vehicle: Vehicle) => {
         const fleet = MockDataService.getFleet();
         const newFleet = [...fleet, vehicle];
-        localStorage.setItem(FLEET_KEY, JSON.stringify(newFleet));
+        safeStorage.setItem(FLEET_KEY, JSON.stringify(newFleet));
         return newFleet;
     },
 
     updateVehicleStatus: (id: string, status: Vehicle['status']) => {
         const fleet = MockDataService.getFleet();
         const newFleet = fleet.map(v => v.id === id ? { ...v, status } : v);
-        localStorage.setItem(FLEET_KEY, JSON.stringify(newFleet));
+        safeStorage.setItem(FLEET_KEY, JSON.stringify(newFleet));
         return newFleet;
     },
 
+    // Helpers
     // Helpers
     getTodayDate: () => new Date().toISOString().split('T')[0],
 };

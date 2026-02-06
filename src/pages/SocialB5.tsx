@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { SupabaseService, SocialPost, Personnel } from '../services/SupabaseService';
 import { toast } from 'sonner';
 
 const SocialB5: React.FC = () => {
   const [prompt, setPrompt] = useState("");
+  const { profile } = useAuth();
   const [generatedContent, setGeneratedContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [posts, setPosts] = useState<SocialPost[]>([]);
@@ -117,7 +119,7 @@ const SocialB5: React.FC = () => {
                     ></textarea>
                     <button
                       onClick={handleGenerate}
-                      disabled={isGenerating}
+                      disabled={isGenerating || profile?.p_social !== 'editor'}
                       className="absolute bottom-4 right-4 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isGenerating ? (
@@ -125,10 +127,15 @@ const SocialB5: React.FC = () => {
                           <span className="animate-spin material-symbols-outlined text-[18px]">sync</span>
                           Criando...
                         </>
-                      ) : (
+                      ) : profile?.p_social === 'editor' ? (
                         <>
                           <span className="material-symbols-outlined text-[18px]">shutter_speed</span>
                           Gerar Rascunho
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[18px]">lock</span>
+                          Leitura
                         </>
                       )}
                     </button>
@@ -147,8 +154,8 @@ const SocialB5: React.FC = () => {
                         {generatedContent}
                       </div>
                       <div className="mt-4 flex gap-3">
-                        <button onClick={handlePublish} className="flex-1 py-3 bg-secondary-green text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-transform active:scale-[0.98]">
-                          Salvar & Publicar no Feed
+                        <button onClick={handlePublish} disabled={profile?.p_social !== 'editor'} className="flex-1 py-3 bg-secondary-green text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+                          {profile?.p_social === 'editor' ? 'Salvar & Publicar no Feed' : 'Sem permissão para publicar'}
                         </button>
                         <button onClick={() => handleAlert("Modo de edição ativado.")} className="px-6 py-3 border border-rustic-border bg-white text-rustic-brown rounded-xl font-bold hover:bg-gray-50 transition-colors">
                           Editar
@@ -185,8 +192,9 @@ const SocialB5: React.FC = () => {
                         <span>{post.likes} Curtidas</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id!); }}
-                          className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-md transition-colors"
+                          className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-md transition-colors disabled:opacity-0"
                           title="Excluir Post"
+                          disabled={profile?.p_social !== 'editor'}
                         >
                           <span className="material-symbols-outlined text-[18px]">delete</span>
                         </button>

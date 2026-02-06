@@ -11,7 +11,7 @@ const Operacional: React.FC = () => {
   const [selectedViaturaId, setSelectedViaturaId] = useState<string>("");
   const [receipts, setReceipts] = useState<ProductReceipt[]>([]);
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   // Receipt Form State
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -179,14 +179,21 @@ const Operacional: React.FC = () => {
                     placeholder="Observações (Opcional)"
                     className="w-full h-24 p-4 rounded-lg border border-rustic-border bg-white text-sm focus:ring-2 focus:ring-primary/20 resize-none"
                   />
-                  <button
-                    onClick={handleRegisterReceipt}
-                    disabled={isUploading}
-                    className="w-full py-3 bg-secondary-green text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:bg-green-700 transition-all disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined">{isUploading ? 'sync' : 'save'}</span>
-                    {isUploading ? 'Registrando...' : 'Registrar Recebimento'}
-                  </button>
+                  {profile?.p_operacional === 'editor' ? (
+                    <button
+                      onClick={handleRegisterReceipt}
+                      disabled={isUploading}
+                      className="w-full py-3 bg-secondary-green text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:bg-green-700 transition-all disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined">{isUploading ? 'sync' : 'save'}</span>
+                      {isUploading ? 'Registrando...' : 'Registrar Recebimento'}
+                    </button>
+                  ) : (
+                    <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                      <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>
+                      <p className="text-xs font-black uppercase text-amber-700">Modo Leitura: Apenas p/ Editor</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Recent Receipts List */}
@@ -310,14 +317,21 @@ const Operacional: React.FC = () => {
                 {checklistItems.length === 0 && <p className="text-center py-12 text-gray-400">Nenhum item cadastrado para esta categoria.</p>}
 
                 {checklistItems.length > 0 && (
-                  <button
-                    onClick={handleSaveChecklist}
-                    disabled={loading}
-                    className="w-full mt-4 py-4 bg-primary text-white font-black text-sm rounded-xl shadow-lg border-b-4 border-red-800 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-                  >
-                    <span className="material-symbols-outlined">{loading ? 'sync' : 'task_alt'}</span>
-                    {loading ? 'SALVANDO...' : 'FINALIZAR E ENVIAR CONFERÊNCIA'}
-                  </button>
+                  profile?.p_operacional === 'editor' ? (
+                    <button
+                      onClick={handleSaveChecklist}
+                      disabled={loading}
+                      className="w-full mt-4 py-4 bg-primary text-white font-black text-sm rounded-xl shadow-lg border-b-4 border-red-800 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                    >
+                      <span className="material-symbols-outlined">{loading ? 'sync' : 'task_alt'}</span>
+                      {loading ? 'SALVANDO...' : 'FINALIZAR E ENVIAR CONFERÊNCIA'}
+                    </button>
+                  ) : (
+                    <div className="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                      <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>
+                      <p className="text-xs font-black uppercase text-amber-700">Você não tem permissão para enviar a conferência.</p>
+                    </div>
+                  )
                 )}
               </div>
             </div>

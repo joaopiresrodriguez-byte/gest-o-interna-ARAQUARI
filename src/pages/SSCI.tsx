@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { SupabaseService, SSCIAnalysis, SSCIChatSession, SSCIChatMessage, SSCINormativeDocument } from '../services/SupabaseService';
 import { GeminiService } from '../services/GeminiService';
 
 const SSCI: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'ANALISE' | 'PESQUISA' | 'CONHECIMENTO'>('ANALISE');
     const [loading, setLoading] = useState(false);
+    const { profile } = useAuth();
 
     // --- SECTION 1: ANALYSIS ---
     const [analyses, setAnalyses] = useState<SSCIAnalysis[]>([]);
@@ -346,15 +348,18 @@ const SSCI: React.FC = () => {
 
                                     <button
                                         onClick={handleSubmitAnalysis}
-                                        disabled={loading}
-                                        className={`w-full py-4 ${loading ? 'bg-gray-400' : 'bg-primary'} text-white font-black text-sm rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex flex-col items-center justify-center gap-1`}
+                                        disabled={loading || profile?.p_ssci !== 'editor'}
+                                        className={`w-full py-4 ${loading || profile?.p_ssci !== 'editor' ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary'} text-white font-black text-sm rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex flex-col items-center justify-center gap-1`}
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>{loading ? 'sync' : 'smart_toy'}</span>
-                                            {loading ? 'PROCESSANDO ANÁLISE...' : 'SUBMETER PARA ANÁLISE DA IA'}
+                                            {loading ? 'PROCESSANDO ANÁLISE...' : profile?.p_ssci === 'editor' ? 'SUBMETER PARA ANÁLISE DA IA' : 'SOMENTE LEITURA'}
                                         </div>
                                         {loading && includeWebAnalysis && (
                                             <span className="text-[9px] font-bold opacity-80 uppercase tracking-widest animate-pulse">Consultando cbm.sc.gov.br...</span>
+                                        )}
+                                        {profile?.p_ssci !== 'editor' && (
+                                            <span className="text-[9px] font-bold opacity-80 uppercase tracking-widest text-amber-200">Você só tem permissão de LEITURA</span>
                                         )}
                                     </button>
                                 </div>
@@ -367,7 +372,9 @@ const SSCI: React.FC = () => {
                                         <div className="bg-stone-50 border-b border-rustic-border p-6 flex justify-between items-center">
                                             <h3 className="font-black text-lg text-[#181111]">Manifestação Jurídica Estruturada</h3>
                                             <div className="flex gap-2">
-                                                <button onClick={() => handleDeleteAnalysis(currentAnalysis.id!, currentAnalysis.documentos_anexados || [])} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-400"><span className="material-symbols-outlined text-[20px]">delete</span></button>
+                                                {profile?.p_ssci === 'editor' && (
+                                                    <button onClick={() => handleDeleteAnalysis(currentAnalysis.id!, currentAnalysis.documentos_anexados || [])} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-400"><span className="material-symbols-outlined text-[20px]">delete</span></button>
+                                                )}
                                                 <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">print</span></button>
                                                 <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">content_copy</span></button>
                                                 <button onClick={() => setCurrentAnalysis(null)} className="p-2 bg-primary text-white rounded-lg hover:brightness-110"><span className="material-symbols-outlined text-[20px]">close</span></button>
@@ -429,8 +436,9 @@ const SSCI: React.FC = () => {
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleDeleteChatSession(sess.id!); }}
                                                     className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-red-300 hover:text-red-500 rounded transition-all"
+                                                    disabled={profile?.p_ssci !== 'editor'}
                                                 >
-                                                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                                                    {profile?.p_ssci === 'editor' && <span className="material-symbols-outlined text-[14px]">delete</span>}
                                                 </button>
                                             </div>
                                         </button>
@@ -548,12 +556,14 @@ const SSCI: React.FC = () => {
                                         <option>Decreto</option>
                                     </select>
                                 </div>
-                                <button
-                                    onClick={() => setIsAddingDoc(true)}
-                                    className="px-6 py-3 bg-secondary-green text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 hover:brightness-110"
-                                >
-                                    <span className="material-symbols-outlined text-[18px]">add_circle</span> NOVO DOCUMENTO
-                                </button>
+                                {profile?.p_ssci === 'editor' && (
+                                    <button
+                                        onClick={() => setIsAddingDoc(true)}
+                                        className="px-6 py-3 bg-secondary-green text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 hover:brightness-110"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">add_circle</span> NOVO DOCUMENTO
+                                    </button>
+                                )}
                             </div>
 
                             {/* Documents Grid */}
@@ -569,8 +579,8 @@ const SSCI: React.FC = () => {
                                                         await SupabaseService.deleteSSCINormativeDocument(doc.id!, fileName);
                                                         loadData();
                                                     }
-                                                }} className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600">
-                                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                                }} className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600" disabled={profile?.p_ssci !== 'editor'}>
+                                                    {profile?.p_ssci === 'editor' && <span className="material-symbols-outlined text-[18px]">delete</span>}
                                                 </button>
                                             </div>
                                             <h4 className="font-bold text-[#181111] text-base leading-tight mb-1 line-clamp-2">{doc.nome_documento}</h4>

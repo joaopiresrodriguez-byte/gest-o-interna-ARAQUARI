@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { SupabaseService, MateriaInstrucao, Training, MateriaApresentacao, MateriaVideo } from '../services/SupabaseService';
 
 const InstrucaoB3: React.FC = () => {
@@ -7,6 +8,7 @@ const InstrucaoB3: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const { profile } = useAuth();
 
   // Form State - Materia
   const [nome, setNome] = useState("");
@@ -240,130 +242,140 @@ const InstrucaoB3: React.FC = () => {
                 <h3 className="text-xl font-black text-[#2D2926]">Cadastrar Nova Matéria</h3>
               </div>
 
-              <div className="p-8 space-y-6">
-                {/* Basic Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Nome da Matéria *</label>
-                    <input
-                      value={nome} onChange={e => setNome(e.target.value)}
-                      className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] placeholder:text-[#C4BEB7] focus:border-[#C62828] focus:ring-0 transition-all outline-none"
-                      placeholder="Ex: APH Básico"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Carga Horária (h) *</label>
-                    <input
-                      type="number" value={cargaHoraria} onChange={e => setCargaHoraria(e.target.value)}
-                      className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] placeholder:text-[#C4BEB7] focus:border-[#C62828] focus:ring-0 transition-all outline-none"
-                      placeholder="Ex: 40"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Categoria</label>
-                    <select
-                      value={categoria} onChange={e => setCategoria(e.target.value)}
-                      className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] focus:border-[#C62828] outline-none"
-                    >
-                      <option>APH</option>
-                      <option>Combate a Incêndio</option>
-                      <option>Salvamento</option>
-                      <option>Operações Especiais</option>
-                      <option>Prevenção</option>
-                      <option>Administrativa</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Nível</label>
-                    <select
-                      value={nivel} onChange={e => setNivel(e.target.value as any)}
-                      className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] focus:border-[#C62828] outline-none"
-                    >
-                      <option value="basico">Básico</option>
-                      <option value="intermediario">Intermediário</option>
-                      <option value="avancado">Avançado</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Descrição / Ementa</label>
-                  <textarea
-                    value={descricao} onChange={e => setDescricao(e.target.value)}
-                    rows={3} className="rounded-xl border-2 border-[#E5E1DA] bg-white p-4 text-[#2D2926] focus:border-[#C62828] outline-none resize-none"
-                    placeholder="Descreva o conteúdo programático..."
-                  />
-                </div>
-
-                {/* Materials Section */}
-                <div className="space-y-4 pt-4 border-t border-[#E5E1DA]">
-                  <h4 className="text-lg font-black text-[#2D2926] flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#C62828]">folder_open</span>
-                    Materiais Didáticos
-                  </h4>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* PDF Upload */}
-                    <div className="flex flex-col gap-3">
-                      <label className="relative flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-[#D6CFC7] bg-[#FAF9F7] cursor-pointer hover:bg-[#F2EFE9] transition-all">
-                        <span className="material-symbols-outlined text-[#C62828] text-3xl">picture_as_pdf</span>
-                        <span className="text-xs font-bold mt-1">+ Apresentação PDF</span>
-                        <input type="file" multiple accept=".pdf" className="hidden"
-                          onChange={e => e.target.files && setPendingPDFs([...pendingPDFs, ...Array.from(e.target.files)])}
-                        />
-                      </label>
-                      {pendingPDFs.length > 0 && (
-                        <div className="space-y-1">
-                          {pendingPDFs.map((f, i) => (
-                            <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-[11px]">
-                              <span className="truncate max-w-[150px] font-medium">{f.name}</span>
-                              <button onClick={() => setPendingPDFs(pendingPDFs.filter((_, idx) => idx !== i))} className="text-red-500 material-symbols-outlined text-sm">cancel</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+              {profile?.p_instrucao === 'editor' ? (
+                <div className="p-8 space-y-6">
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Nome da Matéria *</label>
+                      <input
+                        value={nome} onChange={e => setNome(e.target.value)}
+                        className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] placeholder:text-[#C4BEB7] focus:border-[#C62828] focus:ring-0 transition-all outline-none"
+                        placeholder="Ex: APH Básico"
+                      />
                     </div>
-
-                    {/* Video Upload */}
-                    <div className="flex flex-col gap-3">
-                      <label className="relative flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-[#D6CFC7] bg-[#FAF9F7] cursor-pointer hover:bg-[#F2EFE9] transition-all">
-                        <span className="material-symbols-outlined text-[#2E7D32] text-3xl">movie</span>
-                        <span className="text-xs font-bold mt-1">+ Adicionar Vídeo</span>
-                        <input type="file" multiple accept="video/*" className="hidden"
-                          onChange={e => e.target.files && setPendingVideos([...pendingVideos, ...Array.from(e.target.files)])}
-                        />
-                      </label>
-                      {pendingVideos.length > 0 && (
-                        <div className="space-y-1">
-                          {pendingVideos.map((f, i) => (
-                            <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-[11px]">
-                              <span className="truncate max-w-[150px] font-medium">{f.name}</span>
-                              <button onClick={() => setPendingVideos(pendingVideos.filter((_, idx) => idx !== i))} className="text-red-500 material-symbols-outlined text-sm">cancel</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Carga Horária (h) *</label>
+                      <input
+                        type="number" value={cargaHoraria} onChange={e => setCargaHoraria(e.target.value)}
+                        className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] placeholder:text-[#C4BEB7] focus:border-[#C62828] focus:ring-0 transition-all outline-none"
+                        placeholder="Ex: 40"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Categoria</label>
+                      <select
+                        value={categoria} onChange={e => setCategoria(e.target.value)}
+                        className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] focus:border-[#C62828] outline-none"
+                      >
+                        <option>APH</option>
+                        <option>Combate a Incêndio</option>
+                        <option>Salvamento</option>
+                        <option>Operações Especiais</option>
+                        <option>Prevenção</option>
+                        <option>Administrativa</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Nível</label>
+                      <select
+                        value={nivel} onChange={e => setNivel(e.target.value as any)}
+                        className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] focus:border-[#C62828] outline-none"
+                      >
+                        <option value="basico">Básico</option>
+                        <option value="intermediario">Intermediário</option>
+                        <option value="avancado">Avançado</option>
+                      </select>
                     </div>
                   </div>
-                </div>
 
-                <button
-                  onClick={handleSaveMateria} disabled={uploading}
-                  className={`w-full h-14 rounded-2xl bg-[#C62828] text-white font-black text-lg flex items-center justify-center gap-3 shadow-lg shadow-red-200 hover:bg-[#A32020] transition-all active:scale-95 disabled:bg-gray-400 disabled:shadow-none mt-4`}
-                >
-                  {uploading ? (
-                    <>
-                      <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      Processando Materiais...
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined">auto_stories</span>
-                      Cadastrar Matéria
-                    </>
-                  )}
-                </button>
-              </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Descrição / Ementa</label>
+                    <textarea
+                      value={descricao} onChange={e => setDescricao(e.target.value)}
+                      rows={3} className="rounded-xl border-2 border-[#E5E1DA] bg-white p-4 text-[#2D2926] focus:border-[#C62828] outline-none resize-none"
+                      placeholder="Descreva o conteúdo programático..."
+                    />
+                  </div>
+
+                  {/* Materials Section */}
+                  <div className="space-y-4 pt-4 border-t border-[#E5E1DA]">
+                    <h4 className="text-lg font-black text-[#2D2926] flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[#C62828]">folder_open</span>
+                      Materiais Didáticos
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* PDF Upload */}
+                      <div className="flex flex-col gap-3">
+                        <label className="relative flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-[#D6CFC7] bg-[#FAF9F7] cursor-pointer hover:bg-[#F2EFE9] transition-all">
+                          <span className="material-symbols-outlined text-[#C62828] text-3xl">picture_as_pdf</span>
+                          <span className="text-xs font-bold mt-1">+ Apresentação PDF</span>
+                          <input type="file" multiple accept=".pdf" className="hidden"
+                            onChange={e => e.target.files && setPendingPDFs([...pendingPDFs, ...Array.from(e.target.files)])}
+                          />
+                        </label>
+                        {pendingPDFs.length > 0 && (
+                          <div className="space-y-1">
+                            {pendingPDFs.map((f, i) => (
+                              <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-[11px]">
+                                <span className="truncate max-w-[150px] font-medium">{f.name}</span>
+                                <button onClick={() => setPendingPDFs(pendingPDFs.filter((_, idx) => idx !== i))} className="text-red-500 material-symbols-outlined text-sm">cancel</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Video Upload */}
+                      <div className="flex flex-col gap-3">
+                        <label className="relative flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-[#D6CFC7] bg-[#FAF9F7] cursor-pointer hover:bg-[#F2EFE9] transition-all">
+                          <span className="material-symbols-outlined text-[#2E7D32] text-3xl">movie</span>
+                          <span className="text-xs font-bold mt-1">+ Adicionar Vídeo</span>
+                          <input type="file" multiple accept="video/*" className="hidden"
+                            onChange={e => e.target.files && setPendingVideos([...pendingVideos, ...Array.from(e.target.files)])}
+                          />
+                        </label>
+                        {pendingVideos.length > 0 && (
+                          <div className="space-y-1">
+                            {pendingVideos.map((f, i) => (
+                              <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-[11px]">
+                                <span className="truncate max-w-[150px] font-medium">{f.name}</span>
+                                <button onClick={() => setPendingVideos(pendingVideos.filter((_, idx) => idx !== i))} className="text-red-500 material-symbols-outlined text-sm">cancel</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSaveMateria} disabled={uploading}
+                    className={`w-full h-14 rounded-2xl bg-[#C62828] text-white font-black text-lg flex items-center justify-center gap-3 shadow-lg shadow-red-200 hover:bg-[#A32020] transition-all active:scale-95 disabled:bg-gray-400 disabled:shadow-none mt-4`}
+                  >
+                    {uploading ? (
+                      <>
+                        <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Processando Materiais...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined">auto_stories</span>
+                        Cadastrar Matéria
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="p-8">
+                  <div className="p-6 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                    <span className="material-symbols-outlined text-amber-500 text-4xl mb-3">lock</span>
+                    <h4 className="text-lg font-bold text-[#2D2926]">Acesso Restrito</h4>
+                    <p className="text-sm text-[#8C8379] mt-1">Você não tem permissão para cadastrar novas matérias.</p>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Scheduling Section */}
@@ -374,31 +386,41 @@ const InstrucaoB3: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-black text-[#2D2926]">Agendar Instrução</h3>
               </div>
-              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Data</label>
-                  <input type="date" value={trainingDate} onChange={e => setTrainingDate(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" />
+              {profile?.p_instrucao === 'editor' ? (
+                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Data</label>
+                    <input type="date" value={trainingDate} onChange={e => setTrainingDate(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Horário</label>
+                    <input type="time" value={trainingTime} onChange={e => setTrainingTime(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Matéria</label>
+                    <select value={selectedMateriaId} onChange={e => setSelectedMateriaId(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4">
+                      <option value="">Selecione...</option>
+                      {materias.map(m => <option key={m.id} value={m.id}>{m.nome_materia}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Instrutor</label>
+                    <input value={trainingInstructor} onChange={e => setTrainingInstructor(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" placeholder="Nome Completo" />
+                  </div>
+                  <button onClick={handleSchedule} className="md:col-span-2 h-14 rounded-2xl bg-[#2E7D32] text-white font-black text-lg flex items-center justify-center gap-2 hover:bg-[#205722] transition-all shadow-lg active:scale-95">
+                    <span className="material-symbols-outlined">calendar_month</span>
+                    Lançar Cronograma
+                  </button>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Horário</label>
-                  <input type="time" value={trainingTime} onChange={e => setTrainingTime(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" />
+              ) : (
+                <div className="p-8">
+                  <div className="p-6 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                    <span className="material-symbols-outlined text-amber-500 text-4xl mb-3">lock</span>
+                    <h4 className="text-lg font-bold text-[#2D2926]">Acesso Restrito</h4>
+                    <p className="text-sm text-[#8C8379] mt-1">Você não tem permissão para agendar instruções.</p>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Matéria</label>
-                  <select value={selectedMateriaId} onChange={e => setSelectedMateriaId(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4">
-                    <option value="">Selecione...</option>
-                    {materias.map(m => <option key={m.id} value={m.id}>{m.nome_materia}</option>)}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2 md:col-span-2">
-                  <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Instrutor</label>
-                  <input value={trainingInstructor} onChange={e => setTrainingInstructor(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" placeholder="Nome Completo" />
-                </div>
-                <button onClick={handleSchedule} className="md:col-span-2 h-14 rounded-2xl bg-[#2E7D32] text-white font-black text-lg flex items-center justify-center gap-2 hover:bg-[#205722] transition-all shadow-lg active:scale-95">
-                  <span className="material-symbols-outlined">calendar_month</span>
-                  Lançar Cronograma
-                </button>
-              </div>
+              )}
             </section>
           </div>
 
@@ -426,13 +448,15 @@ const InstrucaoB3: React.FC = () => {
                           <span className="text-xs font-bold text-[#8C8379] italic">{m.categoria}</span>
                         </div>
                         <div className="flex gap-4">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteMateria(m.id!); }}
-                            className="text-gray-300 hover:text-red-500 transition-colors"
-                            title="Excluir Matéria"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
+                          {profile?.p_instrucao === 'editor' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteMateria(m.id!); }}
+                              className="text-gray-300 hover:text-red-500 transition-colors"
+                              title="Excluir Matéria"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                          )}
                           <div className="flex flex-col items-center">
                             <span className="text-2xl font-black text-[#C62828]">{m.carga_horaria}</span>
                             <span className="text-[10px] font-bold text-[#8C8379] uppercase">Horas</span>
@@ -491,13 +515,15 @@ const InstrucaoB3: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleDeleteTraining(t.id!)}
-                        className="size-10 rounded-full border border-white/20 flex items-center justify-center opacity-40 hover:opacity-100 hover:bg-red-500 transition-all"
-                        title="Remover Treinamento"
-                      >
-                        <span className="material-symbols-outlined text-sm">delete</span>
-                      </button>
+                      {profile?.p_instrucao === 'editor' && (
+                        <button
+                          onClick={() => handleDeleteTraining(t.id!)}
+                          className="size-10 rounded-full border border-white/20 flex items-center justify-center opacity-40 hover:opacity-100 hover:bg-red-500 transition-all"
+                          title="Remover Treinamento"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      )}
                       <div className="size-10 rounded-full border border-white/20 flex items-center justify-center opacity-40 group-hover:opacity-100 group-hover:bg-[#C62828] group-hover:border-transparent transition-all">
                         <span className="material-symbols-outlined text-sm">chevron_right</span>
                       </div>
@@ -589,9 +615,11 @@ const InstrucaoB3: React.FC = () => {
                       </div>
                       <div className="flex gap-3 mt-auto">
                         <a href={pres.arquivo_url} target="_blank" rel="noreferrer" className="flex-1 h-10 rounded-lg bg-[#2D2926] text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:bg-[#C62828] transition-colors">Visualizar</a>
-                        <button onClick={() => handleDeleteApresentacao(pres.id!, pres.materia_id)} className="size-10 rounded-lg border-2 border-[#E5E1DA] text-[#8C8379] flex items-center justify-center hover:border-red-500 hover:text-red-500 transition-all">
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                        </button>
+                        {profile?.p_instrucao === 'editor' && (
+                          <button onClick={() => handleDeleteApresentacao(pres.id!, pres.materia_id)} className="size-10 rounded-lg border-2 border-[#E5E1DA] text-[#8C8379] flex items-center justify-center hover:border-red-500 hover:text-red-500 transition-all">
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -628,12 +656,14 @@ const InstrucaoB3: React.FC = () => {
                             <button className="size-10 rounded-xl border border-[#E5E1DA] flex items-center justify-center text-[#8C8379] hover:bg-[#C62828] hover:text-white transition-all">
                               <span className="material-symbols-outlined text-[18px]">download</span>
                             </button>
-                            <button
-                              onClick={() => handleDeleteVideo(vid.id!, vid.materia_id)}
-                              className="size-10 rounded-xl border border-[#E5E1DA] flex items-center justify-center text-[#8C8379] hover:bg-red-500 hover:text-white hover:border-transparent transition-all"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
-                            </button>
+                            {profile?.p_instrucao === 'editor' && (
+                              <button
+                                onClick={() => handleDeleteVideo(vid.id!, vid.materia_id)}
+                                className="size-10 rounded-xl border border-[#E5E1DA] flex items-center justify-center text-[#8C8379] hover:bg-red-500 hover:text-white hover:border-transparent transition-all"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            )}
                           </div>
                         </div>
 
