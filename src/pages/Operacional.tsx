@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseService, ProductReceipt, ChecklistItem, DailyChecklist } from '../services/SupabaseService';
+import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 
@@ -73,6 +74,15 @@ const Operacional: React.FC = () => {
       });
 
       toast.success("Recebimento registrado com sucesso!");
+
+      // Send Notification
+      NotificationService.sendReceiptNotification({
+        nf: receiptNF,
+        obs: receiptObs,
+        photoUrl: publicUrl,
+        user: user?.email || 'N/A'
+      });
+
       setReceiptFile(null);
       setReceiptNF("");
       setReceiptObs("");
@@ -109,6 +119,15 @@ const Operacional: React.FC = () => {
       toast.success("Conferência salva com sucesso!", {
         description: "As pendências foram enviadas automaticamente ao módulo B4."
       });
+
+      // Send Notification
+      NotificationService.sendConferenceNotification({
+        responsible: user?.email || "N/A",
+        viatura: fleet.find(v => v.id === selectedViaturaId)?.name,
+        items: checklistItems,
+        statuses: reportStatuses
+      });
+
       loadOperationalData();
     } catch (error) {
       console.error("Error saving checklist:", error);
