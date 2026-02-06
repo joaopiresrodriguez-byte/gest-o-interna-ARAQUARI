@@ -1,9 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchService } from "./SearchService";
 
-const genAI = new GoogleGenerativeAI((import.meta as any).env.VITE_GEMINI_API_KEY);
+const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+if (!apiKey) {
+    console.warn("[GeminiService] VITE_GEMINI_API_KEY não encontrada no ambiente.");
+}
+
+const genAI = new GoogleGenerativeAI(apiKey || "");
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash-latest",
+    model: "gemini-1.5-flash",
     generationConfig: {
         temperature: 0.7,
         topK: 40,
