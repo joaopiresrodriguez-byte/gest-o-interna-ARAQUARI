@@ -102,8 +102,8 @@ Descrição: ${dados.descricao_solicitacao}
                 links_cbmsc: linksCbmsc
             };
         } catch (error: any) {
-            console.error('Erro detalhado no GeminiService:', error);
-            throw new Error(`Falha na análise profunda: ${error.message || "Erro desconhecido"}`);
+            console.error(`Erro detalhado no GeminiService (${modelName}):`, error);
+            throw new Error(`Falha na análise profunda (${modelName}): ${error.message || "Erro desconhecido"}`);
         }
     },
 
