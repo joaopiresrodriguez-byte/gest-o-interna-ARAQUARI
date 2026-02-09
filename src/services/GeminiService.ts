@@ -6,31 +6,53 @@ const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
 const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY;
 
-let modelName = "gemini-pro";
+// Lista de modelos para tentar (em ordem de preferência)
+const AVAILABLE_MODELS = [
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-pro",
+    "gemini-pro" // último recurso
+];
 
-console.log("%c👑 [IA] VERSÃO 1.3.0 - GOLD EDITION", "color: #000; background: #fbbf24; font-size: 16px; font-weight: bold; padding: 15px; border: 4px solid #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);");
-console.log(`[IA] Chave Localizada: ${apiKey ? "CONFIGURADA (OK)" : "AUSENTE (ERRO)"}`);
-console.log(`[IA] Modelo Ativo: ${modelName}`);
+let workingModelName: string | null = null;
 
-if (!apiKey) {
-    console.error("ALERTA CRÍTICO: Chave de API não encontrada. O sistema de IA não funcionará sem a variável VITE_GEMINI_API_KEY.");
-}
+console.log("%c💥 [IA] VERSÃO 1.4.0 - ULTRA RESILIENTE", "color: #fff; background: #9333ea; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log(`[IA] Chave presente: ${!!apiKey}`);
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-// Função auxiliar para obter o modelo com fallback
-const getModel = (name: string) => {
-    return genAI.getGenerativeModel({
-        model: name,
-        generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-        }
-    });
-};
+// Função para tentar gerar conteúdo com fallback exaustivo
+const generateWithFallback = async (parts: any[]) => {
+    // 1. Tentar o último modelo que funcionou (se houver)
+    const modelsToTry = workingModelName
+        ? [workingModelName, ...AVAILABLE_MODELS.filter(m => m !== workingModelName)]
+        : AVAILABLE_MODELS;
 
-const currentModel = getModel(modelName);
+    let lastError: any = null;
+
+    for (const name of modelsToTry) {
+        try {
+            console.log(`[GeminiService] Tentando modelo: ${name}...`);
+            const model = genAI.getGenerativeModel({ model: name });
+            const result = await model.generateContent(parts);
+            const response = await result.response;
+            const text = response.text();
+
+            if (text) {
+                workingModelName = name; // Salva o modelo que funcionou
+                console.log(`[GeminiService] Sucesso com o modelo: ${name}`);
+                return { text, model: name };
+            }
+        } catch (error: any) {
+            console.warn(`[GeminiService] Modelo ${name} falhou:`, error.message);
+            lastError = error;
+            // Se for erro de quota ou segurança, talvez não valha a pena tentar os outros, 
+            // mas 404/400 (not found) indica que devemos tentar o próximo.
+        }
+    }
+
+    throw new Error(`Nenhum modelo disponível respondeu corretamente. Último erro: ${lastError?.message || "Desconhecido"}`);
+};
 
 export interface AnalysisInput {
     tipo_solicitacao: string;
@@ -103,34 +125,22 @@ Descrição: ${dados.descricao_solicitacao}
             }
 
             try {
-                const result = await currentModel.generateContent(parts);
-                const response = await result.response;
-                const resposta = response.text();
+                const { text, model } = await generateWithFallback(parts);
 
                 return {
-                    resposta: resposta,
+                    resposta: text,
                     documentos_utilizados: documentosLocais.map(d => d.id),
                     fonte_web: contextoWeb ? "WEB" : "LOCAL",
-                    links_cbmsc: linksCbmsc
+                    links_cbmsc: linksCbmsc,
+                    modelo_ia: model
                 };
-            } catch (innerError: any) {
-                if (innerError.message?.includes("404") || innerError.message?.includes("not found")) {
-                    console.warn("[GeminiService] Modelo Flash falhou, tentando Fallback para Pro...");
-                    const fallbackModel = getModel("gemini-pro");
-                    const result = await fallbackModel.generateContent(parts);
-                    const response = await result.response;
-                    return {
-                        resposta: response.text(),
-                        documentos_utilizados: documentosLocais.map(d => d.id),
-                        fonte_web: contextoWeb ? "WEB" : "LOCAL",
-                        links_cbmsc: linksCbmsc
-                    };
-                }
-                throw innerError;
+            } catch (error: any) {
+                console.error("[GeminiService] Erro em todos os modelos:", error);
+                throw error;
             }
         } catch (error: any) {
-            console.error(`Erro detalhado no GeminiService (${modelName}):`, error);
-            throw new Error(`Falha na análise profunda (${modelName}): ${error.message || "Erro desconhecido"}`);
+            console.error(`Erro detalhado no GeminiService:`, error);
+            throw new Error(`Falha na análise profunda: ${error.message || "Erro desconhecido"}`);
         }
     },
 
@@ -164,8 +174,14 @@ Descrição: ${dados.descricao_solicitacao}
         ${informacoesWeb ? JSON.stringify(informacoesWeb) : '[]'}
       `;
 
-            // 4. Criar chat com histórico
-            const chatOptions = {
+            // 4. Iniciar Chat com Fallback (simplificado para usar o workingModelName)
+            if (!workingModelName) {
+                // Se ainda não descobrimos qual modelo funciona, fazemos uma chamada rápida de teste
+                await generateWithFallback([{ text: "oi" }]);
+            }
+
+            const model = genAI.getGenerativeModel({ model: workingModelName || AVAILABLE_MODELS[0] });
+            const chat = model.startChat({
                 history: historicoConversa.map(msg => ({
                     role: msg.role === 'user' ? 'user' : 'model',
                     parts: [{ text: msg.content }]
@@ -174,9 +190,7 @@ Descrição: ${dados.descricao_solicitacao}
                     maxOutputTokens: 2000,
                     temperature: 0.7,
                 },
-            };
-
-            let chat = currentModel.startChat(chatOptions);
+            });
 
             // 5. Prompt do sistema
             const promptSistema = `
