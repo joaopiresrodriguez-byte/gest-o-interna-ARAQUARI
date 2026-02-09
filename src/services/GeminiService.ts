@@ -1,14 +1,17 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchService } from "./SearchService";
 
-const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+const env = (import.meta as any).env;
+const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || (window as any).process?.env?.GEMINI_API_KEY;
 const modelName = "gemini-pro";
 
-// LOG DE EMERGÊNCIA - SE VOCÊ NÃO VER ISSO, SEU SITE NÃO ATUALIZOU
-console.log("%c🚀 [SISTEMA] VERSÃO NUCLEAR 1.0.1 - MODELO: gemini-pro - HORA: 14:40", "color: #00ff00; background: #000; font-size: 20px; font-weight: bold; padding: 20px; border: 5px solid #00ff00;");
+// LOG DE DIAGNÓSTICO
+console.log("%c🚀 [IA] SISTEMA ATUALIZADO 1.0.2", "color: cyan; background: black; font-size: 14px; font-weight: bold;");
+console.log(`[IA] Chave encontrada: ${apiKey ? (apiKey.substring(0, 4) + "..." + apiKey.substring(apiKey.length - 4)) : "NÃO ENCONTRADA"}`);
+console.log(`[IA] Modelo configurado: ${modelName}`);
 
 if (!apiKey) {
-    console.error("CRÍTICO: Chave VITE_GEMINI_API_KEY não encontrada!");
+    console.error("ERRO CRÍTICO: Nenhuma chave de API encontrada (VITE_GEMINI_API_KEY ou GEMINI_API_KEY)!");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
