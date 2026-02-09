@@ -5,7 +5,7 @@ interface NewsItem {
     link: string;
 }
 
-export const DefesaCivilTicker: React.FC = () => {
+export const DefesaCivilTicker = React.memo(() => {
     const [news, setNews] = useState<NewsItem[]>([]);
 
     useEffect(() => {
@@ -80,4 +80,6 @@ export const DefesaCivilTicker: React.FC = () => {
       `}</style>
         </div>
     );
-};
+});
+
+DefesaCivilTicker.displayName = 'DefesaCivilTicker';

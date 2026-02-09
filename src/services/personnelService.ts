@@ -1,53 +1,223 @@
 import { supabase } from './supabase';
 import { Personnel, DocumentB1, Vacation } from './types';
+import { BaseService, ServiceError } from './baseService';
+import { PAGINATION } from '../config/constants';
+
+// Campos específicos para otimizar queries
+const PERSONNEL_FIELDS = 'id, name, rank, status, type, phone, email, created_at';
+const DOCUMENT_FIELDS = 'id, nome, tipo, data_upload, path, personnel_id';
+const VACATION_FIELDS = 'id, personnel_id, data_inicio, data_fim, tipo, status';
+
+// Instâncias dos serviços base
+const personnelBase = new BaseService<Personnel>('personnel', PERSONNEL_FIELDS);
+const documentsBase = new BaseService<DocumentB1>('personnel_documents', DOCUMENT_FIELDS);
+const vacationsBase = new BaseService<Vacation>('personnel_vacations', VACATION_FIELDS);
 
 export const PersonnelService = {
-    getPersonnel: async (): Promise<Personnel[]> => {
-        const { data, error } = await supabase.from('personnel').select('*').order('name', { ascending: true });
-        if (error) console.error('Error fetching personnel:', error);
-        return (data as Personnel[]) || [];
+    /**
+     * Buscar todos os militares com paginação opcional
+     */
+    getPersonnel: async (page?: number): Promise<Personnel[]> => {
+        try {
+            const result = await personnelBase.getAll({
+                orderBy: 'name',
+                ascending: true,
+                page,
+                pageSize: page ? PAGINATION.PERSONNEL_PAGE_SIZE : undefined,
+            });
+
+            // Se não tem paginação, retorna array direto
+            if (Array.isArray(result)) {
+                return result;
+            }
+
+            // Se tem paginação, retorna apenas os dados
+            return result.data;
+        } catch (error) {
+            console.error('Error fetching personnel:', error);
+            throw error;
+        }
     },
 
-    addPersonnel: async (person: Personnel) => {
-        const { error } = await supabase.from('personnel').insert([person]);
-        if (error) console.error('Error adding personnel:', error);
+    /**
+     * Adicionar novo militar
+     */
+    addPersonnel: async (person: Omit<Personnel, 'id'>): Promise<Personnel> => {
+        try {
+            return await personnelBase.create(person);
+        } catch (error) {
+            console.error('Error adding personnel:', error);
+            throw error;
+        }
     },
 
-    deletePersonnel: async (id: number) => {
-        const { error } = await supabase.from('personnel').delete().eq('id', id);
-        if (error) throw error;
+    /**
+     * Atualizar militar existente
+     */
+    updatePersonnel: async (id: number, person: Partial<Personnel>): Promise<Personnel> => {
+        try {
+            return await personnelBase.update(id, person);
+        } catch (error) {
+            console.error('Error updating personnel:', error);
+            throw error;
+        }
     },
 
-    getDocumentsB1: async (): Promise<DocumentB1[]> => {
-        const { data, error } = await supabase.from('documentos').select('*').order('data_upload', { ascending: false });
-        if (error) console.error('Error fetching documents:', error);
-        return (data as DocumentB1[]) || [];
+    /**
+     * Deletar militar
+     */
+    deletePersonnel: async (id: number): Promise<void> => {
+        try {
+            await personnelBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting personnel:', error);
+            throw error;
+        }
     },
 
-    addDocumentB1: async (doc: DocumentB1) => {
-        const { error } = await supabase.from('documentos').insert([doc]);
-        if (error) throw error;
+    /**
+     * Buscar militar por ID
+     */
+    getPersonnelById: async (id: number): Promise<Personnel | null> => {
+        try {
+            return await personnelBase.getById(id);
+        } catch (error) {
+            console.error('Error fetching personnel by ID:', error);
+            throw error;
+        }
     },
 
-    deleteDocumentB1: async (id: string, path: string) => {
-        await supabase.storage.from('documentos-b1').remove([path]);
-        const { error } = await supabase.from('documentos').delete().eq('id', id);
-        if (error) throw error;
+    /**
+     * Buscar documentos de um militar
+     */
+    getDocumentsB1: async (personnelId?: number): Promise<DocumentB1[]> => {
+        try {
+            if (personnelId) {
+                const result = await documentsBase.query(
+                    { personnel_id: personnelId },
+                    { orderBy: 'data_upload', ascending: false }
+                );
+                return Array.isArray(result) ? result : result.data;
+            }
+
+            const result = await documentsBase.getAll({
+                orderBy: 'data_upload',
+                ascending: false,
+            });
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching documents:', error);
+            throw error;
+        }
     },
 
-    getVacations: async (): Promise<Vacation[]> => {
-        const { data, error } = await supabase.from('ferias').select('*').order('data_inicio', { ascending: true });
-        if (error) console.error('Error fetching vacations:', error);
-        return (data as Vacation[]) || [];
+    /**
+     * Adicionar documento
+     */
+    addDocumentB1: async (doc: Omit<DocumentB1, 'id'>): Promise<DocumentB1> => {
+        try {
+            return await documentsBase.create(doc);
+        } catch (error) {
+            console.error('Error adding document:', error);
+            throw error;
+        }
     },
 
-    addVacation: async (vacation: Vacation) => {
-        const { error } = await supabase.from('ferias').insert([vacation]);
-        if (error) throw error;
+    /**
+     * Deletar documento (remove do storage e do banco)
+     */
+    deleteDocumentB1: async (id: string, path: string): Promise<void> => {
+        try {
+            // Remove do storage
+            const { error: storageError } = await supabase.storage
+                .from('personnel-documents')
+                .remove([path]);
+
+            if (storageError) {
+                throw new ServiceError('Erro ao remover arquivo do storage', storageError);
+            }
+
+            // Remove do banco
+            await documentsBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting document:', error);
+            throw error;
+        }
     },
 
-    deleteVacation: async (id: string) => {
-        const { error } = await supabase.from('ferias').delete().eq('id', id);
-        if (error) throw error;
-    }
+    /**
+     * Buscar férias
+     */
+    getVacations: async (personnelId?: number): Promise<Vacation[]> => {
+        try {
+            if (personnelId) {
+                const result = await vacationsBase.query(
+                    { personnel_id: personnelId },
+                    { orderBy: 'data_inicio', ascending: true }
+                );
+                return Array.isArray(result) ? result : result.data;
+            }
+
+            const result = await vacationsBase.getAll({
+                orderBy: 'data_inicio',
+                ascending: true,
+            });
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching vacations:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Adicionar férias
+     */
+    addVacation: async (vacation: Omit<Vacation, 'id'>): Promise<Vacation> => {
+        try {
+            return await vacationsBase.create(vacation);
+        } catch (error) {
+            console.error('Error adding vacation:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Deletar férias
+     */
+    deleteVacation: async (id: string): Promise<void> => {
+        try {
+            await vacationsBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting vacation:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Buscar militares por status
+     */
+    getPersonnelByStatus: async (status: string): Promise<Personnel[]> => {
+        try {
+            const result = await personnelBase.query(
+                { status },
+                { orderBy: 'name', ascending: true }
+            );
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching personnel by status:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Contar militares por status
+     */
+    countByStatus: async (status: string): Promise<number> => {
+        try {
+            return await personnelBase.count({ status });
+        } catch (error) {
+            console.error('Error counting personnel by status:', error);
+            throw error;
+        }
+    },
 };

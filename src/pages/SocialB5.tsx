@@ -186,7 +186,7 @@ const SocialB5: React.FC = () => {
                         {post.content}
                       </p>
                       <div className="h-40 rounded-lg bg-gray-100 mb-3 overflow-hidden">
-                        <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Imagem do Post" />
+                        <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Imagem do Post" loading="lazy" />
                       </div>
                       <div className="flex items-center justify-between text-xs font-medium text-rustic-brown/60 pt-2 border-t border-rustic-border/50">
                         <span>{post.likes} Curtidas</span>

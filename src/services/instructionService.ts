@@ -1,95 +1,252 @@
 import { supabase } from './supabase';
 import { MateriaInstrucao, MateriaApresentacao, MateriaVideo, Training } from './types';
+import { BaseService } from './baseService';
+
+// Campos específicos para otimizar queries
+const MATERIA_FIELDS = 'id, nome_materia, categoria, nivel, status, total_apresentacoes, total_videos, created_at, updated_at';
+const APRESENTACAO_FIELDS = 'id, materia_id, titulo, arquivo_path, ordem, created_at';
+const VIDEO_FIELDS = 'id, materia_id, titulo, video_url, duracao, ordem, created_at';
+const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
+
+// Instâncias dos serviços base
+const materiasBase = new BaseService<MateriaInstrucao>('instruction_materials', MATERIA_FIELDS);
+const apresentacoesBase = new BaseService<MateriaApresentacao>('material_presentations', APRESENTACAO_FIELDS);
+const videosBase = new BaseService<MateriaVideo>('material_videos', VIDEO_FIELDS);
+const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
 
 export const InstructionService = {
-    getMateriasInstrucao: async (filtros?: { categoria?: string, nivel?: string, status?: string }): Promise<MateriaInstrucao[]> => {
-        let query = supabase.from('materias_instrucao').select('*').order('nome_materia', { ascending: true });
-        if (filtros?.categoria) query = query.eq('categoria', filtros.categoria);
-        if (filtros?.nivel) query = query.eq('nivel', filtros.nivel);
-        if (filtros?.status) query = query.eq('status', filtros.status);
-        const { data, error } = await query;
-        if (error) console.error('Error fetching materias:', error);
-        return (data as MateriaInstrucao[]) || [];
+    // ==================== MATÉRIAS DE INSTRUÇÃO ====================
+
+    /**
+     * Buscar matérias de instrução com filtros opcionais
+     */
+    getMateriasInstrucao: async (filtros?: {
+        categoria?: string;
+        nivel?: string;
+        status?: string;
+    }): Promise<MateriaInstrucao[]> => {
+        try {
+            if (filtros && Object.keys(filtros).length > 0) {
+                const result = await materiasBase.query(filtros as Record<string, unknown>, {
+                    orderBy: 'nome_materia',
+                    ascending: true,
+                });
+                return Array.isArray(result) ? result : result.data;
+            }
+
+            const result = await materiasBase.getAll({
+                orderBy: 'nome_materia',
+                ascending: true,
+            });
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching materias:', error);
+            throw error;
+        }
     },
 
-    addMateriaInstrucao: async (materia: MateriaInstrucao) => {
-        const { data, error } = await supabase.from('materias_instrucao').insert([materia]).select();
-        if (error) throw error;
-        return data[0];
+    /**
+     * Adicionar matéria de instrução
+     */
+    addMateriaInstrucao: async (materia: Omit<MateriaInstrucao, 'id'>): Promise<MateriaInstrucao> => {
+        try {
+            return await materiasBase.create(materia);
+        } catch (error) {
+            console.error('Error adding materia:', error);
+            throw error;
+        }
     },
 
-    updateMateriaInstrucao: async (id: string, updates: Partial<MateriaInstrucao>) => {
-        const { data, error } = await supabase.from('materias_instrucao').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select();
-        if (error) throw error;
-        return data[0];
+    /**
+     * Atualizar matéria de instrução
+     */
+    updateMateriaInstrucao: async (
+        id: string,
+        updates: Partial<MateriaInstrucao>
+    ): Promise<MateriaInstrucao> => {
+        try {
+            const updatesWithTimestamp = {
+                ...updates,
+                updated_at: new Date().toISOString(),
+            };
+            return await materiasBase.update(id, updatesWithTimestamp);
+        } catch (error) {
+            console.error('Error updating materia:', error);
+            throw error;
+        }
     },
 
-    deleteMateriaInstrucao: async (id: string) => {
-        const { error } = await supabase.from('materias_instrucao').delete().eq('id', id);
-        if (error) throw error;
+    /**
+     * Deletar matéria de instrução
+     */
+    deleteMateriaInstrucao: async (id: string): Promise<void> => {
+        try {
+            await materiasBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting materia:', error);
+            throw error;
+        }
     },
 
+    // ==================== APRESENTAÇÕES ====================
+
+    /**
+     * Buscar apresentações de uma matéria
+     */
     getMateriaApresentacoes: async (materiaId: string): Promise<MateriaApresentacao[]> => {
-        const { data, error } = await supabase.from('materia_apresentacoes').select('*').eq('materia_id', materiaId).order('ordem', { ascending: true });
-        if (error) console.error('Error fetching presentations:', error);
-        return (data as MateriaApresentacao[]) || [];
+        try {
+            const result = await apresentacoesBase.query(
+                { materia_id: materiaId },
+                { orderBy: 'ordem', ascending: true }
+            );
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching presentations:', error);
+            throw error;
+        }
     },
 
-    addMateriaApresentacao: async (apresentacao: MateriaApresentacao) => {
-        const { error } = await supabase.from('materia_apresentacoes').insert([apresentacao]);
-        if (error) throw error;
-        await InstructionService.atualizarContadoresMateriais(apresentacao.materia_id);
+    /**
+     * Adicionar apresentação (atualiza contadores automaticamente)
+     */
+    addMateriaApresentacao: async (apresentacao: Omit<MateriaApresentacao, 'id'>): Promise<MateriaApresentacao> => {
+        try {
+            const created = await apresentacoesBase.create(apresentacao);
+            await InstructionService.atualizarContadoresMateriais(apresentacao.materia_id);
+            return created;
+        } catch (error) {
+            console.error('Error adding presentation:', error);
+            throw error;
+        }
     },
 
-    deleteMateriaApresentacao: async (id: string, materiaId: string) => {
-        const { error } = await supabase.from('materia_apresentacoes').delete().eq('id', id);
-        if (error) throw error;
-        await InstructionService.atualizarContadoresMateriais(materiaId);
+    /**
+     * Deletar apresentação (atualiza contadores automaticamente)
+     */
+    deleteMateriaApresentacao: async (id: string, materiaId: string): Promise<void> => {
+        try {
+            await apresentacoesBase.delete(id);
+            await InstructionService.atualizarContadoresMateriais(materiaId);
+        } catch (error) {
+            console.error('Error deleting presentation:', error);
+            throw error;
+        }
     },
 
+    // ==================== VÍDEOS ====================
+
+    /**
+     * Buscar vídeos de uma matéria
+     */
     getMateriaVideos: async (materiaId: string): Promise<MateriaVideo[]> => {
-        const { data, error } = await supabase.from('materia_videos').select('*').eq('materia_id', materiaId).order('ordem', { ascending: true });
-        if (error) console.error('Error fetching videos:', error);
-        return (data as MateriaVideo[]) || [];
+        try {
+            const result = await videosBase.query(
+                { materia_id: materiaId },
+                { orderBy: 'ordem', ascending: true }
+            );
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching videos:', error);
+            throw error;
+        }
     },
 
-    addMateriaVideo: async (video: MateriaVideo) => {
-        const { error } = await supabase.from('materia_videos').insert([video]);
-        if (error) throw error;
-        await InstructionService.atualizarContadoresMateriais(video.materia_id);
+    /**
+     * Adicionar vídeo (atualiza contadores automaticamente)
+     */
+    addMateriaVideo: async (video: Omit<MateriaVideo, 'id'>): Promise<MateriaVideo> => {
+        try {
+            const created = await videosBase.create(video);
+            await InstructionService.atualizarContadoresMateriais(video.materia_id);
+            return created;
+        } catch (error) {
+            console.error('Error adding video:', error);
+            throw error;
+        }
     },
 
-    deleteMateriaVideo: async (id: string, materiaId: string) => {
-        const { error } = await supabase.from('materia_videos').delete().eq('id', id);
-        if (error) throw error;
-        await InstructionService.atualizarContadoresMateriais(materiaId);
+    /**
+     * Deletar vídeo (atualiza contadores automaticamente)
+     */
+    deleteMateriaVideo: async (id: string, materiaId: string): Promise<void> => {
+        try {
+            await videosBase.delete(id);
+            await InstructionService.atualizarContadoresMateriais(materiaId);
+        } catch (error) {
+            console.error('Error deleting video:', error);
+            throw error;
+        }
     },
 
-    atualizarContadoresMateriais: async (materiaId: string) => {
-        const [presCount, vidCount] = await Promise.all([
-            supabase.from('materia_apresentacoes').select('*', { count: 'exact', head: true }).eq('materia_id', materiaId),
-            supabase.from('materia_videos').select('*', { count: 'exact', head: true }).eq('materia_id', materiaId)
-        ]);
-        await supabase.from('materias_instrucao').update({
-            total_apresentacoes: presCount.count || 0,
-            total_videos: vidCount.count || 0,
-            updated_at: new Date().toISOString()
-        }).eq('id', materiaId);
+    // ==================== LÓGICA DE NEGÓCIO ====================
+
+    /**
+     * Atualizar contadores de materiais (apresentações e vídeos)
+     */
+    atualizarContadoresMateriais: async (materiaId: string): Promise<void> => {
+        try {
+            const [presCount, vidCount] = await Promise.all([
+                apresentacoesBase.count({ materia_id: materiaId }),
+                videosBase.count({ materia_id: materiaId }),
+            ]);
+
+            await materiasBase.update(materiaId, {
+                total_apresentacoes: presCount,
+                total_videos: vidCount,
+                updated_at: new Date().toISOString(),
+            } as Partial<MateriaInstrucao>);
+        } catch (error) {
+            console.error('Error updating material counters:', error);
+            throw error;
+        }
     },
 
+    // ==================== TRAININGS ====================
+
+    /**
+     * Buscar treinamentos (com join de matéria)
+     */
     getTrainings: async (): Promise<Training[]> => {
-        const { data, error } = await supabase.from('trainings').select('*, materia:materias_instrucao(*)').order('date', { ascending: true });
-        if (error) console.error('Error fetching trainings:', error);
-        return (data as any[]) || [];
+        try {
+            // Query com join precisa ser feita manualmente
+            const { data, error } = await supabase
+                .from('training_schedule')
+                .select('*, materia:instruction_materials(*)')
+                .order('date', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching trainings:', error);
+                throw error;
+            }
+
+            return (data as unknown as Training[]) || [];
+        } catch (error) {
+            console.error('Error fetching trainings:', error);
+            throw error;
+        }
     },
 
-    addTraining: async (training: Training) => {
-        const { error } = await supabase.from('trainings').insert([training]);
-        if (error) console.error('Error adding training:', error);
+    /**
+     * Adicionar treinamento
+     */
+    addTraining: async (training: Omit<Training, 'id'>): Promise<Training> => {
+        try {
+            return await trainingsBase.create(training);
+        } catch (error) {
+            console.error('Error adding training:', error);
+            throw error;
+        }
     },
 
-    deleteTraining: async (id: string) => {
-        const { error } = await supabase.from('trainings').delete().eq('id', id);
-        if (error) throw error;
-    }
+    /**
+     * Deletar treinamento
+     */
+    deleteTraining: async (id: string): Promise<void> => {
+        try {
+            await trainingsBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting training:', error);
+            throw error;
+        }
+    },
 };

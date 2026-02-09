@@ -1,89 +1,261 @@
 import { supabase } from './supabase';
 import { DailyMission, Mission, GuReport, Training } from './types';
+import { BaseService } from './baseService';
+
+// Campos específicos para otimizar queries
+const DAILY_MISSION_FIELDS = 'id, titulo, descricao, data_missao, hora_inicio, hora_fim, responsavel_id, status, prioridade, created_at, ultima_atualizacao';
+const GU_REPORT_FIELDS = 'id, titulo, descricao, tipo, data_relatorio, responsavel, created_at';
+const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
+const MISSION_FIELDS = 'id, title, description, date, completed';
+
+// Instâncias dos serviços base
+const dailyMissionsBase = new BaseService<DailyMission>('daily_missions', DAILY_MISSION_FIELDS);
+const guReportsBase = new BaseService<GuReport>('gu_reports', GU_REPORT_FIELDS);
+const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
+const missionsBase = new BaseService<Mission>('missions', MISSION_FIELDS);
 
 export const OperationalService = {
-    // Missions
-    getDailyMissions: async (filters?: { data?: string, responsavel?: string, status?: string[] }): Promise<DailyMission[]> => {
-        let query = supabase.from('missoes_diarias').select('*');
-        if (filters?.data) query = query.eq('data_missao', filters.data);
-        if (filters?.responsavel) query = query.eq('responsavel_id', filters.responsavel);
-        if (filters?.status) query = query.in('status', filters.status);
-        const { data, error } = await query.order('prioridade', { ascending: false }).order('hora_inicio', { ascending: true });
-        if (error) console.error('Error fetching daily missions:', error);
-        return (data as DailyMission[]) || [];
+    // ==================== DAILY MISSIONS ====================
+
+    /**
+     * Buscar missões diárias com filtros opcionais
+     */
+    getDailyMissions: async (filters?: {
+        data?: string;
+        responsavel?: string;
+        status?: string[];
+    }): Promise<DailyMission[]> => {
+        try {
+            // Se tem filtro de status (array), precisa usar query customizada
+            if (filters?.status && filters.status.length > 0) {
+                let query = supabase
+                    .from('daily_missions')
+                    .select(DAILY_MISSION_FIELDS)
+                    .in('status', filters.status);
+
+                if (filters.data) {
+                    query = query.eq('data_missao', filters.data);
+                }
+                if (filters.responsavel) {
+                    query = query.eq('responsavel_id', filters.responsavel);
+                }
+
+                const { data, error } = await query
+                    .order('prioridade', { ascending: false })
+                    .order('hora_inicio', { ascending: true });
+
+                if (error) {
+                    console.error('Error fetching daily missions:', error);
+                    throw error;
+                }
+
+                return (data as DailyMission[]) || [];
+            }
+
+            // Filtros simples podem usar o BaseService
+            const simpleFilters: Record<string, unknown> = {};
+            if (filters?.data) simpleFilters.data_missao = filters.data;
+            if (filters?.responsavel) simpleFilters.responsavel_id = filters.responsavel;
+
+            const result = Object.keys(simpleFilters).length > 0
+                ? await dailyMissionsBase.query(simpleFilters, {
+                    orderBy: 'prioridade',
+                    ascending: false,
+                })
+                : await dailyMissionsBase.getAll({
+                    orderBy: 'prioridade',
+                    ascending: false,
+                });
+
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching daily missions:', error);
+            throw error;
+        }
     },
 
-    addDailyMission: async (mission: DailyMission) => {
-        const { data, error } = await supabase.from('missoes_diarias').insert([mission]).select();
-        if (error) throw error;
-        return data[0];
+    /**
+     * Adicionar missão diária
+     */
+    addDailyMission: async (mission: Omit<DailyMission, 'id'>): Promise<DailyMission> => {
+        try {
+            return await dailyMissionsBase.create(mission);
+        } catch (error) {
+            console.error('Error adding daily mission:', error);
+            throw error;
+        }
     },
 
-    updateDailyMission: async (id: string, updates: Partial<DailyMission>) => {
-        const { data, error } = await supabase.from('missoes_diarias').update({ ...updates, ultima_atualizacao: new Date().toISOString() }).eq('id', id).select();
-        if (error) throw error;
-        return data[0];
+    /**
+     * Atualizar missão diária
+     */
+    updateDailyMission: async (id: string, updates: Partial<DailyMission>): Promise<DailyMission> => {
+        try {
+            const updatesWithTimestamp = {
+                ...updates,
+                ultima_atualizacao: new Date().toISOString(),
+            };
+            return await dailyMissionsBase.update(id, updatesWithTimestamp);
+        } catch (error) {
+            console.error('Error updating daily mission:', error);
+            throw error;
+        }
     },
 
-    deleteDailyMission: async (id: string) => {
-        const { error } = await supabase.from('missoes_diarias').delete().eq('id', id);
-        if (error) throw error;
+    /**
+     * Deletar missão diária
+     */
+    deleteDailyMission: async (id: string): Promise<void> => {
+        try {
+            await dailyMissionsBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting daily mission:', error);
+            throw error;
+        }
     },
 
-    // Gu Reports
+    // ==================== GU REPORTS ====================
+
+    /**
+     * Buscar relatórios GU
+     */
     getGuReports: async (): Promise<GuReport[]> => {
-        const { data, error } = await supabase.from('gu_reports').select('*').order('created_at', { ascending: false });
-        if (error) console.error('Error fetching reports:', error);
-        return (data as GuReport[]) || [];
+        try {
+            const result = await guReportsBase.getAll({
+                orderBy: 'created_at',
+                ascending: false,
+            });
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching GU reports:', error);
+            throw error;
+        }
     },
 
-    addGuReport: async (report: GuReport) => {
-        const { error } = await supabase.from('gu_reports').insert([report]);
-        if (error) console.error('Error adding report:', error);
+    /**
+     * Adicionar relatório GU
+     */
+    addGuReport: async (report: Omit<GuReport, 'id'>): Promise<GuReport> => {
+        try {
+            return await guReportsBase.create(report);
+        } catch (error) {
+            console.error('Error adding GU report:', error);
+            throw error;
+        }
     },
 
-    deleteGuReport: async (id: string) => {
-        const { error } = await supabase.from('gu_reports').delete().eq('id', id);
-        if (error) throw error;
+    /**
+     * Deletar relatório GU
+     */
+    deleteGuReport: async (id: string): Promise<void> => {
+        try {
+            await guReportsBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting GU report:', error);
+            throw error;
+        }
     },
 
-    // Trainings
+    // ==================== TRAININGS ====================
+
+    /**
+     * Buscar treinamentos (com join de matéria)
+     */
     getTrainings: async (): Promise<Training[]> => {
-        const { data, error } = await supabase.from('trainings').select('*, materia:materias_instrucao(*)').order('date', { ascending: true });
-        if (error) console.error('Error fetching trainings:', error);
-        return (data as any[]) || [];
+        try {
+            // Query com join precisa ser feita manualmente
+            const { data, error } = await supabase
+                .from('training_schedule')
+                .select('*, materia:materias_instrucao(*)')
+                .order('date', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching trainings:', error);
+                throw error;
+            }
+
+            return (data as unknown as Training[]) || [];
+        } catch (error) {
+            console.error('Error fetching trainings:', error);
+            throw error;
+        }
     },
 
-    addTraining: async (training: Training) => {
-        const { error } = await supabase.from('trainings').insert([training]);
-        if (error) console.error('Error adding training:', error);
+    /**
+     * Adicionar treinamento
+     */
+    addTraining: async (training: Omit<Training, 'id'>): Promise<Training> => {
+        try {
+            return await trainingsBase.create(training);
+        } catch (error) {
+            console.error('Error adding training:', error);
+            throw error;
+        }
     },
 
-    deleteTraining: async (id: string) => {
-        const { error } = await supabase.from('trainings').delete().eq('id', id);
-        if (error) throw error;
+    /**
+     * Deletar treinamento
+     */
+    deleteTraining: async (id: string): Promise<void> => {
+        try {
+            await trainingsBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting training:', error);
+            throw error;
+        }
     },
 
-    // Legacy/Core missions
+    // ==================== LEGACY MISSIONS ====================
+
+    /**
+     * Buscar missões (legacy)
+     */
     getMissions: async (): Promise<Mission[]> => {
-        const { data, error } = await supabase.from('missions').select('*').order('date', { ascending: true });
-        if (error) console.error('Error fetching missions:', error);
-        return (data as Mission[]) || [];
+        try {
+            const result = await missionsBase.getAll({
+                orderBy: 'date',
+                ascending: true,
+            });
+            return Array.isArray(result) ? result : result.data;
+        } catch (error) {
+            console.error('Error fetching missions:', error);
+            throw error;
+        }
     },
 
-    addMission: async (mission: Mission) => {
-        const { data, error } = await supabase.from('missions').insert([mission]).select();
-        if (error) console.error('Error adding mission:', error);
-        return data;
+    /**
+     * Adicionar missão (legacy)
+     */
+    addMission: async (mission: Omit<Mission, 'id'>): Promise<Mission> => {
+        try {
+            return await missionsBase.create(mission);
+        } catch (error) {
+            console.error('Error adding mission:', error);
+            throw error;
+        }
     },
 
-    toggleMission: async (id: number, currentStatus: boolean) => {
-        const { error } = await supabase.from('missions').update({ completed: !currentStatus }).eq('id', id);
-        if (error) console.error('Error toggling mission:', error);
+    /**
+     * Alternar status de missão (legacy)
+     */
+    toggleMission: async (id: number, currentStatus: boolean): Promise<void> => {
+        try {
+            await missionsBase.update(id, { completed: !currentStatus } as Partial<Mission>);
+        } catch (error) {
+            console.error('Error toggling mission:', error);
+            throw error;
+        }
     },
 
-    deleteMission: async (id: number) => {
-        const { error } = await supabase.from('missions').delete().eq('id', id);
-        if (error) throw error;
-    }
+    /**
+     * Deletar missão (legacy)
+     */
+    deleteMission: async (id: number): Promise<void> => {
+        try {
+            await missionsBase.delete(id);
+        } catch (error) {
+            console.error('Error deleting mission:', error);
+            throw error;
+        }
+    },
 };

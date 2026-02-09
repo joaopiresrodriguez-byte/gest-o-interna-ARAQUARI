@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { PersonnelService } from '../services/personnelService';
 import { Personnel } from '../services/types';
 
@@ -6,9 +6,8 @@ interface BirthdayCardProps {
     selectedDate: string;
 }
 
-export const BirthdayCard: React.FC<BirthdayCardProps> = ({ selectedDate }) => {
+export const BirthdayCard = React.memo<BirthdayCardProps>(({ selectedDate }) => {
     const [personnel, setPersonnel] = useState<Personnel[]>([]);
-    const [birthdays, setBirthdays] = useState<Personnel[]>([]);
 
     useEffect(() => {
         const fetchPersonnel = async () => {
@@ -18,18 +17,16 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ selectedDate }) => {
         fetchPersonnel();
     }, []);
 
-    useEffect(() => {
-        if (personnel.length > 0) {
-            const [year, month, day] = selectedDate.split('-');
-            // selectedDate is usually YYYY-MM-DD
-            const daysBirthdays = personnel.filter(p => {
-                if (!p.data_nascimento) return false;
-                const [pYear, pMonth, pDay] = p.data_nascimento.split('-');
-                // Compare Month and Day
-                return pMonth === month && pDay === day;
-            });
-            setBirthdays(daysBirthdays);
-        }
+    // Memoize birthday filtering to avoid recalculation on every render
+    const birthdays = useMemo(() => {
+        if (personnel.length === 0) return [];
+
+        const [year, month, day] = selectedDate.split('-');
+        return personnel.filter(p => {
+            if (!p.data_nascimento) return false;
+            const [pYear, pMonth, pDay] = p.data_nascimento.split('-');
+            return pMonth === month && pDay === day;
+        });
     }, [selectedDate, personnel]);
 
     if (birthdays.length === 0) return null;
@@ -64,4 +61,6 @@ export const BirthdayCard: React.FC<BirthdayCardProps> = ({ selectedDate }) => {
             </div>
         </div>
     );
-};
+});
+
+BirthdayCard.displayName = 'BirthdayCard';

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SupabaseService, ProductReceipt, ChecklistItem, DailyChecklist } from '../services/SupabaseService';
 import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { Button, Card, Input, TextArea, Badge } from '../components/ui';
 
 const Operacional: React.FC = () => {
   // New States for Advanced Features
@@ -27,7 +28,7 @@ const Operacional: React.FC = () => {
     loadOperationalData();
   }, [activeChecklistTab, selectedViaturaId]);
 
-  const loadOperationalData = async () => {
+  const loadOperationalData = useCallback(async () => {
     setLoading(true);
     try {
       const [items, recs, fleetData] = await Promise.all([
@@ -52,9 +53,9 @@ const Operacional: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeChecklistTab, selectedViaturaId, reportStatuses]);
 
-  const handleRegisterReceipt = async () => {
+  const handleRegisterReceipt = useCallback(async () => {
     if (!receiptFile || !receiptNF) {
       toast.error("Por favor, selecione uma foto e insira o número da nota fiscal.");
       return;
@@ -93,16 +94,16 @@ const Operacional: React.FC = () => {
     } finally {
       setIsUploading(false);
     }
-  };
+  }, [receiptFile, receiptNF, receiptObs, user?.email, loadOperationalData]);
 
-  const updateReportStatus = (id: string, status: 'ok' | 'faltante', obs?: string) => {
+  const updateReportStatus = useCallback((id: string, status: 'ok' | 'faltante', obs?: string) => {
     setReportStatuses(prev => ({
       ...prev,
       [id]: { ...prev[id], status, obs: obs !== undefined ? obs : prev[id].obs }
     }));
-  };
+  }, []);
 
-  const handleSaveChecklist = async () => {
+  const handleSaveChecklist = useCallback(async () => {
     setLoading(true);
     try {
       const promises = checklistItems.map(item => {
@@ -135,7 +136,7 @@ const Operacional: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [checklistItems, reportStatuses, selectedViaturaId, user?.email, fleet, loadOperationalData]);
 
   return (
     <div className="bg-background-light h-full w-full flex flex-col overflow-y-auto">
@@ -185,28 +186,28 @@ const Operacional: React.FC = () => {
                     )}
                     <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files && setReceiptFile(e.target.files[0])} />
                   </label>
-                  <input
-                    type="text"
+                  <Input
                     value={receiptNF}
-                    onChange={e => setReceiptNF(e.target.value)}
+                    onChange={setReceiptNF}
                     placeholder="Nº da Nota Fiscal"
-                    className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-white text-sm focus:ring-2 focus:ring-primary/20"
                   />
-                  <textarea
+                  <TextArea
                     value={receiptObs}
-                    onChange={e => setReceiptObs(e.target.value)}
+                    onChange={setReceiptObs}
                     placeholder="Observações (Opcional)"
-                    className="w-full h-24 p-4 rounded-lg border border-rustic-border bg-white text-sm focus:ring-2 focus:ring-primary/20 resize-none"
+                    rows={3}
                   />
                   {profile?.p_operacional === 'editor' ? (
-                    <button
+                    <Button
                       onClick={handleRegisterReceipt}
-                      disabled={isUploading}
-                      className="w-full py-3 bg-secondary-green text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:bg-green-700 transition-all disabled:opacity-50"
+                      loading={isUploading}
+                      variant="success"
+                      size="lg"
+                      fullWidth
+                      icon={isUploading ? undefined : 'save'}
                     >
-                      <span className="material-symbols-outlined">{isUploading ? 'sync' : 'save'}</span>
                       {isUploading ? 'Registrando...' : 'Registrar Recebimento'}
-                    </button>
+                    </Button>
                   ) : (
                     <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-center">
                       <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>
@@ -224,7 +225,7 @@ const Operacional: React.FC = () => {
                   <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
                     {receipts.map(rec => (
                       <div key={rec.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-rustic-border/50">
-                        <img src={rec.foto_url} className="w-16 h-16 rounded object-cover border border-gray-200" alt="Produto" />
+                        <img src={rec.foto_url} className="w-16 h-16 rounded object-cover border border-gray-200" alt="Produto" loading="lazy" />
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-[#181111]">NF: {rec.numero_nota_fiscal}</span>
                           <span className="text-[10px] text-gray-500">{new Date(rec.data_recebimento!).toLocaleDateString('pt-BR')}</span>
@@ -301,20 +302,22 @@ const Operacional: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <button
+                        <Button
                           onClick={() => updateReportStatus(item.id, 'ok')}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border transition-all ${reportStatuses[item.id]?.status === 'ok' ? 'bg-secondary-green text-white border-secondary-green shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-secondary-green'}`}
+                          variant={reportStatuses[item.id]?.status === 'ok' ? 'success' : 'ghost'}
+                          size="sm"
+                          icon="check_circle"
                         >
-                          <span className="material-symbols-outlined text-[18px]">check_circle</span>
                           DISPONÍVEL
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => updateReportStatus(item.id, 'faltante')}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border transition-all ${reportStatuses[item.id]?.status === 'faltante' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-primary'}`}
+                          variant={reportStatuses[item.id]?.status === 'faltante' ? 'primary' : 'ghost'}
+                          size="sm"
+                          icon="report"
                         >
-                          <span className="material-symbols-outlined text-[18px]">report</span>
                           FALTANTE
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
@@ -337,14 +340,17 @@ const Operacional: React.FC = () => {
 
                 {checklistItems.length > 0 && (
                   profile?.p_operacional === 'editor' ? (
-                    <button
+                    <Button
                       onClick={handleSaveChecklist}
-                      disabled={loading}
-                      className="w-full mt-4 py-4 bg-primary text-white font-black text-sm rounded-xl shadow-lg border-b-4 border-red-800 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                      loading={loading}
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                      icon={loading ? undefined : 'task_alt'}
+                      className="mt-4"
                     >
-                      <span className="material-symbols-outlined">{loading ? 'sync' : 'task_alt'}</span>
                       {loading ? 'SALVANDO...' : 'FINALIZAR E ENVIAR CONFERÊNCIA'}
-                    </button>
+                    </Button>
                   ) : (
                     <div className="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
                       <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>

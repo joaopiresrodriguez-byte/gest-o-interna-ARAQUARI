@@ -633,7 +633,7 @@ const InstrucaoB3: React.FC = () => {
                     <div key={vid.id} className="bg-white border border-[#E5E1DA] rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-sm hover:shadow-xl transition-all h-auto md:h-48 group">
                       <div className="relative w-full md:w-80 bg-black flex items-center justify-center overflow-hidden">
                         {vid.thumbnail_url ? (
-                          <img src={vid.thumbnail_url} alt="Thumbnail" className="w-full h-full object-cover opacity-80" />
+                          <img src={vid.thumbnail_url} alt="Thumbnail" className="w-full h-full object-cover opacity-80" loading="lazy" />
                         ) : (
                           <div className="flex flex-col items-center gap-2 opacity-30">
                             <span className="material-symbols-outlined text-5xl text-white">movie</span>

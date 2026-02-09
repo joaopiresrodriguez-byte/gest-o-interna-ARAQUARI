@@ -1,87 +1,73 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import DashboardAvisos from './pages/DashboardAvisos';
-import Operacional from './pages/Operacional';
-import PessoalB1 from './pages/PessoalB1';
-import InstrucaoB3 from './pages/InstrucaoB3';
-import PatrimonioB4 from './pages/PatrimonioB4';
-import SocialB5 from './pages/SocialB5';
-import SSCI from './pages/SSCI';
-import Login from './pages/Login';
-import GestaoUsuarios from './pages/GestaoUsuarios';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'sonner';
+import { LoadingFallback } from './components/LoadingFallback';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
+// Lazy loading de páginas para code splitting
+const DashboardAvisos = lazy(() => import('./pages/DashboardAvisos'));
+const Operacional = lazy(() => import('./pages/Operacional'));
+const PessoalB1 = lazy(() => import('./pages/PessoalB1'));
+const InstrucaoB3 = lazy(() => import('./pages/InstrucaoB3'));
+const PatrimonioB4 = lazy(() => import('./pages/PatrimonioB4'));
+const SocialB5 = lazy(() => import('./pages/SocialB5'));
+const SSCI = lazy(() => import('./pages/SSCI'));
+const Login = lazy(() => import('./pages/Login'));
+const GestaoUsuarios = lazy(() => import('./pages/GestaoUsuarios'));
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: any;
-}
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
 
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
 
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("Uncaught error:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 flex flex-col items-center justify-center h-screen bg-red-50 text-red-900">
-          <h1 className="text-2xl font-bold mb-4">Algo deu errado 😢</h1>
-          <pre className="bg-white p-4 rounded border border-red-200 text-xs overflow-auto max-w-2xl">
-            {this.state.error?.toString()}
-            <br />
-            <br />
-            {this.state.error?.stack}
-          </pre>
-          <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-600 text-white rounded">
-            Recarregar Página
-          </button>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-// Sidebar Component
-const SidebarLink = ({
-  to,
-  icon,
-  label
-}: {
+// Sidebar Component - Memoized to prevent unnecessary re-renders
+const SidebarLink = React.memo<{
   to: string;
   icon: string;
   label: string;
-}) => (
-  <NavLink
-    to={to}
-    className={({ isActive }) => `w-full flex items-center gap-3 px-4 py-3 rounded-lg border-l-4 transition-all group ${isActive
-      ? 'bg-white/10 border-primary text-white shadow-sm'
-      : 'hover:bg-white/5 border-transparent text-gray-400 hover:text-white'
-      }`}
-  >
-    {({ isActive }) => (
-      <>
-        <span className={`material-symbols-outlined ${isActive ? 'text-primary' : ''}`}>{icon}</span>
-        <span className={`text-sm font-medium tracking-wide ${isActive ? 'font-bold' : ''}`}>{label}</span>
-      </>
-    )}
-  </NavLink>
-);
+}>(({
+  to,
+  icon,
+  label
+}) => {
+  // Prefetch function to load the lazy component chunk on hover
+  const prefetch = () => {
+    const componentMap: Record<string, () => Promise<any>> = {
+      '/avisos': () => import('./pages/DashboardAvisos'),
+      '/operacional': () => import('./pages/Operacional'),
+      '/ssci': () => import('./pages/SSCI'),
+      '/pessoal': () => import('./pages/PessoalB1'),
+      '/instrucao': () => import('./pages/InstrucaoB3'),
+      '/logistica': () => import('./pages/PatrimonioB4'),
+      '/social': () => import('./pages/SocialB5'),
+      '/gestao': () => import('./pages/GestaoUsuarios'),
+    };
+
+    const importFn = componentMap[to];
+    if (importFn) {
+      importFn().catch(() => { }); // Silent catch, just prefetching
+    }
+  };
+
+  return (
+    <NavLink
+      to={to}
+      onMouseEnter={prefetch}
+      className={({ isActive }) => `w-full flex items-center gap-3 px-4 py-3 rounded-lg border-l-4 transition-all group ${isActive
+        ? 'bg-white/10 border-primary text-white shadow-sm'
+        : 'hover:bg-white/5 border-transparent text-gray-400 hover:text-white'
+        }`}
+    >
+      {({ isActive }) => (
+        <>
+          <span className={`material-symbols-outlined ${isActive ? 'text-primary' : ''}`}>{icon}</span>
+          <span className={`text-sm font-medium tracking-wide ${isActive ? 'font-bold' : ''}`}>{label}</span>
+        </>
+      )}
+    </NavLink>
+  );
+});
+
+SidebarLink.displayName = 'SidebarLink';
 
 const AppLayout: React.FC = () => {
   const { signOut, user, profile } = useAuth();
@@ -166,21 +152,25 @@ const AppLayout: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 h-full overflow-hidden bg-gray-100 relative">
-        <Routes>
-          <Route path="/" element={<Navigate to="/avisos" replace />} />
+        <RouteErrorBoundary>
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/avisos" replace />} />
 
-          {profile?.is_manager && <Route path="/gestao" element={<GestaoUsuarios />} />}
+              {profile?.is_manager && <Route path="/gestao" element={<GestaoUsuarios />} />}
 
-          <Route path="/avisos" element={profile?.p_avisos ? <DashboardAvisos /> : <Navigate to="/" replace />} />
-          <Route path="/operacional" element={profile?.p_operacional ? <Operacional /> : <Navigate to="/" replace />} />
-          <Route path="/ssci" element={profile?.p_ssci ? <SSCI /> : <Navigate to="/" replace />} />
-          <Route path="/pessoal" element={profile?.p_pessoal ? <PessoalB1 /> : <Navigate to="/" replace />} />
-          <Route path="/instrucao" element={profile?.p_instrucao ? <InstrucaoB3 /> : <Navigate to="/" replace />} />
-          <Route path="/logistica" element={profile?.p_logistica ? <PatrimonioB4 /> : <Navigate to="/" replace />} />
-          <Route path="/social" element={profile?.p_social ? <SocialB5 /> : <Navigate to="/" replace />} />
+              <Route path="/avisos" element={profile?.p_avisos ? <DashboardAvisos /> : <Navigate to="/" replace />} />
+              <Route path="/operacional" element={profile?.p_operacional ? <Operacional /> : <Navigate to="/" replace />} />
+              <Route path="/ssci" element={profile?.p_ssci ? <SSCI /> : <Navigate to="/" replace />} />
+              <Route path="/pessoal" element={profile?.p_pessoal ? <PessoalB1 /> : <Navigate to="/" replace />} />
+              <Route path="/instrucao" element={profile?.p_instrucao ? <InstrucaoB3 /> : <Navigate to="/" replace />} />
+              <Route path="/logistica" element={profile?.p_logistica ? <PatrimonioB4 /> : <Navigate to="/" replace />} />
+              <Route path="/social" element={profile?.p_social ? <SocialB5 /> : <Navigate to="/" replace />} />
 
-          <Route path="*" element={<Navigate to="/avisos" replace />} />
-        </Routes>
+              <Route path="*" element={<Navigate to="/avisos" replace />} />
+            </Routes>
+          </Suspense>
+        </RouteErrorBoundary>
       </main>
     </div>
   );
@@ -202,7 +192,11 @@ const ProtectedApp: React.FC = () => {
   }
 
   if (!session) {
-    return <Login />;
+    return (
+      <Suspense fallback={<LoadingFallback message="Carregando login..." />}>
+        <Login />
+      </Suspense>
+    );
   }
 
   return <AppLayout />;
@@ -213,9 +207,9 @@ const App: React.FC = () => {
     <BrowserRouter>
       <AuthProvider>
         <Toaster position="top-right" richColors />
-        <ErrorBoundary>
+        <RouteErrorBoundary>
           <ProtectedApp />
-        </ErrorBoundary>
+        </RouteErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );
