@@ -4,11 +4,11 @@ import { SearchService } from "./SearchService";
 const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
 const modelName = "gemini-pro";
 
-// Log de alta visibilidade para confirmar atualização do cache
-console.log("%c[GEMINI] SISTEMA ATUALIZADO - VERSÃO: 2026-02-06.14:25 - MODELO: gemini-pro", "color: yellow; background: black; font-size: 16px; font-weight: bold; padding: 10px;");
+// LOG DE EMERGÊNCIA - SE VOCÊ NÃO VER ISSO, SEU SITE NÃO ATUALIZOU
+console.log("%c🚀 [SISTEMA] VERSÃO NUCLEAR 1.0.1 - MODELO: gemini-pro - HORA: 14:40", "color: #00ff00; background: #000; font-size: 20px; font-weight: bold; padding: 20px; border: 5px solid #00ff00;");
 
 if (!apiKey) {
-    console.warn("⚠️ [GEMINI] CHAVE DE API NÃO ENCONTRADA (VITE_GEMINI_API_KEY)");
+    console.error("CRÍTICO: Chave VITE_GEMINI_API_KEY não encontrada!");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
