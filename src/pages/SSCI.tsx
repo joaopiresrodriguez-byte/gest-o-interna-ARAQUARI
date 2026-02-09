@@ -263,11 +263,33 @@ const SSCI: React.FC = () => {
                 <div className="flex flex-col">
                     <div className="flex items-center gap-3">
                         <h1 className="text-3xl font-black tracking-tight text-white">Módulo SSCI</h1>
-                        <span className="px-3 py-1 bg-sky-500 text-white text-[11px] font-black rounded-full shadow-[0_0_15px_rgba(14,165,233,0.5)] animate-pulse">v1.6.0 HYBRID AI</span>
+                        <span className="px-3 py-1 bg-gradient-to-r from-red-500 via-yellow-500 to-blue-500 text-white text-[11px] font-black rounded-full shadow-lg animate-pulse">v1.7.0 RAINBOW</span>
                     </div>
                     <p className="text-sm text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
                 </div>
                 <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 bg-[#2d2f31] p-1.5 rounded-lg border border-[#3d3f41]">
+                        <input
+                            type="password"
+                            placeholder="Cole sua API Key aqui (sk-...)"
+                            className="bg-transparent text-white text-xs px-2 outline-none w-48"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    GeminiService.setManualKey(e.currentTarget.value);
+                                }
+                            }}
+                        />
+                        <button
+                            onClick={(e) => {
+                                const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                GeminiService.setManualKey(input.value);
+                            }}
+                            className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded"
+                        >
+                            SALVAR
+                        </button>
+                    </div>
+
                     <button
                         onClick={async () => {
                             try {

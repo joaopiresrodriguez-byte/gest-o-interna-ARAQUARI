@@ -3,8 +3,13 @@ import { SearchService } from "./SearchService";
 
 const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
-const EMERGENCY_KEY = ""; // REMOVIDO PARA SEGURANÇA - ADICIONE NO .ENV
-const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY || EMERGENCY_KEY;
+const EMERGENCY_KEY = "";
+// Tenta pegar do localStorage primeiro, depois das env vars
+const getApiKey = () => {
+    const localKey = localStorage.getItem("MANUAL_API_KEY");
+    return localKey || env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY || EMERGENCY_KEY;
+}
+const apiKey = getApiKey();
 
 // Lista de modelos para tentar (em ordem de preferência)
 const AVAILABLE_MODELS = [
@@ -15,7 +20,7 @@ const AVAILABLE_MODELS = [
 
 let workingModelName: string | null = null;
 
-console.log("%c🤖 [IA] VERSÃO 1.6.0 - HYBRID AI (OPENAI + GEMINI)", "color: #fff; background: #0ea5e9; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log("%c🌈 [IA] VERSÃO 1.7.0 - RAINBOW DEBUGGER", "color: #fff; background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
 console.log(`[IA] Chave ativa: ${apiKey ? "Sim (" + apiKey.substring(0, 7) + "...)" : "Não"}`);
 console.log(`[IA] Provedor Detectado: ${apiKey?.startsWith("sk-") ? "OPENAI (GPT)" : "GOOGLE (GEMINI)"}`);
 
@@ -309,5 +314,16 @@ INSTRUÇÕES:
         const regex = /(IN|Instrução Normativa|Lei|Decreto|Portaria)\s+(Nº\s+)?([0-9\.\/\-]+)/gi;
         const matches = texto.match(regex);
         return matches ? Array.from(new Set(matches.map(m => m.trim()))) : [];
+    },
+
+    setManualKey: (key: string) => {
+        localStorage.setItem("MANUAL_API_KEY", key);
+        window.location.reload(); // Recarrega para aplicar a nova chave
+    },
+
+    getMaskedKey: () => {
+        const key = getApiKey();
+        if (!key) return "NENHUMA";
+        return key.substring(0, 5) + "..." + key.substring(key.length - 3);
     }
 };
