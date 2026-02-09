@@ -3,15 +3,15 @@ import { SearchService } from "./SearchService";
 
 const env = (import.meta as any).env;
 const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY;
-const modelName = "gemini-1.5-flash";
+const modelName = "gemini-1.5-flash-latest";
 
-// LOG DE DIAGNÓSTICO
-console.log("%c🚀 [IA] SISTEMA ATUALIZADO 1.0.3", "color: white; background: blue; font-size: 14px; font-weight: bold; padding: 5px;");
-console.log(`[IA] Chave detectada: ${apiKey ? "SIM (Ok)" : "NÃO (Erro)"}`);
+// LOG DE DIAGNÓSTICO FINAL
+console.log("%c🚀 [IA] VERSÃO NUCLEAR 1.0.4", "color: #fff; background: #e11d48; font-size: 14px; font-weight: bold; padding: 5px;");
+console.log(`[IA] Chave válida: ${apiKey && apiKey.startsWith("AIza") ? "Sim (Inicia com AIza)" : "Não (Formato Inválido ou Ausente)"}`);
 console.log(`[IA] Modelo: ${modelName}`);
 
 if (!apiKey) {
-    console.error("ERRO CRÍTICO: Variável VITE_GEMINI_API_KEY não encontrada nas variáveis de ambiente!");
+    console.error("ERRO CRÍTICO: Variável VITE_GEMINI_API_KEY ausente!");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
