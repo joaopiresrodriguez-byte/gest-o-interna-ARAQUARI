@@ -263,7 +263,7 @@ const SSCI: React.FC = () => {
                 <div className="flex flex-col">
                     <div className="flex items-center gap-3">
                         <h1 className="text-3xl font-black tracking-tight text-white">Módulo SSCI</h1>
-                        <span className="px-3 py-1 bg-emerald-500 text-white text-[11px] font-black rounded-full shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse">v1.5.0 EMERALD</span>
+                        <span className="px-3 py-1 bg-sky-500 text-white text-[11px] font-black rounded-full shadow-[0_0_15px_rgba(14,165,233,0.5)] animate-pulse">v1.6.0 HYBRID AI</span>
                     </div>
                     <p className="text-sm text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
                 </div>

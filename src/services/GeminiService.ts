@@ -1,10 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchService } from "./SearchService";
 
-// Ultimate Key Detection
 const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
-const EMERGENCY_KEY = "AIzaSyAeOvFuCfs5PZOox1Mkou1kOsRp1LAxOZ8"; // Chave fornecida pelo usuário para correção imediata
+const EMERGENCY_KEY = ""; // REMOVIDO PARA SEGURANÇA - ADICIONE NO .ENV
 const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY || EMERGENCY_KEY;
 
 // Lista de modelos para tentar (em ordem de preferência)
@@ -16,14 +15,66 @@ const AVAILABLE_MODELS = [
 
 let workingModelName: string | null = null;
 
-console.log("%c🐲 [IA] VERSÃO 1.5.0 - EMERALD DRAGON", "color: #fff; background: #10b981; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
-console.log(`[IA] Chave ativa: ${apiKey ? "Sim (" + apiKey.substring(0, 10) + "...)" : "Não"}`);
+console.log("%c🤖 [IA] VERSÃO 1.6.0 - HYBRID AI (OPENAI + GEMINI)", "color: #fff; background: #0ea5e9; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log(`[IA] Chave ativa: ${apiKey ? "Sim (" + apiKey.substring(0, 7) + "...)" : "Não"}`);
+console.log(`[IA] Provedor Detectado: ${apiKey?.startsWith("sk-") ? "OPENAI (GPT)" : "GOOGLE (GEMINI)"}`);
 
-const genAI = new GoogleGenerativeAI(apiKey || "");
+// --- OPENAI IMPLEMENTATION ---
+const generateWithOpenAI = async (messages: any[], model: string, apiKey: string) => {
+    try {
+        console.log(`[AIService] Usando OpenAI (${model})...`);
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: messages,
+                temperature: 0.7
+            })
+        });
 
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(`OpenAI Error: ${err.error?.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        return {
+            text: data.choices[0].message.content,
+            model: model
+        };
+    } catch (error: any) {
+        console.error("[AIService] Erro OpenAI:", error);
+        throw error;
+    }
+};
+
+// --- GEMINI IMPLEMENTATION ---
 // Função para tentar gerar conteúdo com fallback exaustivo
 const generateWithFallback = async (parts: any[]) => {
-    // 1. Tentar o último modelo que funcionou (se houver)
+    // 1. DETECÇÃO DE PROVEDOR DE IA
+    if (apiKey?.startsWith("sk-")) {
+        // É uma chave OpenAI
+        const openAIModel = "gpt-4o-mini"; // ou gpt-3.5-turbo
+        console.log(`[AIService] Chave OpenAI detectada. Usando ${openAIModel}`);
+
+        // Converter formato Gemini para OpenAI
+        // O Gemini usa [{text: "..."}], OpenAI usa [{role: "user", content: "..."}]
+        const messages = parts.map(p => ({
+            role: "user",
+            content: p.text || JSON.stringify(p)
+        }));
+
+        // Se tiver arquivos (imagens), o formato é mais complexo, mas para texto simples:
+        return await generateWithOpenAI(messages, openAIModel, apiKey);
+    }
+
+    // 2. DETECÇÃO GOOGLE GEMINI (Fluxo Original)
+    const genAI = new GoogleGenerativeAI(apiKey || "");
+    // Tentar o último modelo que funcionou (se houver)
     const modelsToTry = workingModelName
         ? [workingModelName, ...AVAILABLE_MODELS.filter(m => m !== workingModelName)]
         : AVAILABLE_MODELS;
@@ -173,26 +224,12 @@ Descrição: ${dados.descricao_solicitacao}
         ${informacoesWeb ? JSON.stringify(informacoesWeb) : '[]'}
       `;
 
-            // 4. Iniciar Chat com Fallback (simplificado para usar o workingModelName)
-            if (!workingModelName) {
-                // Se ainda não descobrimos qual modelo funciona, fazemos uma chamada rápida de teste
-                await generateWithFallback([{ text: "oi" }]);
-            }
-
-            const model = genAI.getGenerativeModel({ model: workingModelName || AVAILABLE_MODELS[0] });
-            const chat = model.startChat({
-                history: historicoConversa.map(msg => ({
-                    role: msg.role === 'user' ? 'user' : 'model',
-                    parts: [{ text: msg.content }]
-                })),
-                generationConfig: {
-                    maxOutputTokens: 2000,
-                    temperature: 0.7,
-                },
-            });
-
-            // 5. Prompt do sistema
-            const promptSistema = `
+            // 4. Iniciar Chat com Fallback (Hybrid)
+            if (apiKey?.startsWith("sk-")) {
+                // --- MODO OPENAI ---
+                const openAIModel = "gpt-4o-mini";
+                const systemMessage = {
+                    role: "system", content: `
 Você é um assistente especializado em normativas do Corpo de Bombeiros Militar de Santa Catarina (CBMSC).
 
 INSTRUÇÕES:
@@ -201,18 +238,67 @@ INSTRUÇÕES:
 - Se utilizar qualquer informação vinda das FONTES WEB, você deve obrigatoriamente indicar com a etiqueta "[WEB]" ao final da frase ou parágrafo.
 - Se a informação não estiver disponível em nenhuma das fontes, decline educadamente e recomende consulta ao SSCI.
 - Seja objetivo, claro e mantenha o tom profissional.
-`;
+`};
+                const userMessage = { role: "user", content: `PERGUNTA DO USUÁRIO: ${mensagemUsuario}\n\nCONTEXTO:\n${contexto}` };
 
-            // 6. Enviar mensagem
-            const result = await chat.sendMessage(`${promptSistema}\n\nPERGUNTA DO USUÁRIO: ${mensagemUsuario}\n\nCONTEXTO:\n${contexto}`);
-            const response = await result.response;
-            const resposta = response.text();
+                // Converter histórico
+                const messages = [
+                    systemMessage,
+                    ...historicoConversa.map(msg => ({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content })),
+                    userMessage
+                ];
 
-            return {
-                resposta: resposta,
-                documentos_referenciados: documentosRelevantes.map(d => d.id),
-                links_externos: informacoesWeb?.map(info => info.link) || []
-            };
+                const { text } = await generateWithOpenAI(messages, openAIModel, apiKey);
+
+                return {
+                    resposta: text,
+                    documentos_referenciados: documentosRelevantes.map(d => d.id),
+                    links_externos: informacoesWeb?.map(info => info.link) || []
+                };
+
+            } else {
+                // --- MODO GEMINI (LEGADO) ---
+                const genAI = new GoogleGenerativeAI(apiKey || "");
+
+                if (!workingModelName) {
+                    await generateWithFallback([{ text: "oi" }]);
+                }
+
+                const model = genAI.getGenerativeModel({ model: workingModelName || AVAILABLE_MODELS[0] });
+                const chat = model.startChat({
+                    history: historicoConversa.map(msg => ({
+                        role: msg.role === 'user' ? 'user' : 'model',
+                        parts: [{ text: msg.content }]
+                    })),
+                    generationConfig: {
+                        maxOutputTokens: 2000,
+                        temperature: 0.7,
+                    },
+                });
+
+                // 5. Prompt do sistema
+                const promptSistema = `
+    Você é um assistente especializado em normativas do Corpo de Bombeiros Militar de Santa Catarina (CBMSC).
+    
+    INSTRUÇÕES:
+    - Responda baseado nos DOCUMENTOS LOCAIS e nas FONTES WEB (CBMSC) fornecidas.
+    - Cite sempre as fontes de forma clara.
+    - Se utilizar qualquer informação vinda das FONTES WEB, você deve obrigatoriamente indicar com a etiqueta "[WEB]" ao final da frase ou parágrafo.
+    - Se a informação não estiver disponível em nenhuma das fontes, decline educadamente e recomende consulta ao SSCI.
+    - Seja objetivo, claro e mantenha o tone profissional.
+    `;
+
+                // 6. Enviar mensagem
+                const result = await chat.sendMessage(`${promptSistema}\n\nPERGUNTA DO USUÁRIO: ${mensagemUsuario}\n\nCONTEXTO:\n${contexto}`);
+                const response = await result.response;
+                const resposta = response.text();
+
+                return {
+                    resposta: resposta,
+                    documentos_referenciados: documentosRelevantes.map(d => d.id),
+                    links_externos: informacoesWeb?.map(info => info.link) || []
+                };
+            }
         } catch (error: any) {
             console.error('Erro no Chat Gemini:', error);
             throw new Error(`Erro no Assistente: ${error.message || "Erro desconhecido"}`);
