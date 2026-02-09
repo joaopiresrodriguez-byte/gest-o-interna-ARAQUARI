@@ -1,30 +1,32 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchService } from "./SearchService";
 
-// Ultimate Key Detection (VITE, process.env, or direct)
+// Ultimate Key Detection
 const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
 const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY;
 
-const modelName = "gemini-1.5-flash";
+let modelName = "gemini-1.5-flash";
 
-console.log("%c💜 [IA] VERSÃO NUCLEAR 1.0.6 - MODELO ATUALIZADO", "color: #fff; background: #7c3aed; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
-console.log(`[IA] Chave detectada: ${apiKey ? "Sim (" + apiKey.substring(0, 4) + "...)" : "Não"}`);
-console.log(`[IA] Modelo: ${modelName}`);
-
-if (!apiKey) {
-    console.error("ERRO CRÍTICO: Nenhuma chave de API detectada (VITE_GEMINI_API_KEY)!");
-}
+console.log("%c💖 [IA] VERSÃO RESILIENTE 1.0.7", "color: #fff; background: #ec4899; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log(`[IA] Chave ok: ${!!apiKey}`);
+console.log(`[IA] Tentando modelo: ${modelName}`);
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
-const model = genAI.getGenerativeModel({
-    model: modelName,
-    generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-    }
-});
+
+// Função auxiliar para obter o modelo com fallback
+const getModel = (name: string) => {
+    return genAI.getGenerativeModel({
+        model: name,
+        generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+        }
+    });
+};
+
+let currentModel = getModel(modelName);
 
 export interface AnalysisInput {
     tipo_solicitacao: string;
@@ -96,16 +98,32 @@ Descrição: ${dados.descricao_solicitacao}
                 });
             }
 
-            const result = await model.generateContent(parts);
-            const response = await result.response;
-            const resposta = response.text();
+            try {
+                const result = await currentModel.generateContent(parts);
+                const response = await result.response;
+                const resposta = response.text();
 
-            return {
-                resposta: resposta,
-                documentos_utilizados: documentosLocais.map(d => d.id),
-                fonte_web: contextoWeb ? "WEB" : "LOCAL",
-                links_cbmsc: linksCbmsc
-            };
+                return {
+                    resposta: resposta,
+                    documentos_utilizados: documentosLocais.map(d => d.id),
+                    fonte_web: contextoWeb ? "WEB" : "LOCAL",
+                    links_cbmsc: linksCbmsc
+                };
+            } catch (innerError: any) {
+                if (innerError.message?.includes("404") || innerError.message?.includes("not found")) {
+                    console.warn("[GeminiService] Modelo Flash falhou, tentando Fallback para Pro...");
+                    const fallbackModel = getModel("gemini-pro");
+                    const result = await fallbackModel.generateContent(parts);
+                    const response = await result.response;
+                    return {
+                        resposta: response.text(),
+                        documentos_utilizados: documentosLocais.map(d => d.id),
+                        fonte_web: contextoWeb ? "WEB" : "LOCAL",
+                        links_cbmsc: linksCbmsc
+                    };
+                }
+                throw innerError;
+            }
         } catch (error: any) {
             console.error(`Erro detalhado no GeminiService (${modelName}):`, error);
             throw new Error(`Falha na análise profunda (${modelName}): ${error.message || "Erro desconhecido"}`);
@@ -143,7 +161,7 @@ Descrição: ${dados.descricao_solicitacao}
       `;
 
             // 4. Criar chat com histórico
-            const chat = model.startChat({
+            const chatOptions = {
                 history: historicoConversa.map(msg => ({
                     role: msg.role === 'user' ? 'user' : 'model',
                     parts: [{ text: msg.content }]
@@ -152,7 +170,9 @@ Descrição: ${dados.descricao_solicitacao}
                     maxOutputTokens: 2000,
                     temperature: 0.7,
                 },
-            });
+            };
+
+            let chat = currentModel.startChat(chatOptions);
 
             // 5. Prompt do sistema
             const promptSistema = `
