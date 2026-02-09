@@ -2,11 +2,13 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchService } from "./SearchService";
 
 const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
-const modelName = "gemini-1.5-flash";
-console.log(`[GeminiService] Build: 2026-02-06 14:05 | Model: ${modelName}`);
+const modelName = "gemini-pro";
+
+// Log de alta visibilidade para confirmar atualização do cache
+console.log("%c[GEMINI] SISTEMA ATUALIZADO - VERSÃO: 2026-02-06.14:25 - MODELO: gemini-pro", "color: yellow; background: black; font-size: 16px; font-weight: bold; padding: 10px;");
 
 if (!apiKey) {
-    console.warn("[GeminiService] VITE_GEMINI_API_KEY não encontrada!");
+    console.warn("⚠️ [GEMINI] CHAVE DE API NÃO ENCONTRADA (VITE_GEMINI_API_KEY)");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
