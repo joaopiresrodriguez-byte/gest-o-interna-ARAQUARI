@@ -262,10 +262,10 @@ const SSCI: React.FC = () => {
             <header className="px-8 py-6 bg-white border-b border-rustic-border shadow-sm flex flex-wrap justify-between items-center gap-4">
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                        <h1 className="text-3xl font-black tracking-tight text-[#181111]">Módulo SSCI</h1>
-                        <span className="px-2 py-0.5 bg-lime-500 text-black text-[10px] font-black rounded-full shadow-sm">v1.1.0</span>
+                        <h1 className="text-3xl font-black tracking-tight text-white">Módulo SSCI</h1>
+                        <span className="px-2 py-0.5 bg-yellow-400 text-black text-[10px] font-black rounded-full shadow-sm">v1.2.0 - NUCLEAR ACTIVE</span>
                     </div>
-                    <p className="text-sm opacity-60">Análise Técnica, Pesquisa Normativa e Banco de Conhecimento</p>
+                    <p className="text-sm text-white opacity-80">Análise Técnica, Pesquisa Normativa e Banco de Conhecimento</p>
                 </div>
                 <div className="flex bg-gray-100 p-1 rounded-xl">
                     {(['ANALISE', 'PESQUISA', 'CONHECIMENTO'] as const).map(tab => (
