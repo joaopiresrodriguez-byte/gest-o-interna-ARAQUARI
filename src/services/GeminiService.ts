@@ -4,20 +4,20 @@ import { SearchService } from "./SearchService";
 // Ultimate Key Detection
 const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
-const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY;
+const EMERGENCY_KEY = "AIzaSyAeOvFuCfs5PZOox1Mkou1kOsRp1LAxOZ8"; // Chave fornecida pelo usuário para correção imediata
+const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY || EMERGENCY_KEY;
 
 // Lista de modelos para tentar (em ordem de preferência)
 const AVAILABLE_MODELS = [
     "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
     "gemini-1.5-pro",
-    "gemini-pro" // último recurso
+    "gemini-1.0-pro"
 ];
 
 let workingModelName: string | null = null;
 
-console.log("%c💥 [IA] VERSÃO 1.4.0 - ULTRA RESILIENTE", "color: #fff; background: #9333ea; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
-console.log(`[IA] Chave presente: ${!!apiKey}`);
+console.log("%c🐲 [IA] VERSÃO 1.5.0 - EMERALD DRAGON", "color: #fff; background: #10b981; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log(`[IA] Chave ativa: ${apiKey ? "Sim (" + apiKey.substring(0, 10) + "...)" : "Não"}`);
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
@@ -46,12 +46,11 @@ const generateWithFallback = async (parts: any[]) => {
         } catch (error: any) {
             console.warn(`[GeminiService] Modelo ${name} falhou:`, error.message);
             lastError = error;
-            // Se for erro de quota ou segurança, talvez não valha a pena tentar os outros, 
-            // mas 404/400 (not found) indica que devemos tentar o próximo.
         }
     }
 
-    throw new Error(`Nenhum modelo disponível respondeu corretamente. Último erro: ${lastError?.message || "Desconhecido"}`);
+    console.error("Todos os modelos falharam. Último erro:", lastError);
+    throw new Error(`Falha CRÍTICA na IA. Nenhum modelo respondeu. Verifique a chave de API. Erro: ${lastError?.message}`);
 };
 
 export interface AnalysisInput {
