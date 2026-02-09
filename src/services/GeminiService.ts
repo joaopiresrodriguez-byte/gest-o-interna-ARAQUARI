@@ -3,31 +3,32 @@ import { SearchService } from "./SearchService";
 
 const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
-const EMERGENCY_KEY = "";
+const EMERGENCY_KEY = ""; // LIMPO - AGUARDANDO NOVA CHAVE
 // Tenta pegar do localStorage primeiro, depois das env vars
 const getApiKey = () => {
     const localKey = localStorage.getItem("MANUAL_API_KEY");
-    return localKey || env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY || EMERGENCY_KEY;
+    return localKey || env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || "";
 }
 const apiKey = getApiKey();
 
 // Lista de modelos para tentar (em ordem de preferência)
 const AVAILABLE_MODELS = [
+    "gemini-2.0-flash-exp",
     "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.0-pro"
+    "gemini-1.5-pro"
 ];
 
 let workingModelName: string | null = null;
 
-console.log("%c🌈 [IA] VERSÃO 1.7.0 - RAINBOW DEBUGGER", "color: #fff; background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
-console.log(`[IA] Chave ativa: ${apiKey ? "Sim (" + apiKey.substring(0, 7) + "...)" : "Não"}`);
-console.log(`[IA] Provedor Detectado: ${apiKey?.startsWith("sk-") ? "OPENAI (GPT)" : "GOOGLE (GEMINI)"}`);
+// --- HYBRID AI SERVICE (Gemini + OpenAI) ---
+// Versão 1.7.0 - Production
+// Suporta chave Google (começa com nada ou outra coisa) e OpenAI (começa com sk-)
 
 // --- OPENAI IMPLEMENTATION ---
 const generateWithOpenAI = async (messages: any[], model: string, apiKey: string) => {
     try {
-        console.log(`[AIService] Usando OpenAI (${model})...`);
+        // console.log(`[AIService] Usando OpenAI (${model})...`);
+
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -64,7 +65,7 @@ const generateWithFallback = async (parts: any[]) => {
     if (apiKey?.startsWith("sk-")) {
         // É uma chave OpenAI
         const openAIModel = "gpt-4o-mini"; // ou gpt-3.5-turbo
-        console.log(`[AIService] Chave OpenAI detectada. Usando ${openAIModel}`);
+        // console.log(`[AIService] Chave OpenAI detectada. Usando ${openAIModel}`);
 
         // Converter formato Gemini para OpenAI
         // O Gemini usa [{text: "..."}], OpenAI usa [{role: "user", content: "..."}]
@@ -84,11 +85,13 @@ const generateWithFallback = async (parts: any[]) => {
         ? [workingModelName, ...AVAILABLE_MODELS.filter(m => m !== workingModelName)]
         : AVAILABLE_MODELS;
 
+    let firstError: any = null;
     let lastError: any = null;
 
-    for (const name of modelsToTry) {
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const name = modelsToTry[i];
         try {
-            console.log(`[GeminiService] Tentando modelo: ${name}...`);
+            // console.log(`[GeminiService] Tentando modelo: ${name}...`);
             const model = genAI.getGenerativeModel({ model: name });
             const result = await model.generateContent(parts);
             const response = await result.response;
@@ -96,17 +99,19 @@ const generateWithFallback = async (parts: any[]) => {
 
             if (text) {
                 workingModelName = name; // Salva o modelo que funcionou
-                console.log(`[GeminiService] Sucesso com o modelo: ${name}`);
+                // console.log(`[GeminiService] Sucesso com o modelo: ${name}`);
                 return { text, model: name };
             }
         } catch (error: any) {
             console.warn(`[GeminiService] Modelo ${name} falhou:`, error.message);
+            if (i === 0) firstError = error;
             lastError = error;
         }
     }
 
-    console.error("Todos os modelos falharam. Último erro:", lastError);
-    throw new Error(`Falha CRÍTICA na IA. Nenhum modelo respondeu. Verifique a chave de API. Erro: ${lastError?.message}`);
+    const errorToShow = firstError || lastError;
+    console.error("Todos os modelos falharam. Erro principal:", errorToShow);
+    throw new Error(`Falha na IA. Verifique sua Chave de API ou limites. Detalhes: ${errorToShow?.message || "Erro desconhecido"}`);
 };
 
 export interface AnalysisInput {

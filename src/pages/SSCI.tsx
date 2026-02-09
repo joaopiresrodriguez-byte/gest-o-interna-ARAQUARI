@@ -263,7 +263,7 @@ const SSCI: React.FC = () => {
                 <div className="flex flex-col">
                     <div className="flex items-center gap-3">
                         <h1 className="text-3xl font-black tracking-tight text-white">Módulo SSCI</h1>
-                        <span className="px-3 py-1 bg-gradient-to-r from-red-500 via-yellow-500 to-blue-500 text-white text-[11px] font-black rounded-full shadow-lg animate-pulse">v1.7.0 RAINBOW</span>
+                        <span className="px-3 py-1 bg-primary/20 text-primary text-[11px] font-black rounded-full shadow-lg border border-primary/30">v1.7.0 AI HYBRID</span>
                     </div>
                     <p className="text-sm text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
                 </div>
@@ -271,7 +271,7 @@ const SSCI: React.FC = () => {
                     <div className="flex items-center gap-2 bg-[#2d2f31] p-1.5 rounded-lg border border-[#3d3f41]">
                         <input
                             type="password"
-                            placeholder="Cole sua API Key aqui (sk-...)"
+                            placeholder="Cole sua NOVA API Key aqui..."
                             className="bg-transparent text-white text-xs px-2 outline-none w-48"
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
@@ -286,27 +286,10 @@ const SSCI: React.FC = () => {
                             }}
                             className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded"
                         >
-                            SALVAR
+                            SALVAR NOVA CHAVE
                         </button>
                     </div>
 
-                    <button
-                        onClick={async () => {
-                            try {
-                                const result = await GeminiService.analisarRequerimentoComGemini({
-                                    tipo_solicitacao: "TESTE",
-                                    numero_protocolo: "DEBUG-001",
-                                    descricao_solicitacao: "Olá, responda apenas 'CONEXAO_OK' se você estiver funcionando."
-                                }, []);
-                                alert(`SUCESSO: ${result.resposta}`);
-                            } catch (e: any) {
-                                alert(`ERRO NA CONEXÃO: ${e.message}`);
-                            }
-                        }}
-                        className="px-4 py-2 bg-[#2d2f31] hover:bg-[#3d3f41] text-white text-xs font-bold rounded-lg border border-[#4d4f51] transition-all"
-                    >
-                        Testar Conexão IA
-                    </button>
                     <div className="flex bg-[#2d2f31] p-1 rounded-xl border border-[#3d3f41]">
                         {(['ANALISE', 'PESQUISA', 'CONHECIMENTO'] as const).map(tab => (
                             <button
