@@ -6,14 +6,14 @@ const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
 const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY;
 
-let modelName = "gemini-1.5-flash";
+let modelName = "gemini-pro";
 
-console.log("%c☢️ [IA] VERSÃO 1.2.0 - NUCLEAR RED", "color: #fff; background: #dc2626; font-size: 16px; font-weight: bold; padding: 15px; border: 4px solid yellow;");
-console.log(`[IA] Chave detectada: ${apiKey ? "OK (Inicia com " + apiKey.substring(0, 4) + ")" : "ERRO (AUSENTE)"}`);
-console.log(`[IA] Modelo primário: ${modelName}`);
+console.log("%c👑 [IA] VERSÃO 1.3.0 - GOLD EDITION", "color: #000; background: #fbbf24; font-size: 16px; font-weight: bold; padding: 15px; border: 4px solid #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);");
+console.log(`[IA] Chave Localizada: ${apiKey ? "CONFIGURADA (OK)" : "AUSENTE (ERRO)"}`);
+console.log(`[IA] Modelo Ativo: ${modelName}`);
 
 if (!apiKey) {
-    console.error("ERRO CRITICAL: Chave VITE_GEMINI_API_KEY não configurada na Vercel.");
+    console.error("ALERTA CRÍTICO: Chave de API não encontrada. O sistema de IA não funcionará sem a variável VITE_GEMINI_API_KEY.");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");

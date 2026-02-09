@@ -259,25 +259,43 @@ const SSCI: React.FC = () => {
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-background-light text-rustic-brown font-display">
             {/* Header */}
-            <header className="px-8 py-6 bg-white border-b border-rustic-border shadow-sm flex flex-wrap justify-between items-center gap-4">
+            <header className="px-8 py-6 bg-[#1a1c1e] border-b border-[#2d2f31] shadow-xl flex flex-wrap justify-between items-center gap-4">
                 <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <h1 className="text-3xl font-black tracking-tight text-white">Módulo SSCI</h1>
-                        <span className="px-2 py-0.5 bg-yellow-400 text-black text-[10px] font-black rounded-full shadow-sm">v1.2.0 - NUCLEAR ACTIVE</span>
+                        <span className="px-3 py-1 bg-[#fbbf24] text-black text-[11px] font-black rounded-full shadow-[0_0_15px_rgba(251,191,36,0.5)] animate-pulse">v1.3.0 GOLD</span>
                     </div>
-                    <p className="text-sm text-white opacity-80">Análise Técnica, Pesquisa Normativa e Banco de Conhecimento</p>
+                    <p className="text-sm text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
                 </div>
-                <div className="flex bg-gray-100 p-1 rounded-xl">
-                    {(['ANALISE', 'PESQUISA', 'CONHECIMENTO'] as const).map(tab => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            {tab === 'ANALISE' ? 'Análise' : tab === 'PESQUISA' ? 'Chat IA' : 'Documentos'}
-                        </button>
-                    ))}
-                </div>
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={async () => {
+                            try {
+                                const result = await GeminiService.analisarRequerimentoComGemini({
+                                    tipo_solicitacao: "TESTE",
+                                    numero_protocolo: "DEBUG-001",
+                                    descricao_solicitacao: "Olá, responda apenas 'CONEXAO_OK' se você estiver funcionando."
+                                }, []);
+                                alert(`SUCESSO: ${result.resposta}`);
+                            } catch (e: any) {
+                                alert(`ERRO NA CONEXÃO: ${e.message}`);
+                            }
+                        }}
+                        className="px-4 py-2 bg-[#2d2f31] hover:bg-[#3d3f41] text-white text-xs font-bold rounded-lg border border-[#4d4f51] transition-all"
+                    >
+                        Testar Conexão IA
+                    </button>
+                    <div className="flex bg-[#2d2f31] p-1 rounded-xl border border-[#3d3f41]">
+                        {(['ANALISE', 'PESQUISA', 'CONHECIMENTO'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                {tab === 'ANALISE' ? 'Análise' : tab === 'PESQUISA' ? 'Chat IA' : 'Documentos'}
+                            </button>
+                        ))}
+                    </div>
             </header>
 
             <div className="flex-1 overflow-y-auto p-8">
