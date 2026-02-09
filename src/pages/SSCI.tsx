@@ -296,6 +296,7 @@ const SSCI: React.FC = () => {
                             </button>
                         ))}
                     </div>
+                </div>
             </header>
 
             <div className="flex-1 overflow-y-auto p-8">
