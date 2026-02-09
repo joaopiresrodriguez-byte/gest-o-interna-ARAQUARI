@@ -8,7 +8,7 @@ const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI
 
 let modelName = "gemini-1.5-flash";
 
-console.log("%c💖 [IA] VERSÃO RESILIENTE 1.0.7", "color: #fff; background: #ec4899; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log("%c💙 [IA] VERSÃO CORRIGIDA 1.0.8", "color: #fff; background: #2563eb; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
 console.log(`[IA] Chave ok: ${!!apiKey}`);
 console.log(`[IA] Tentando modelo: ${modelName}`);
 
@@ -26,7 +26,7 @@ const getModel = (name: string) => {
     });
 };
 
-let currentModel = getModel(modelName);
+const currentModel = getModel(modelName);
 
 export interface AnalysisInput {
     tipo_solicitacao: string;
