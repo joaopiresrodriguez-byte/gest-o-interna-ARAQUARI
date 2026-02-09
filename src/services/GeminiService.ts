@@ -6,11 +6,15 @@ const env = (import.meta as any).env || {};
 const globalEnv = (window as any).process?.env || {};
 const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY;
 
-let modelName = "gemini-1.5-flash";
+let modelName = "gemini-1.5-flash-latest";
 
-console.log("%c💙 [IA] VERSÃO CORRIGIDA 1.0.8", "color: #fff; background: #2563eb; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
-console.log(`[IA] Chave ok: ${!!apiKey}`);
-console.log(`[IA] Tentando modelo: ${modelName}`);
+console.log("%c🔥 [IA] VERSÃO 1.1.0 - CONTROLE TOTAL", "color: #000; background: #84cc16; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log(`[IA] Status da Chave: ${apiKey ? "CONFIGURADA ✅" : "AUSENTE ❌"}`);
+console.log(`[IA] Modelo Primário: ${modelName}`);
+
+if (!apiKey) {
+    console.error("ERRO CRÍTICO: Chave de API não encontrada em NENHUMA variável (VITE_GEMINI_API_KEY, GEMINI_API_KEY, etc)");
+}
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
@@ -135,8 +139,8 @@ Descrição: ${dados.descricao_solicitacao}
             console.log('[GeminiService] Iniciando chat normativo');
 
             // 1. Chave de API Check
-            if (!(import.meta as any).env.VITE_GEMINI_API_KEY) {
-                throw new Error("A chave de API do Gemini não está configurada.");
+            if (!apiKey) {
+                throw new Error("A chave de API do Gemini não foi encontrada no ambiente (VITE_GEMINI_API_KEY).");
             }
 
             // 2. Buscar no CBMSC (opcional dependendo de incluirWeb)
