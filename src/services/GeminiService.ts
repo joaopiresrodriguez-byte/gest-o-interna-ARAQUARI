@@ -1,17 +1,19 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchService } from "./SearchService";
 
-const env = (import.meta as any).env;
-const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY;
-const modelName = "gemini-1.5-flash-latest";
+// Ultimate Key Detection (VITE, process.env, or direct)
+const env = (import.meta as any).env || {};
+const globalEnv = (window as any).process?.env || {};
+const apiKey = env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || globalEnv.GEMINI_API_KEY || globalEnv.API_KEY;
 
-// LOG DE DIAGNÓSTICO FINAL
-console.log("%c🚀 [IA] VERSÃO NUCLEAR 1.0.4", "color: #fff; background: #e11d48; font-size: 14px; font-weight: bold; padding: 5px;");
-console.log(`[IA] Chave válida: ${apiKey && apiKey.startsWith("AIza") ? "Sim (Inicia com AIza)" : "Não (Formato Inválido ou Ausente)"}`);
-console.log(`[IA] Modelo: ${modelName}`);
+const modelName = "gemini-pro";
+
+console.log("%c🌟 [IA] VERSÃO FINAL 1.0.5 - MODO ESTÁVEL", "color: #000; background: #fbbf24; font-size: 14px; font-weight: bold; padding: 10px; border-radius: 5px;");
+console.log(`[IA] Chave encontrada? ${apiKey ? "Sim (Final: " + apiKey.slice(-4) + ")" : "Não"}`);
+console.log(`[IA] Modelo em uso: ${modelName}`);
 
 if (!apiKey) {
-    console.error("ERRO CRÍTICO: Variável VITE_GEMINI_API_KEY ausente!");
+    console.error("ERRO CRITICO: Nenhuma chave de API detectada no sistema!");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
