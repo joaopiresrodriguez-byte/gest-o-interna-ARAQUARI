@@ -242,39 +242,39 @@ const SocialB5: React.FC = () => {
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                   {personnel
                     .filter(p => {
-                      if (!p.data_nascimento) return false;
+                      if (!p.birth_date) return false;
                       // Safe parsing of YYYY-MM-DD
-                      const [year, month, day] = p.data_nascimento.split('-').map(Number);
+                      const [, month, day] = p.birth_date.split('-').map(Number);
                       const monthMatch = month === filterMonth;
                       const dayMatch = filterDay === "" || day === filterDay;
                       return monthMatch && dayMatch;
                     })
                     .sort((a, b) => {
-                      const dayA = Number(a.data_nascimento!.split('-')[2]);
-                      const dayB = Number(b.data_nascimento!.split('-')[2]);
+                      const dayA = Number(a.birth_date!.split('-')[2]);
+                      const dayB = Number(b.birth_date!.split('-')[2]);
                       return dayA - dayB;
                     })
                     .map(p => {
-                      const day = p.data_nascimento!.split('-')[2];
+                      const day = p.birth_date!.split('-')[2];
                       return (
                         <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-stone-50 transition-colors border border-transparent hover:border-stone-100">
                           <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-amber-600 font-black text-xs border border-amber-100">
                             {day}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-bold text-xs text-[#2c1810] truncate uppercase">{p.nome_guerra || p.name.split(' ')[0]}</p>
+                            <p className="font-bold text-xs text-[#2c1810] truncate uppercase">{p.war_name || p.name.split(' ')[0]}</p>
                             <p className="text-[10px] text-rustic-brown/60 uppercase font-black">{p.rank} • {p.type}</p>
                           </div>
-                          <button onClick={() => toast.success(`Mandar parabéns para ${p.nome_guerra || p.name}!`)} className="p-1.5 text-rustic-brown/20 hover:text-amber-500 transition-colors">
+                          <button onClick={() => toast.success(`Mandar parabéns para ${p.war_name || p.name}!`)} className="p-1.5 text-rustic-brown/20 hover:text-amber-500 transition-colors">
                             <span className="material-symbols-outlined text-[18px]">celebration</span>
                           </button>
                         </div>
                       );
                     })}
                   {personnel.filter(p => {
-                    if (!p.data_nascimento) return false;
-                    const month = Number(p.data_nascimento.split('-')[1]);
-                    const day = Number(p.data_nascimento.split('-')[2]);
+                    if (!p.birth_date) return false;
+                    const month = Number(p.birth_date.split('-')[1]);
+                    const day = Number(p.birth_date.split('-')[2]);
                     return month === filterMonth && (filterDay === "" || day === filterDay);
                   }).length === 0 && (
                       <div className="py-10 text-center space-y-2 opacity-40">

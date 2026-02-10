@@ -2,7 +2,7 @@ import { SocialPost } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const SOCIAL_POST_FIELDS = 'id, titulo, descricao, tipo, data_evento, responsavel, status, created_at';
+const SOCIAL_POST_FIELDS = 'id, content, platform, likes, image_url, created_at';
 
 // Instância do serviço base
 const socialPostsBase = new BaseService<SocialPost>('social_posts', SOCIAL_POST_FIELDS);
@@ -61,33 +61,17 @@ export const SocialService = {
     },
 
     /**
-     * Buscar posts por tipo
+     * Buscar posts por plataforma
      */
-    getSocialPostsByType: async (tipo: string): Promise<SocialPost[]> => {
+    getSocialPostsByPlatform: async (platform: string): Promise<SocialPost[]> => {
         try {
             const result = await socialPostsBase.query(
-                { tipo },
+                { platform },
                 { orderBy: 'created_at', ascending: false }
             );
             return Array.isArray(result) ? result : result.data;
         } catch (error) {
-            console.error('Error fetching social posts by type:', error);
-            throw error;
-        }
-    },
-
-    /**
-     * Buscar posts por status
-     */
-    getSocialPostsByStatus: async (status: string): Promise<SocialPost[]> => {
-        try {
-            const result = await socialPostsBase.query(
-                { status },
-                { orderBy: 'data_evento', ascending: true }
-            );
-            return Array.isArray(result) ? result : result.data;
-        } catch (error) {
-            console.error('Error fetching social posts by status:', error);
+            console.error('Error fetching social posts by platform:', error);
             throw error;
         }
     },

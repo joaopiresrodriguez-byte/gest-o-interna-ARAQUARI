@@ -1,9 +1,9 @@
-import { supabase } from './supabase';
+
 
 export interface Mission {
-    id?: number;
-    text: string;
-    time: string;
+    id?: string;
+    title: string;
+    description?: string;
     date: string;
     completed: boolean;
 }
@@ -15,45 +15,51 @@ export interface Vehicle {
     status: 'active' | 'down' | 'maintenance';
     details: string;
     plate?: string;
+    current_km?: number;
+    last_revision?: string;
 }
 
 export interface Personnel {
     id?: number;
     name: string;
-    nome_guerra?: string;
+    war_name?: string;
     rank: string;
     role: string;
     status: 'ATIVO' | 'FÉRIAS' | 'EM CURSO';
     type: 'BM' | 'BC';
-    endereco?: string;
+    address?: string;
     email?: string;
-    data_nascimento?: string;
-    telefone?: string;
-    tipo_sanguineo?: string;
+    birth_date?: string;
+    phone?: string;
+    blood_type?: string;
     cnh?: string;
-    porte_arma?: boolean;
+    weapon_permit?: boolean;
     image?: string;
 }
 
 export interface GuReport {
     id?: string;
-    report_text: string;
-    date: string;
+    title: string;
+    description: string;
+    type: string;
+    report_date: string;
+    responsible_id: string;
+    created_at?: string;
 }
 
 export interface MateriaInstrucao {
     id?: string;
-    nome_materia: string;
-    carga_horaria: number;
-    categoria?: string;
-    nivel?: 'basico' | 'intermediario' | 'avancado';
-    descricao_ementa?: string;
-    instrutor_principal?: string;
-    observacoes?: string;
-    status?: 'ativa' | 'inativa';
-    total_apresentacoes?: number;
+    name: string;
+    credit_hours: number;
+    category?: string;
+    level?: 'basico' | 'intermediario' | 'avancado';
+    description?: string;
+    instructor?: string;
+    notes?: string;
+    status?: 'active' | 'inactive';
+    total_presentations?: number;
     total_videos?: number;
-    criado_por?: string;
+    created_by?: string;
     created_at?: string;
     updated_at?: string;
 }
@@ -61,30 +67,30 @@ export interface MateriaInstrucao {
 export interface MateriaApresentacao {
     id?: string;
     materia_id: string;
-    titulo_apresentacao: string;
-    arquivo_url: string;
-    nome_arquivo: string;
-    tamanho_kb?: number;
-    numero_paginas?: number;
-    ordem?: number;
+    title: string;
+    file_url: string;
+    file_name: string;
+    size_kb?: number;
+    page_count?: number;
+    sort_order?: number;
     uploaded_by?: string;
-    data_upload?: string;
+    upload_date?: string;
 }
 
 export interface MateriaVideo {
     id?: string;
     materia_id: string;
-    titulo_video: string;
-    arquivo_url: string;
+    title: string;
+    file_url: string;
     thumbnail_url?: string;
-    nome_arquivo: string;
-    tamanho_mb?: number;
-    duracao_segundos?: number;
-    formato?: string;
-    resolucao?: string;
-    ordem?: number;
+    file_name: string;
+    size_mb?: number;
+    duration_seconds?: number;
+    format?: string;
+    resolution?: string;
+    sort_order?: number;
     uploaded_by?: string;
-    data_upload?: string;
+    upload_date?: string;
 }
 
 export interface Training {
@@ -100,10 +106,13 @@ export interface Training {
 
 export interface Purchase {
     id?: string;
-    item_name: string;
-    cost: number;
+    item: string;
+    quantity: number;
+    unit_price: number;
+    supplier?: string;
     status: 'Pendente' | 'Aprovado';
     requester: string;
+    created_at?: string;
 }
 
 export interface SocialPost {
@@ -117,137 +126,141 @@ export interface SocialPost {
 
 export interface ProductReceipt {
     id?: string;
-    foto_url: string;
-    numero_nota_fiscal: string;
-    data_recebimento?: string;
-    observacoes?: string;
+    photo_url: string;
+    fiscal_note_number: string;
+    receipt_date?: string;
+    product?: string;
+    quantity?: number;
+    supplier?: string;
+    notes?: string;
     created_at?: string;
 }
 
 export interface ChecklistItem {
     id: string;
-    categoria: 'materiais' | 'equipamentos' | 'viaturas';
-    nome_item: string;
+    category: 'materiais' | 'equipamentos' | 'viaturas';
+    item_name: string;
     viatura_id?: string;
-    descricao?: string;
-    ativo?: boolean;
-    ordem?: number;
+    description?: string;
+    is_active?: boolean;
+    sort_order?: number;
 }
 
 export interface DailyChecklist {
     id?: string;
     item_id: string;
     viatura_id?: string;
-    data_conferencia?: string;
+    inspection_date?: string;
     status: 'ok' | 'faltante';
-    observacoes?: string;
-    responsavel?: string;
+    notes?: string;
+    responsible?: string;
     item?: ChecklistItem;
 }
 
 export interface PendingNotice {
     id?: string;
-    conferencia_id?: string;
-    tipo: 'viatura' | 'material';
-    destino_modulo: 'B4';
+    inspection_id?: string;
+    type: 'viatura' | 'material';
+    target_module: 'B4';
     viatura_id?: string;
-    descricao: string;
+    description: string;
     status: 'pendente' | 'resolvido';
+    priority?: 'baixa' | 'media' | 'alta' | 'urgente';
     created_at?: string;
 }
 
 export interface DocumentB1 {
     id?: string;
-    nome_arquivo: string;
-    tipo_documento: string;
-    arquivo_url: string;
-    tamanho_kb?: number;
+    file_name: string;
+    document_type: string;
+    file_url: string;
+    size_kb?: number;
     uploaded_by?: string;
-    data_upload?: string;
-    observacoes?: string;
+    upload_date?: string;
+    notes?: string;
 }
 
 export interface Vacation {
     id?: string;
-    bm_bc_id: number;
-    nome_completo: string;
-    data_inicio: string;
-    data_fim: string;
-    quantidade_dias: number;
+    personnel_id: number;
+    full_name: string;
+    start_date: string;
+    end_date: string;
+    day_count: number;
     status?: 'planejado' | 'aprovado' | 'em_andamento' | 'concluido';
-    observacoes?: string;
+    notes?: string;
 }
 
 export interface SSCIAnalysis {
     id?: string;
-    tipo_solicitacao: 'requerimento' | 'recurso';
-    numero_protocolo: string;
-    descricao_solicitacao: string;
-    resposta_ia: string;
-    documentos_anexados?: string[];
-    data_analise?: string;
-    usuario_responsavel?: string;
+    request_type: 'requerimento' | 'recurso';
+    protocol_number: string;
+    request_description: string;
+    ai_response: string;
+    attached_documents?: string[];
+    analysis_date?: string;
+    responsible_user?: string;
     status?: string;
-    fonte_web?: any;
-    links_cbmsc?: string[];
-    modelo_ia?: string;
-    normativas_citadas?: string[];
+    web_source?: any;
+    cbmsc_links?: string[];
+    ai_model?: string;
+    cited_normatives?: string[];
 }
 
 export interface DailyMission {
     id?: string;
-    titulo: string;
-    descricao?: string;
-    data_missao: string;
-    hora_inicio?: string;
-    hora_termino?: string;
-    responsavel_id?: string;
-    responsavel_nome?: string;
-    prioridade: 'baixa' | 'media' | 'alta' | 'urgente';
+    title: string;
+    description?: string;
+    mission_date: string;
+    start_time?: string;
+    end_time?: string;
+    responsible_id?: string;
+    responsible_name?: string;
+    priority: 'baixa' | 'media' | 'alta' | 'urgente';
     status: 'agendada' | 'em_andamento' | 'concluida' | 'cancelada';
-    observacoes?: string;
-    cadastrado_por?: string;
-    data_cadastro?: string;
-    ultima_atualizacao?: string;
+    notes?: string;
+    created_by?: string;
+    registration_date?: string;
+    updated_at?: string;
     created_at?: string;
 }
 
 export interface SSCIChatSession {
     id?: string;
-    usuario?: string;
-    titulo_sessao?: string;
-    data_inicio?: string;
-    data_fim?: string;
+    user?: string;
+    session_title?: string;
+    start_date?: string;
+    end_date?: string;
     status?: string;
 }
 
 export interface SSCIChatMessage {
     id?: string;
-    sessao_id: string;
-    usuario?: string;
-    mensagem_usuario: string;
-    resposta_ia: string;
-    normativas_referenciadas?: any;
-    documentos_referenciados?: any;
-    timestamp_pergunta?: string;
-    timestamp_resposta?: string;
+    session_id: string;
+    user?: string;
+    user_message: string;
+    ai_response: string;
+    referenced_normatives?: any;
+    referenced_documents?: any;
+    query_timestamp?: string;
+    response_timestamp?: string;
 }
 
 export interface SSCINormativeDocument {
     id?: string;
-    nome_documento: string;
-    tipo_documento: string;
-    numero_codigo?: string;
-    orgao_emissor?: string;
-    data_publicacao?: string;
-    data_vigencia?: string;
-    resumo_ementa?: string;
+    document_name: string;
+    document_type: string;
+    code_number?: string;
+    issuing_body?: string;
+    publication_date?: string;
+    validity_date?: string;
+    summary?: string;
     tags?: string[];
-    categoria?: string;
-    arquivo_url: string;
-    tamanho_kb?: number;
+    category?: string;
+    file_url: string;
+    size_kb?: number;
     status?: string;
-    vezes_referenciado?: number;
+    times_referenced?: number;
     uploaded_by?: string;
-    data_upload?: string;
+    upload_date?: string;
 }

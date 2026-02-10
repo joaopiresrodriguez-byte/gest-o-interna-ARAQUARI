@@ -60,15 +60,15 @@ const InstrucaoB3: React.FC = () => {
     try {
       // 1. Save Materia Info
       const newMateria: MateriaInstrucao = {
-        nome_materia: nome,
-        carga_horaria: parseInt(cargaHoraria),
-        categoria,
-        nivel,
-        descricao_ementa: descricao,
-        instrutor_principal: instrutor,
-        observacoes,
-        status: 'ativa',
-        criado_por: "Capitão Instrutor"
+        name: nome,
+        credit_hours: parseInt(cargaHoraria),
+        category: categoria,
+        level: nivel,
+        description: descricao,
+        instructor: instrutor,
+        notes: observacoes,
+        status: 'active',
+        created_by: "Capitão Instrutor"
       };
 
       const savedMateria = await SupabaseService.addMateriaInstrucao(newMateria);
@@ -82,10 +82,10 @@ const InstrucaoB3: React.FC = () => {
 
         await SupabaseService.addMateriaApresentacao({
           materia_id: materiaId,
-          titulo_apresentacao: file.name.replace('.pdf', ''),
-          arquivo_url: url,
-          nome_arquivo: file.name,
-          tamanho_kb: Math.round(file.size / 1024)
+          title: file.name.replace('.pdf', '') || 'Sem título',
+          file_url: url || '',
+          file_name: file.name,
+          size_kb: Math.round(file.size / 1024)
         });
       }
 
@@ -98,11 +98,11 @@ const InstrucaoB3: React.FC = () => {
         // For now, metadata is basic. Duration/Thumbnails would need heavy frontend logic or edge functions.
         await SupabaseService.addMateriaVideo({
           materia_id: materiaId,
-          titulo_video: file.name,
-          arquivo_url: url,
-          nome_arquivo: file.name,
-          tamanho_mb: parseFloat((file.size / (1024 * 1024)).toFixed(2)),
-          formato: file.name.split('.').pop()
+          title: file.name || 'Sem título',
+          file_url: url || '',
+          file_name: file.name,
+          size_mb: parseFloat((file.size / (1024 * 1024)).toFixed(2)),
+          format: file.name.split('.').pop()
         });
       }
 
@@ -400,7 +400,7 @@ const InstrucaoB3: React.FC = () => {
                     <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Matéria</label>
                     <select value={selectedMateriaId} onChange={e => setSelectedMateriaId(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4">
                       <option value="">Selecione...</option>
-                      {materias.map(m => <option key={m.id} value={m.id}>{m.nome_materia}</option>)}
+                      {materias.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   </div>
                   <div className="flex flex-col gap-2 md:col-span-2">
@@ -438,14 +438,14 @@ const InstrucaoB3: React.FC = () => {
                     <div className="p-6 flex flex-col h-full">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex flex-col gap-1">
-                          <span className={`self-start px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${m.nivel === 'basico' ? 'bg-green-100 text-green-700' :
-                            m.nivel === 'intermediario' ? 'bg-orange-100 text-orange-700' :
+                          <span className={`self-start px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${m.level === 'basico' ? 'bg-green-100 text-green-700' :
+                            m.level === 'intermediario' ? 'bg-orange-100 text-orange-700' :
                               'bg-red-100 text-red-700'
                             }`}>
-                            {m.nivel}
+                            {m.level}
                           </span>
-                          <h4 className="text-xl font-black text-[#2D2926] mt-1 group-hover:text-[#C62828] transition-colors">{m.nome_materia}</h4>
-                          <span className="text-xs font-bold text-[#8C8379] italic">{m.categoria}</span>
+                          <h4 className="text-xl font-black text-[#2D2926] mt-1 group-hover:text-[#C62828] transition-colors">{m.name}</h4>
+                          <span className="text-xs font-bold text-[#8C8379] italic">{m.category}</span>
                         </div>
                         <div className="flex gap-4">
                           {profile?.p_instrucao === 'editor' && (
@@ -458,19 +458,19 @@ const InstrucaoB3: React.FC = () => {
                             </button>
                           )}
                           <div className="flex flex-col items-center">
-                            <span className="text-2xl font-black text-[#C62828]">{m.carga_horaria}</span>
+                            <span className="text-2xl font-black text-[#C62828]">{m.credit_hours}</span>
                             <span className="text-[10px] font-bold text-[#8C8379] uppercase">Horas</span>
                           </div>
                         </div>
                       </div>
 
-                      <p className="text-sm text-[#5C564F] mb-6 line-clamp-2 italic">{m.descricao_ementa || "Sem ementa cadastrada."}</p>
+                      <p className="text-sm text-[#5C564F] mb-6 line-clamp-2 italic">{m.description || "Sem ementa cadastrada."}</p>
 
                       <div className="mt-auto pt-6 border-t border-[#F2EFE9] flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-1.5 text-[#C62828]">
                             <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
-                            <span className="text-xs font-bold">{m.total_apresentacoes || 0}</span>
+                            <span className="text-xs font-bold">{m.total_presentations || 0}</span>
                           </div>
                           <div className="flex items-center gap-1.5 text-[#2E7D32]">
                             <span className="material-symbols-outlined text-[18px]">movie</span>
@@ -508,7 +508,7 @@ const InstrucaoB3: React.FC = () => {
                       <span className="text-2xl font-black leading-none">{t.date.split('-')[2]}</span>
                     </div>
                     <div className="flex flex-1 flex-col truncate">
-                      <h5 className="text-base font-black truncate">{t.materia?.nome_materia || "Treinamento"}</h5>
+                      <h5 className="text-base font-black truncate">{t.materia?.name || "Treinamento"}</h5>
                       <div className="flex items-center gap-3 mt-1 text-sm opacity-60">
                         <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">timer</span> {t.time}</span>
                         <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">person</span> {t.instructor}</span>
@@ -547,13 +547,13 @@ const InstrucaoB3: React.FC = () => {
               <div className="flex items-start justify-between">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-3">
-                    <span className="px-3 py-1 bg-[#C62828] text-white text-[10px] font-black uppercase rounded-full tracking-widest">{selectedMateria.categoria}</span>
-                    <span className="px-3 py-1 bg-[#2D2926] text-white text-[10px] font-black uppercase rounded-full tracking-widest">{selectedMateria.nivel}</span>
+                    <span className="px-3 py-1 bg-[#C62828] text-white text-[10px] font-black uppercase rounded-full tracking-widest">{selectedMateria.category}</span>
+                    <span className="px-3 py-1 bg-[#2D2926] text-white text-[10px] font-black uppercase rounded-full tracking-widest">{selectedMateria.level}</span>
                   </div>
-                  <h2 className="text-3xl font-black text-[#2D2926] mt-2">{selectedMateria.nome_materia}</h2>
+                  <h2 className="text-3xl font-black text-[#2D2926] mt-2">{selectedMateria.name}</h2>
                   <p className="text-[#8C8379] font-bold mt-1 text-sm flex items-center gap-2">
                     <span className="material-symbols-outlined text-sm">monitoring</span>
-                    Base de Conhecimento • {selectedMateria.carga_horaria} horas de instrução
+                    Base de Conhecimento • {selectedMateria.credit_hours} horas de instrução
                   </p>
                 </div>
                 <button onClick={() => setSelectedMateria(null)} className="size-12 rounded-2xl bg-[#E5E1DA] flex items-center justify-center text-[#4A443F] hover:bg-[#C62828] hover:text-white transition-all">
@@ -576,7 +576,7 @@ const InstrucaoB3: React.FC = () => {
                   <div className="space-y-3">
                     <h4 className="text-sm font-black uppercase tracking-widest text-[#C62828]">Descrição do Conteúdo</h4>
                     <p className="text-lg text-[#4A443F] leading-relaxed italic border-l-4 border-[#C62828] pl-6 bg-white py-6 rounded-r-2xl">
-                      "{selectedMateria.descricao_ementa || "Nenhuma ementa detalhada disponível para esta matéria."}"
+                      "{selectedMateria.description || "Nenhuma ementa detalhada disponível para esta matéria."}"
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -587,14 +587,14 @@ const InstrucaoB3: React.FC = () => {
                           <span className="material-symbols-outlined text-3xl">school</span>
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-lg font-black">{selectedMateria.instrutor_principal || "Não definido"}</span>
+                          <span className="text-lg font-black">{selectedMateria.instructor || "Não definido"}</span>
                           <span className="text-xs font-bold text-[#8C8379]">Instrutor Principal</span>
                         </div>
                       </div>
                     </div>
                     <div className="bg-white p-6 rounded-2xl border border-[#E5E1DA]">
                       <h5 className="text-xs font-black uppercase text-[#8C8379] mb-4">Notas Internas</h5>
-                      <p className="text-sm text-[#5C564F]">{selectedMateria.observacoes || "Nenhuma observação adicional registrada."}</p>
+                      <p className="text-sm text-[#5C564F]">{selectedMateria.notes || "Nenhuma observação adicional registrada."}</p>
                     </div>
                   </div>
                 </div>
@@ -609,12 +609,12 @@ const InstrucaoB3: React.FC = () => {
                           <span className="material-symbols-outlined">picture_as_pdf</span>
                         </div>
                         <div className="flex flex-col truncate">
-                          <h5 className="text-base font-black truncate text-[#2D2926]">{pres.titulo_apresentacao}</h5>
-                          <span className="text-xs font-bold text-[#8C8379]">{pres.tamanho_kb} KB • PDF</span>
+                          <h5 className="text-base font-black truncate text-[#2D2926]">{pres.title}</h5>
+                          <span className="text-xs font-bold text-[#8C8379]">{pres.size_kb} KB • PDF</span>
                         </div>
                       </div>
                       <div className="flex gap-3 mt-auto">
-                        <a href={pres.arquivo_url} target="_blank" rel="noreferrer" className="flex-1 h-10 rounded-lg bg-[#2D2926] text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:bg-[#C62828] transition-colors">Visualizar</a>
+                        <a href={pres.file_url} target="_blank" rel="noreferrer" className="flex-1 h-10 rounded-lg bg-[#2D2926] text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:bg-[#C62828] transition-colors">Visualizar</a>
                         {profile?.p_instrucao === 'editor' && (
                           <button onClick={() => handleDeleteApresentacao(pres.id!, pres.materia_id)} className="size-10 rounded-lg border-2 border-[#E5E1DA] text-[#8C8379] flex items-center justify-center hover:border-red-500 hover:text-red-500 transition-all">
                             <span className="material-symbols-outlined text-sm">delete</span>
@@ -644,13 +644,13 @@ const InstrucaoB3: React.FC = () => {
                             <span className="material-symbols-outlined text-3xl">play_arrow</span>
                           </button>
                         </div>
-                        <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-[10px] font-black text-white">{vid.formate || vid.resolucao || 'HD'}</div>
+                        <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-[10px] font-black text-white">{vid.format || 'HD'}</div>
                       </div>
                       <div className="flex-1 p-6 flex flex-col">
                         <div className="flex items-start justify-between">
                           <div className="flex flex-col">
-                            <h5 className="text-xl font-black text-[#2D2926]">{vid.titulo_video}</h5>
-                            <p className="text-xs font-bold text-[#8C8379] mt-1">{vid.tamanho_mb} MB • {vid.formato?.toUpperCase() || 'MP4'}</p>
+                            <h5 className="text-xl font-black text-[#2D2926]">{vid.title}</h5>
+                            <p className="text-xs font-bold text-[#8C8379] mt-1">{vid.size_mb} MB • {vid.format?.toUpperCase() || 'MP4'}</p>
                           </div>
                           <div className="flex gap-2">
                             <button className="size-10 rounded-xl border border-[#E5E1DA] flex items-center justify-center text-[#8C8379] hover:bg-[#C62828] hover:text-white transition-all">

@@ -3,9 +3,9 @@ import { MateriaInstrucao, MateriaApresentacao, MateriaVideo, Training } from '.
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const MATERIA_FIELDS = 'id, nome_materia, categoria, nivel, status, total_apresentacoes, total_videos, created_at, updated_at';
-const APRESENTACAO_FIELDS = 'id, materia_id, titulo, arquivo_path, ordem, created_at';
-const VIDEO_FIELDS = 'id, materia_id, titulo, video_url, duracao, ordem, created_at';
+const MATERIA_FIELDS = 'id, name, category, level, status, total_presentations, total_videos, created_at, updated_at';
+const APRESENTACAO_FIELDS = 'id, materia_id, title, file_path, sort_order';
+const VIDEO_FIELDS = 'id, materia_id, title, video_url, duration, sort_order';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 
 // Instâncias dos serviços base
@@ -28,14 +28,14 @@ export const InstructionService = {
         try {
             if (filtros && Object.keys(filtros).length > 0) {
                 const result = await materiasBase.query(filtros as Record<string, unknown>, {
-                    orderBy: 'nome_materia',
+                    orderBy: 'name',
                     ascending: true,
                 });
                 return Array.isArray(result) ? result : result.data;
             }
 
             const result = await materiasBase.getAll({
-                orderBy: 'nome_materia',
+                orderBy: 'name',
                 ascending: true,
             });
             return Array.isArray(result) ? result : result.data;
@@ -97,7 +97,7 @@ export const InstructionService = {
         try {
             const result = await apresentacoesBase.query(
                 { materia_id: materiaId },
-                { orderBy: 'ordem', ascending: true }
+                { orderBy: 'sort_order', ascending: true }
             );
             return Array.isArray(result) ? result : result.data;
         } catch (error) {
@@ -142,7 +142,7 @@ export const InstructionService = {
         try {
             const result = await videosBase.query(
                 { materia_id: materiaId },
-                { orderBy: 'ordem', ascending: true }
+                { orderBy: 'sort_order', ascending: true }
             );
             return Array.isArray(result) ? result : result.data;
         } catch (error) {

@@ -10,7 +10,7 @@ const PatrimonioB4: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
   const [initialNotices, setInitialNotices] = useState<PendingNotice[]>([]);
-  const { notices, setNotices } = useRealtimeNotices(initialNotices);
+  const { notices } = useRealtimeNotices(initialNotices);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -19,7 +19,7 @@ const PatrimonioB4: React.FC = () => {
   // Form State for Manual Entry (Vehicles)
   const [newItemName, setNewItemName] = useState("");
   const [newItemType, setNewItemType] = useState<Vehicle['type']>('Equipamento');
-  const [newItemStatus, setNewItemStatus] = useState<Vehicle['status']>('active');
+  const [newItemStatus] = useState<Vehicle['status']>('active');
   const [newItemDetails, setNewItemDetails] = useState("");
   const [newItemViaturaId, setNewItemViaturaId] = useState("");
 
@@ -30,7 +30,7 @@ const PatrimonioB4: React.FC = () => {
   const [missionStart, setMissionStart] = useState("");
   const [missionEnd, setMissionEnd] = useState("");
   const [missionRespId, setMissionRespId] = useState("");
-  const [missionPriority, setMissionPriority] = useState<DailyMission['prioridade']>('media');
+  const [missionPriority, setMissionPriority] = useState<DailyMission['priority']>('media');
   const [missionStatus, setMissionStatus] = useState<DailyMission['status']>('agendada');
   const [missionObs, setMissionObs] = useState("");
 
@@ -77,8 +77,9 @@ const PatrimonioB4: React.FC = () => {
   const handleCreatePurchaseRequest = async (notice: PendingNotice) => {
     try {
       await SupabaseService.addPurchase({
-        item_name: notice.descricao.replace('Faltante: ', '').replace(' reportado na conferência diária.', ''),
-        cost: 0,
+        item: notice.description.replace('Faltante: ', '').replace(' reportado na conferência diária.', ''),
+        quantity: 1,
+        unit_price: 0,
         status: 'Pendente',
         requester: 'Sistema Automático (B4)'
       });
@@ -111,17 +112,16 @@ const PatrimonioB4: React.FC = () => {
       // 2. If it's an Equipment, Viatura or Material, also add to Daily Conference (itens_conferencia)
       // This links it to the Operational module
       if (newItemType === 'Equipamento' || newItemType === 'Viatura' || newItemType === 'Material') {
-        let category: 'materiais' | 'equipamentos' | 'viaturas' = 'materiais';
-        if (newItemType === 'Equipamento') category = 'equipamentos';
-        else if (newItemType === 'Viatura') category = 'viaturas';
+        let categoryValue: 'materiais' | 'equipamentos' | 'viaturas' = 'materiais';
+        if (newItemType === 'Equipamento') categoryValue = 'equipamentos';
+        else if (newItemType === 'Viatura') categoryValue = 'viaturas';
 
         await SupabaseService.addChecklistItem({
-          id: itemId,
-          nome_item: newItemName,
-          categoria: category,
+          item_name: newItemName,
+          category: categoryValue,
           viatura_id: newItemViaturaId || undefined,
-          ativo: true,
-          descricao: newItemDetails
+          is_active: true,
+          description: newItemDetails
         });
       }
 
@@ -143,17 +143,17 @@ const PatrimonioB4: React.FC = () => {
     const resp = personnel.find(p => p.id?.toString() === missionRespId);
 
     const newMission: DailyMission = {
-      titulo: missionTitle,
-      descricao: missionDesc,
-      data_missao: missionDate,
-      hora_inicio: missionStart || undefined,
-      hora_termino: missionEnd || undefined,
-      responsavel_id: missionRespId || undefined,
-      responsavel_nome: resp ? `${resp.rank} ${resp.name}` : undefined,
-      prioridade: missionPriority,
+      title: missionTitle,
+      description: missionDesc,
+      mission_date: missionDate,
+      start_time: missionStart || undefined,
+      end_time: missionEnd || undefined,
+      responsible_id: missionRespId || undefined,
+      responsible_name: resp ? `${resp.rank} ${resp.name}` : undefined,
+      priority: missionPriority,
       status: missionStatus,
-      observacoes: missionObs,
-      cadastrado_por: "Administrador B4"
+      notes: missionObs,
+      created_by: "Administrador B4"
     };
 
     try {
@@ -188,7 +188,7 @@ const PatrimonioB4: React.FC = () => {
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (!confirm("Remover este item do patrimônio permanentemente?")) return;
+    if (!confirm(`Remover item ${id} permanentemente?`)) return;
     try {
       await SupabaseService.deleteVehicle(id);
       loadData();
@@ -197,7 +197,7 @@ const PatrimonioB4: React.FC = () => {
     }
   };
 
-  const handleDeletePurchase = async (id: number) => {
+  const handleDeletePurchase = async (id: string) => {
     if (!confirm("Excluir registro de compra?")) return;
     try {
       await SupabaseService.deletePurchase(id);
@@ -225,9 +225,9 @@ const PatrimonioB4: React.FC = () => {
           </button>
           <div className="relative">
             <span className="material-symbols-outlined text-rustic-brown/60">notifications</span>
-            {notices.filter(n => n.status === 'pendente').length + dailyMissions.filter(m => m.prioridade === 'urgente' && m.status !== 'concluida').length > 0 && (
+            {notices.filter(n => n.status === 'pendente').length + dailyMissions.filter(m => m.priority === 'urgente' && m.status !== 'concluida').length > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] flex items-center justify-center rounded-full border border-white font-bold">
-                {notices.filter(n => n.status === 'pendente').length + dailyMissions.filter(m => m.prioridade === 'urgente' && m.status !== 'concluida').length}
+                {notices.filter(n => n.status === 'pendente').length + dailyMissions.filter(m => m.priority === 'urgente' && m.status !== 'concluida').length}
               </span>
             )}
           </div>
@@ -332,15 +332,15 @@ const PatrimonioB4: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[800px] pr-2">
                       {dailyMissions
                         .filter(m => (missionFilterStatus === 'todos' || m.status === missionFilterStatus))
-                        .filter(m => (missionFilterPriority === 'todos' || m.prioridade === missionFilterPriority))
+                        .filter(m => (missionFilterPriority === 'todos' || m.priority === missionFilterPriority))
                         .map(mission => (
                           <div key={mission.id} className="bg-white border border-rustic-border rounded-xl p-4 hover:shadow-md transition-all flex flex-col gap-3">
                             <div className="flex justify-between items-start">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${mission.prioridade === 'urgente' ? 'bg-red-100 text-red-600' :
-                                mission.prioridade === 'alta' ? 'bg-orange-100 text-orange-600' :
-                                  mission.prioridade === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
+                                mission.priority === 'alta' ? 'bg-orange-100 text-orange-600' :
+                                  mission.priority === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
                                 }`}>
-                                {mission.prioridade}
+                                {mission.priority}
                               </span>
                               <div className="flex gap-1">
                                 {profile?.p_logistica === 'editor' && (
@@ -351,13 +351,13 @@ const PatrimonioB4: React.FC = () => {
                               </div>
                             </div>
                             <div>
-                              <h4 className="font-bold text-sm leading-tight mb-1">{mission.titulo}</h4>
-                              <p className="text-[11px] text-gray-500 line-clamp-2">{mission.descricao}</p>
+                              <h4 className="font-bold text-sm leading-tight mb-1">{mission.title}</h4>
+                              <p className="text-[11px] text-gray-500 line-clamp-2">{mission.description}</p>
                             </div>
                             <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 mt-1">
-                              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> {new Date(mission.data_missao).toLocaleDateString('pt-BR')}</span>
-                              {mission.hora_inicio && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> {mission.hora_inicio}</span>}
-                              {mission.responsavel_nome && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">person</span> {mission.responsavel_nome}</span>}
+                              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> {new Date(mission.mission_date).toLocaleDateString('pt-BR')}</span>
+                              {mission.start_time && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> {mission.start_time}</span>}
+                              {mission.responsible_name && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">person</span> {mission.responsible_name}</span>}
                             </div>
                             <div className="border-t border-stone-50 pt-3 flex items-center justify-between mt-auto">
                               <select
@@ -398,12 +398,13 @@ const PatrimonioB4: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {filteredFleet.map(item => {
-                      const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || n.descricao.includes(item.name)));
+                      const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || n.description.includes(item.name)));
 
                       return (
                         <div key={item.id} className="bg-white rounded-xl border border-rustic-border p-5 hover:shadow-md transition-all relative">
                           <div className="flex justify-between items-start mb-3">
                             <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {item.status}
                             </span>
                             <div className="flex gap-2">
                               <span className="text-[10px] font-bold text-rustic-brown/40">{item.id}</span>
@@ -428,7 +429,7 @@ const PatrimonioB4: React.FC = () => {
                                   <div className="flex items-start gap-2">
                                     <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">warning</span>
                                     <div className="flex-1">
-                                      <p className="text-[10px] font-bold text-primary">{notice.descricao}</p>
+                                      <p className="text-[10px] font-bold text-primary">{notice.description}</p>
                                       {profile?.p_logistica === 'editor' && (
                                         <button
                                           onClick={() => handleResolveNotice(notice.id!)}
@@ -507,10 +508,10 @@ const PatrimonioB4: React.FC = () => {
                       Solicitações de Compra Pendentes (Operacional)
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {notices.filter(n => n.tipo === 'material' && n.status === 'pendente').map(notice => (
+                      {notices.filter(n => n.type === 'material' && n.status === 'pendente').map(notice => (
                         <div key={notice.id} className="bg-white border border-orange-200 p-4 rounded-lg shadow-sm flex items-start justify-between gap-4">
                           <div>
-                            <p className="text-sm font-bold text-rustic-brown">{notice.descricao}</p>
+                            <p className="text-sm font-bold text-rustic-brown">{notice.description}</p>
                             <span className="text-[10px] text-gray-500">{new Date(notice.created_at!).toLocaleDateString('pt-BR')}</span>
                           </div>
                           {profile?.p_logistica === 'editor' && (
@@ -524,7 +525,7 @@ const PatrimonioB4: React.FC = () => {
                           )}
                         </div>
                       ))}
-                      {notices.filter(n => n.tipo === 'material' && n.status === 'pendente').length === 0 && (
+                      {notices.filter(n => n.type === 'material' && n.status === 'pendente').length === 0 && (
                         <p className="text-sm text-orange-700 italic col-span-2">Nenhuma nova necessidade de material reportada.</p>
                       )}
                     </div>
@@ -538,21 +539,23 @@ const PatrimonioB4: React.FC = () => {
                         <thead className="border-b border-rustic-border text-xs font-bold uppercase text-rustic-brown/50">
                           <tr>
                             <th className="py-3 px-4">Item</th>
+                            <th className="py-3 px-4">Qtd</th>
                             <th className="py-3 px-4">Status</th>
-                            <th className="py-3 px-4 text-right">Custo</th>
+                            <th className="py-3 px-4 text-right">P. Unit</th>
                             <th className="py-3 px-4 text-right">Ação</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-rustic-border/30">
                           {purchases.map(p => (
                             <tr key={p.id}>
-                              <td className="py-3 px-4 font-bold">{p.item_name}</td>
+                              <td className="py-3 px-4 font-bold">{p.item}</td>
+                              <td className="py-3 px-4">{p.quantity}</td>
                               <td className="py-3 px-4">
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.status === 'Aprovado' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                                   {p.status}
                                 </span>
                               </td>
-                              <td className="py-3 px-4 text-right">R$ {p.cost.toFixed(2)}</td>
+                              <td className="py-3 px-4 text-right">R$ {(p.unit_price || 0).toFixed(2)}</td>
                               <td className="py-3 px-4 text-right">
                                 {profile?.p_logistica === 'editor' && (
                                   <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded">

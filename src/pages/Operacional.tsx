@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { SupabaseService, ProductReceipt, ChecklistItem, DailyChecklist } from '../services/SupabaseService';
+import { SupabaseService, ProductReceipt, ChecklistItem } from '../services/SupabaseService';
 import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { Button, Card, Input, TextArea, Badge } from '../components/ui';
+import { Button, Input, TextArea } from '../components/ui';
 
 const Operacional: React.FC = () => {
   // New States for Advanced Features
@@ -68,10 +68,10 @@ const Operacional: React.FC = () => {
       const publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
 
       await SupabaseService.addProductReceipt({
-        foto_url: publicUrl,
-        numero_nota_fiscal: receiptNF,
-        observacoes: receiptObs,
-        data_recebimento: new Date().toISOString()
+        photo_url: publicUrl,
+        fiscal_note_number: receiptNF,
+        notes: receiptObs,
+        receipt_date: new Date().toISOString()
       });
 
       toast.success("Recebimento registrado com sucesso!");
@@ -111,9 +111,9 @@ const Operacional: React.FC = () => {
         return SupabaseService.saveDailyChecklist({
           item_id: item.id,
           viatura_id: selectedViaturaId || item.viatura_id,
-          status: report.status,
-          observacoes: report.obs,
-          responsavel: user?.email || "Usuário não identificado"
+          status: report.status as any,
+          notes: report.obs,
+          responsible: user?.email || "Usuário não identificado"
         });
       });
       await Promise.all(promises);
@@ -225,11 +225,11 @@ const Operacional: React.FC = () => {
                   <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
                     {receipts.map(rec => (
                       <div key={rec.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-rustic-border/50">
-                        <img src={rec.foto_url} className="w-16 h-16 rounded object-cover border border-gray-200" alt="Produto" loading="lazy" />
+                        <img src={rec.photo_url} className="w-16 h-16 rounded object-cover border border-gray-200" alt="Produto" loading="lazy" />
                         <div className="flex flex-col">
-                          <span className="text-xs font-bold text-[#181111]">NF: {rec.numero_nota_fiscal}</span>
-                          <span className="text-[10px] text-gray-500">{new Date(rec.data_recebimento!).toLocaleDateString('pt-BR')}</span>
-                          <span className="text-[10px] text-gray-400 mt-1 line-clamp-1">{rec.observacoes}</span>
+                          <span className="text-xs font-bold text-[#181111]">NF: {rec.fiscal_note_number}</span>
+                          <span className="text-[10px] text-gray-500">{rec.receipt_date ? new Date(rec.receipt_date).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                          <span className="text-[10px] text-gray-400 mt-1 line-clamp-1">{rec.notes}</span>
                         </div>
                       </div>
                     ))}
@@ -297,8 +297,8 @@ const Operacional: React.FC = () => {
                           <span className="material-symbols-outlined">{activeChecklistTab === 'viaturas' ? 'emergency' : activeChecklistTab === 'equipamentos' ? 'construction' : 'inventory_2'}</span>
                         </div>
                         <div>
-                          <p className="font-bold text-[#181111] text-base">{item.nome_item}</p>
-                          <span className="text-[10px] text-gray-400 font-bold uppercase">{item.categoria}</span>
+                          <p className="font-bold text-[#181111] text-base">{item.item_name}</p>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase">{item.category}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">

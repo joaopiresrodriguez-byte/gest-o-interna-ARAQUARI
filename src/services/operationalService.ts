@@ -3,8 +3,8 @@ import { DailyMission, Mission, GuReport, Training } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const DAILY_MISSION_FIELDS = 'id, titulo, descricao, data_missao, hora_inicio, hora_fim, responsavel_id, status, prioridade, created_at, ultima_atualizacao';
-const GU_REPORT_FIELDS = 'id, titulo, descricao, tipo, data_relatorio, responsavel, created_at';
+const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_time, responsible_id, status, priority, created_at, updated_at';
+const GU_REPORT_FIELDS = 'id, title, description, type, report_date, responsible_id, created_at';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 const MISSION_FIELDS = 'id, title, description, date, completed';
 
@@ -34,15 +34,15 @@ export const OperationalService = {
                     .in('status', filters.status);
 
                 if (filters.data) {
-                    query = query.eq('data_missao', filters.data);
+                    query = query.eq('mission_date', filters.data);
                 }
                 if (filters.responsavel) {
-                    query = query.eq('responsavel_id', filters.responsavel);
+                    query = query.eq('responsible_id', filters.responsavel);
                 }
 
                 const { data, error } = await query
-                    .order('prioridade', { ascending: false })
-                    .order('hora_inicio', { ascending: true });
+                    .order('priority', { ascending: false })
+                    .order('start_time', { ascending: true });
 
                 if (error) {
                     console.error('Error fetching daily missions:', error);
@@ -54,16 +54,16 @@ export const OperationalService = {
 
             // Filtros simples podem usar o BaseService
             const simpleFilters: Record<string, unknown> = {};
-            if (filters?.data) simpleFilters.data_missao = filters.data;
-            if (filters?.responsavel) simpleFilters.responsavel_id = filters.responsavel;
+            if (filters?.data) simpleFilters.mission_date = filters.data;
+            if (filters?.responsavel) simpleFilters.responsible_id = filters.responsavel;
 
             const result = Object.keys(simpleFilters).length > 0
                 ? await dailyMissionsBase.query(simpleFilters, {
-                    orderBy: 'prioridade',
+                    orderBy: 'priority',
                     ascending: false,
                 })
                 : await dailyMissionsBase.getAll({
-                    orderBy: 'prioridade',
+                    orderBy: 'priority',
                     ascending: false,
                 });
 
@@ -93,7 +93,7 @@ export const OperationalService = {
         try {
             const updatesWithTimestamp = {
                 ...updates,
-                ultima_atualizacao: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
             };
             return await dailyMissionsBase.update(id, updatesWithTimestamp);
         } catch (error) {
@@ -166,7 +166,7 @@ export const OperationalService = {
             // Query com join precisa ser feita manualmente
             const { data, error } = await supabase
                 .from('training_schedule')
-                .select('*, materia:materias_instrucao(*)')
+                .select('*, materia:instruction_materials(*)')
                 .order('date', { ascending: true });
 
             if (error) {

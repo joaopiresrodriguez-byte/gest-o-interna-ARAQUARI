@@ -1,7 +1,7 @@
 export interface SearchResult {
-    titulo: string;
+    title: string;
     snippet: string;
-    link: string;
+    url: string;
 }
 
 export const SearchService = {
@@ -27,9 +27,9 @@ export const SearchService = {
             }
 
             const resultados: SearchResult[] = data.items?.slice(0, 5).map((item: any) => ({
-                titulo: item.title,
+                title: item.title,
                 snippet: item.snippet,
-                link: item.link
+                url: item.link
             })) || [];
 
             return resultados;

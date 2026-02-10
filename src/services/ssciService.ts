@@ -3,10 +3,10 @@ import { SSCIAnalysis, SSCIChatSession, SSCIChatMessage, SSCINormativeDocument }
 import { BaseService, ServiceError } from './baseService';
 
 // Campos específicos para otimizar queries
-const ANALYSIS_FIELDS = 'id, tipo_requerimento, texto_requerimento, analise_ia, fundamentacao_legal, data_analise, usuario_id';
-const CHAT_SESSION_FIELDS = 'id, titulo, data_inicio, usuario_id, ativo';
-const CHAT_MESSAGE_FIELDS = 'id, sessao_id, pergunta, resposta, timestamp_pergunta, timestamp_resposta';
-const NORMATIVE_DOC_FIELDS = 'id, titulo, tipo_documento, numero, ano, orgao_emissor, data_publicacao, arquivo_path, vezes_referenciado, data_upload';
+const ANALYSIS_FIELDS = 'id, request_type, request_description, ai_response, analysis_date, responsible_user';
+const CHAT_SESSION_FIELDS = 'id, session_title, start_date, user, status';
+const CHAT_MESSAGE_FIELDS = 'id, session_id, user_message, ai_response, query_timestamp, response_timestamp';
+const NORMATIVE_DOC_FIELDS = 'id, document_name, document_type, code_number, issuing_body, publication_date, file_url, times_referenced, upload_date';
 
 // Instâncias dos serviços base
 const analysesBase = new BaseService<SSCIAnalysis>('ssci_analyses', ANALYSIS_FIELDS);
@@ -23,7 +23,7 @@ export const SSCIService = {
     getSSCIAnalyses: async (): Promise<SSCIAnalysis[]> => {
         try {
             const result = await analysesBase.getAll({
-                orderBy: 'data_analise',
+                orderBy: 'analysis_date',
                 ascending: false,
             });
             return Array.isArray(result) ? result : result.data;
@@ -65,7 +65,7 @@ export const SSCIService = {
     getSSCIChatSessions: async (): Promise<SSCIChatSession[]> => {
         try {
             const result = await chatSessionsBase.getAll({
-                orderBy: 'data_inicio',
+                orderBy: 'start_date',
                 ascending: false,
             });
             return Array.isArray(result) ? result : result.data;
@@ -107,8 +107,8 @@ export const SSCIService = {
     getSSCIChatMessages: async (sessionId: string): Promise<SSCIChatMessage[]> => {
         try {
             const result = await chatMessagesBase.query(
-                { sessao_id: sessionId },
-                { orderBy: 'timestamp_pergunta', ascending: true }
+                { session_id: sessionId },
+                { orderBy: 'query_timestamp', ascending: true }
             );
             return Array.isArray(result) ? result : result.data;
         } catch (error) {
@@ -137,7 +137,7 @@ export const SSCIService = {
     getSSCINormativeDocuments: async (): Promise<SSCINormativeDocument[]> => {
         try {
             const result = await normativeDocsBase.getAll({
-                orderBy: 'data_upload',
+                orderBy: 'upload_date',
                 ascending: false,
             });
             return Array.isArray(result) ? result : result.data;
@@ -185,9 +185,9 @@ export const SSCIService = {
      * Rastrear uso de documento (lógica de negócio)
      */
     trackDocumentUsage: async (usage: {
-        documento_id: string;
-        tipo_uso: string;
-        referencia_id: string;
+        document_id: string;
+        usage_type: string;
+        reference_id: string;
     }): Promise<void> => {
         try {
             // Registra o uso
@@ -196,14 +196,14 @@ export const SSCIService = {
             // Busca contador atual
             const { data: doc } = await supabase
                 .from('ssci_normative_documents')
-                .select('vezes_referenciado')
-                .eq('id', usage.documento_id)
+                .select('times_referenced')
+                .eq('id', usage.document_id)
                 .single();
 
             // Incrementa contador
             if (doc) {
-                await normativeDocsBase.update(usage.documento_id, {
-                    vezes_referenciado: (doc.vezes_referenciado || 0) + 1,
+                await normativeDocsBase.update(usage.document_id, {
+                    times_referenced: (doc.times_referenced || 0) + 1,
                 } as Partial<SSCINormativeDocument>);
             }
         } catch (error) {
@@ -220,7 +220,7 @@ export const SSCIService = {
             const { data, error } = await supabase
                 .from('ssci_normative_documents')
                 .select(NORMATIVE_DOC_FIELDS)
-                .order('vezes_referenciado', { ascending: false })
+                .order('times_referenced', { ascending: false })
                 .limit(limit);
 
             if (error) {

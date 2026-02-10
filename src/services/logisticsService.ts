@@ -3,9 +3,9 @@ import { Purchase, ProductReceipt, PendingNotice } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const PURCHASE_FIELDS = 'id, item, quantidade, preco_unitario, fornecedor, status, created_at';
-const RECEIPT_FIELDS = 'id, produto, quantidade, fornecedor, data_recebimento, observacoes, created_at';
-const NOTICE_FIELDS = 'id, tipo, descricao, status, viatura_id, prioridade, created_at';
+const PURCHASE_FIELDS = 'id, item, quantity, unit_price, supplier, status, created_at';
+const RECEIPT_FIELDS = 'id, product, quantity, supplier, arrival_date, notes, created_at';
+const NOTICE_FIELDS = 'id, type, description, status, viatura_id, priority, target_module, inspection_id, created_at';
 
 // Instâncias dos serviços base
 const purchasesBase = new BaseService<Purchase>('purchases', PURCHASE_FIELDS);
@@ -46,7 +46,7 @@ export const LogisticsService = {
     /**
      * Deletar compra
      */
-    deletePurchase: async (id: number): Promise<void> => {
+    deletePurchase: async (id: string): Promise<void> => {
         try {
             await purchasesBase.delete(id);
         } catch (error) {

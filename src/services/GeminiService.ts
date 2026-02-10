@@ -133,14 +133,14 @@ export const GeminiService = {
             console.log(`[GeminiService] Iniciando análise profunda para protocolo: ${dados.numero_protocolo}`);
 
             let contextoWeb = "";
-            let linksCbmsc: string[] = [];
+            let webResults: any[] = [];
 
             if (dados.incluir_web) {
                 try {
                     const busca = await SearchService.buscarSiteCBMSC(dados.descricao_solicitacao);
                     if (busca) {
-                        contextoWeb = busca.map(r => `FONTE: ${r.titulo}\nLINK: ${r.link}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
-                        linksCbmsc = busca.map(r => r.link);
+                        contextoWeb = busca.map(r => `FONTE: ${r.title}\nLINK: ${r.url}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
+                        webResults = busca;
                     }
                 } catch (searchError) {
                     console.warn('[GeminiService] Busca no site do CBMSC falhou:', searchError);
@@ -190,8 +190,8 @@ Descrição: ${dados.descricao_solicitacao}
                 return {
                     resposta: text,
                     documentos_utilizados: documentosLocais.map(d => d.id),
-                    fonte_web: contextoWeb ? "WEB" : "LOCAL",
-                    links_cbmsc: linksCbmsc,
+                    web_source: webResults,
+                    cbmsc_links: webResults.map(r => r.url),
                     modelo_ia: model
                 };
             } catch (error: any) {
@@ -263,7 +263,7 @@ INSTRUÇÕES:
                 return {
                     resposta: text,
                     documentos_referenciados: documentosRelevantes.map(d => d.id),
-                    links_externos: informacoesWeb?.map(info => info.link) || []
+                    links_externos: informacoesWeb?.map(info => info.url) || []
                 };
 
             } else {
@@ -306,7 +306,7 @@ INSTRUÇÕES:
                 return {
                     resposta: resposta,
                     documentos_referenciados: documentosRelevantes.map(d => d.id),
-                    links_externos: informacoesWeb?.map(info => info.link) || []
+                    links_externos: informacoesWeb?.map(info => info.url) || []
                 };
             }
         } catch (error: any) {

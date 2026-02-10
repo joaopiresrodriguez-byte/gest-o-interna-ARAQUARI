@@ -4,9 +4,9 @@ import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
 
 // Campos específicos para otimizar queries
-const PERSONNEL_FIELDS = 'id, name, rank, status, type, phone, email, created_at';
-const DOCUMENT_FIELDS = 'id, nome, tipo, data_upload, path, personnel_id';
-const VACATION_FIELDS = 'id, personnel_id, data_inicio, data_fim, tipo, status';
+const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at';
+const DOCUMENT_FIELDS = 'id, file_name, document_type, file_url, size_kb, uploaded_by, upload_date, notes, personnel_id';
+const VACATION_FIELDS = 'id, personnel_id, full_name, start_date, end_date, day_count, status, notes';
 
 // Instâncias dos serviços base
 const personnelBase = new BaseService<Personnel>('personnel', PERSONNEL_FIELDS);
@@ -95,13 +95,13 @@ export const PersonnelService = {
             if (personnelId) {
                 const result = await documentsBase.query(
                     { personnel_id: personnelId },
-                    { orderBy: 'data_upload', ascending: false }
+                    { orderBy: 'upload_date', ascending: false }
                 );
                 return Array.isArray(result) ? result : result.data;
             }
 
             const result = await documentsBase.getAll({
-                orderBy: 'data_upload',
+                orderBy: 'upload_date',
                 ascending: false,
             });
             return Array.isArray(result) ? result : result.data;
@@ -153,13 +153,13 @@ export const PersonnelService = {
             if (personnelId) {
                 const result = await vacationsBase.query(
                     { personnel_id: personnelId },
-                    { orderBy: 'data_inicio', ascending: true }
+                    { orderBy: 'start_date', ascending: true }
                 );
                 return Array.isArray(result) ? result : result.data;
             }
 
             const result = await vacationsBase.getAll({
-                orderBy: 'data_inicio',
+                orderBy: 'start_date',
                 ascending: true,
             });
             return Array.isArray(result) ? result : result.data;

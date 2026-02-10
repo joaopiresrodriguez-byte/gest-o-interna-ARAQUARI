@@ -61,8 +61,8 @@ export const SupabaseService = {
     // Instruction overrides/proxies
     getCourses: async () => InstructionService.getMateriasInstrucao(),
     addCourse: async (materia: any) => InstructionService.addMateriaInstrucao({
-        nome_materia: materia.name,
-        carga_horaria: materia.hours,
-        categoria: materia.category
+        name: materia.name,
+        credit_hours: materia.hours,
+        category: materia.category
     }),
 };

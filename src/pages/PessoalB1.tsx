@@ -7,7 +7,6 @@ const PessoalB1: React.FC = () => {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'LISTAGEM' | 'CADASTRO' | 'DOCUMENTOS' | 'FERIAS' | 'ESCALA' | 'REUNIAO'>('LISTAGEM');
   const [searchTerm, setSearchTerm] = useState("");
-  const [isJoinedMeeting, setIsJoinedMeeting] = useState(false);
 
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   const [documents, setDocuments] = useState<DocumentB1[]>([]);
@@ -18,16 +17,16 @@ const PessoalB1: React.FC = () => {
   // Form State Personnel
   const [formData, setFormData] = useState<Partial<Personnel>>({
     name: '',
-    nome_guerra: '',
+    war_name: '',
     status: 'ATIVO',
     type: 'BM',
-    endereco: '',
+    address: '',
     email: '',
-    data_nascimento: '',
-    telefone: '',
-    tipo_sanguineo: '',
+    birth_date: '',
+    phone: '',
+    blood_type: '',
     cnh: '',
-    porte_arma: false,
+    weapon_permit: false,
     role: 'Serviço Ativo'
   });
 
@@ -77,16 +76,16 @@ const PessoalB1: React.FC = () => {
       toast.success("Militar cadastrado com sucesso!");
       setFormData({
         name: '',
-        nome_guerra: '',
+        war_name: '',
         status: 'ATIVO',
         type: 'BM',
-        endereco: '',
+        address: '',
         email: '',
-        data_nascimento: '',
-        telefone: '',
-        tipo_sanguineo: '',
+        birth_date: '',
+        phone: '',
+        blood_type: '',
         cnh: '',
-        porte_arma: false,
+        weapon_permit: false,
         role: 'Serviço Ativo'
       });
       setActiveTab('LISTAGEM');
@@ -108,12 +107,12 @@ const PessoalB1: React.FC = () => {
       const url = SupabaseService.getPublicUrl('documentos-b1', fileName);
 
       await SupabaseService.addDocumentB1({
-        nome_arquivo: docFile.name,
-        tipo_documento: docCategory,
-        arquivo_url: url,
-        tamanho_kb: Math.round(docFile.size / 1024),
-        data_upload: new Date().toISOString(),
-        observacoes: docObs
+        file_name: docFile.name,
+        document_type: docCategory,
+        file_url: url,
+        size_kb: Math.round(docFile.size / 1024),
+        upload_date: new Date().toISOString(),
+        notes: docObs
       });
       toast.success("Documento anexado!");
       setDocFile(null);
@@ -145,22 +144,22 @@ const PessoalB1: React.FC = () => {
 
     // Conflict detection
     const conflict = vacations.find(v => (
-      (start >= new Date(v.data_inicio) && start <= new Date(v.data_fim)) ||
-      (end >= new Date(v.data_inicio) && end <= new Date(v.data_fim))
+      (start >= new Date(v.start_date) && start <= new Date(v.end_date)) ||
+      (end >= new Date(v.start_date) && end <= new Date(v.end_date))
     ));
 
     if (conflict) {
-      if (!confirm(`Atenção: Já existe um período de férias agendado entre ${conflict.data_inicio} e ${conflict.data_fim} (${conflict.nome_completo}). Deseja continuar?`)) return;
+      if (!confirm(`Atenção: Já existe um período de férias agendado entre ${conflict.start_date} e ${conflict.end_date} (${conflict.full_name}). Deseja continuar?`)) return;
     }
 
     await SupabaseService.addVacation({
-      bm_bc_id: vacaPersonId,
-      nome_completo: person?.name || "Desconhecido",
-      data_inicio: vacaStart,
-      data_fim: vacaEnd,
-      quantidade_dias: days,
+      personnel_id: vacaPersonId,
+      full_name: person?.name || "Desconhecido",
+      start_date: vacaStart,
+      end_date: vacaEnd,
+      day_count: days,
       status: 'planejado',
-      observacoes: vacaObs
+      notes: vacaObs
     });
     alert("Férias programadas com sucesso!");
     setVacaStart(""); setVacaEnd(""); loadData();
@@ -217,10 +216,10 @@ const PessoalB1: React.FC = () => {
           {/* TAB: LISTAGEM */}
           {activeTab === 'LISTAGEM' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {personnelList.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.nome_guerra?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+              {personnelList.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.war_name?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
                 <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group">
                   <div className="w-20 h-20 rounded-full bg-cover bg-center mb-4 border-2 border-primary/20" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
-                  <h4 className="font-bold text-lg leading-tight">{p.rank} {p.nome_guerra || p.name.split(' ')[0]}</h4>
+                  <h4 className="font-bold text-lg leading-tight">{p.rank} {p.war_name || p.name.split(' ')[0]}</h4>
                   <p className="text-xs text-gray-400 mb-2 truncate w-full px-4">{p.name}</p>
                   <div className="flex flex-wrap justify-center gap-1.5 mb-4">
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${p.type === 'BM' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>{p.type}</span>
@@ -251,12 +250,18 @@ const PessoalB1: React.FC = () => {
 
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome Completo *</label>
-                    <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo" />
+                    <div className="flex gap-2">
+                      <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="flex-1 h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo" />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rustic-brown/40 material-symbols-outlined text-sm">search</span>
+                        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-32 h-11 pl-8 pr-2 rounded-xl border border-rustic-border bg-stone-50 text-[10px] focus:ring-2 focus:ring-primary/20 transition-all font-bold" placeholder="Filtrar..." />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome de Guerra</label>
-                    <input value={formData.nome_guerra} onChange={e => setFormData({ ...formData, nome_guerra: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Ex: Sd. Pires" />
+                    <input value={formData.war_name} onChange={e => setFormData({ ...formData, war_name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Ex: Sd. Pires" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -290,18 +295,18 @@ const PessoalB1: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Data de Nasc.</label>
-                      <input type="date" value={formData.data_nascimento} onChange={e => setFormData({ ...formData, data_nascimento: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" />
+                      <input type="date" value={formData.birth_date} onChange={e => setFormData({ ...formData, birth_date: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Telefone</label>
-                      <input value={formData.telefone} onChange={e => setFormData({ ...formData, telefone: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="(47) 99999-9999" />
+                      <input value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="(47) 99999-9999" />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo Sanguíneo</label>
-                      <select value={formData.tipo_sanguineo} onChange={e => setFormData({ ...formData, tipo_sanguineo: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                      <select value={formData.blood_type} onChange={e => setFormData({ ...formData, blood_type: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
                         <option value="">Selecione...</option>
                         <option value="A+">A+</option><option value="A-">A-</option>
                         <option value="B+">B+</option><option value="B-">B-</option>
@@ -317,11 +322,11 @@ const PessoalB1: React.FC = () => {
 
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Endereço Residencial</label>
-                    <input value={formData.endereco} onChange={e => setFormData({ ...formData, endereco: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Rua, Número, Bairro, Cidade" />
+                    <input value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Rua, Número, Bairro, Cidade" />
                   </div>
 
                   <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-rustic-border/50">
-                    <input type="checkbox" checked={formData.porte_arma} onChange={e => setFormData({ ...formData, porte_arma: e.target.checked })} className="w-4 h-4 text-primary rounded" />
+                    <input type="checkbox" checked={formData.weapon_permit} onChange={e => setFormData({ ...formData, weapon_permit: e.target.checked })} className="w-4 h-4 text-primary rounded" />
                     <label className="text-xs font-bold text-gray-600">Possui Porte de Arma / Acautelamento</label>
                   </div>
                 </div>
@@ -362,6 +367,7 @@ const PessoalB1: React.FC = () => {
                   <select value={docCategory} onChange={e => setDocCategory(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm">
                     <option>Certidão</option><option>Portaria</option><option>Requerimento</option><option>Ficha Médica</option>
                   </select>
+                  <textarea value={docObs} onChange={e => setDocObs(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-xs" placeholder="Observações/Notas" />
                   <button onClick={handleUploadDocument} disabled={loading} className="w-full py-3 bg-primary text-white font-black rounded-xl hover:brightness-110 disabled:opacity-50">SUBIR DOCUMENTO</button>
                 </div>
               </div>
@@ -374,13 +380,13 @@ const PessoalB1: React.FC = () => {
                   <tbody className="divide-y divide-gray-100">
                     {documents.map(doc => (
                       <tr key={doc.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-6 py-4 font-bold"><span className="flex items-center gap-2"><span className="material-symbols-outlined text-primary">description</span> {doc.nome_arquivo}</span></td>
-                        <td className="px-6 py-4"><span className="text-[10px] font-bold bg-gray-100 px-2 py-0.5 rounded">{doc.tipo_documento}</span></td>
-                        <td className="px-6 py-4 text-gray-400 text-xs">{doc.tamanho_kb} KB</td>
+                        <td className="px-6 py-4 font-bold"><span className="flex items-center gap-2"><span className="material-symbols-outlined text-primary">description</span> {doc.file_name}</span></td>
+                        <td className="px-6 py-4"><span className="text-[10px] font-bold bg-gray-100 px-2 py-0.5 rounded">{doc.document_type}</span></td>
+                        <td className="px-6 py-4 text-gray-400 text-xs">{doc.size_kb} KB</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <a href={doc.arquivo_url} target="_blank" className="p-2 hover:bg-stone-100 rounded-lg text-primary"><span className="material-symbols-outlined text-[18px]">visibility</span></a>
-                            <button onClick={() => handleDeleteDocument(doc.id!, doc.arquivo_url)} className="p-2 hover:bg-red-50 rounded-lg text-red-600"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                            <a href={doc.file_url} target="_blank" className="p-2 hover:bg-stone-100 rounded-lg text-primary"><span className="material-symbols-outlined text-[18px]">visibility</span></a>
+                            <button onClick={() => handleDeleteDocument(doc.id!, doc.file_url)} className="p-2 hover:bg-red-50 rounded-lg text-red-600"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                           </div>
                         </td>
                       </tr>
@@ -406,6 +412,7 @@ const PessoalB1: React.FC = () => {
                     <label className="text-xs font-bold block">Início: <input type="date" value={vacaStart} onChange={e => setVacaStart(e.target.value)} className="w-full mt-1 h-10 px-2 border rounded-lg" /></label>
                     <label className="text-xs font-bold block">Fim: <input type="date" value={vacaEnd} onChange={e => setVacaEnd(e.target.value)} className="w-full mt-1 h-10 px-2 border rounded-lg" /></label>
                   </div>
+                  <textarea value={vacaObs} onChange={e => setVacaObs(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-xs" placeholder="Observações das férias" />
                   <button onClick={handleSaveVacation} className="w-full py-4 bg-primary text-white font-black rounded-xl hover:brightness-110">PROGRAMAR FÉRIAS</button>
                 </div>
               </div>
@@ -421,12 +428,12 @@ const PessoalB1: React.FC = () => {
                   {vacations.map(v => (
                     <div key={v.id} className="flex items-center gap-4 p-4 rounded-xl border border-rustic-border hover:border-primary/30 group transition-all">
                       <div className="w-12 h-12 rounded-lg bg-blue-50 flex flex-col items-center justify-center text-blue-700 font-black">
-                        <span className="text-[10px] uppercase">{new Date(v.data_inicio).toLocaleDateString('pt-BR', { month: 'short' })}</span>
-                        <span className="text-lg leading-none">{v.data_inicio.split('-')[2]}</span>
+                        <span className="text-[10px] uppercase">{new Date(v.start_date).toLocaleDateString('pt-BR', { month: 'short' })}</span>
+                        <span className="text-lg leading-none">{v.start_date.split('-')[2]}</span>
                       </div>
                       <div className="flex-1">
-                        <p className="font-bold text-sm">{v.nome_completo}</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase">{v.quantidade_dias} DIAS • {v.data_inicio} ATÉ {v.data_fim}</p>
+                        <p className="font-bold text-sm">{v.full_name}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase">{v.day_count} DIAS • {v.start_date} ATÉ {v.end_date}</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded-full uppercase tracking-tighter">PLANEJADO</span>
@@ -471,7 +478,7 @@ const PessoalB1: React.FC = () => {
                     <span className="px-2 py-0.5 bg-white/10 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.type}</span>
                   </div>
                   <h3 className="text-3xl font-black tracking-tight">{selectedPerson.name}</h3>
-                  <p className="text-white/60 font-bold uppercase text-[11px] tracking-widest mt-1">Guerra: {selectedPerson.nome_guerra || 'Não informado'}</p>
+                  <p className="text-white/60 font-bold uppercase text-[11px] tracking-widest mt-1">Guerra: {selectedPerson.war_name || 'Não informado'}</p>
                 </div>
               </div>
             </div>
@@ -493,14 +500,14 @@ const PessoalB1: React.FC = () => {
                       <span className="material-symbols-outlined text-primary/40 text-[20px]">call</span>
                       <div>
                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Telefone</p>
-                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.telefone || 'N/A'}</p>
+                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.phone || 'N/A'}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <span className="material-symbols-outlined text-primary/40 text-[20px] mt-1">home</span>
                       <div>
                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Endereço</p>
-                        <p className="text-sm font-bold text-rustic-brown leading-snug">{selectedPerson.endereco || 'N/A'}</p>
+                        <p className="text-sm font-bold text-rustic-brown leading-snug">{selectedPerson.address || 'N/A'}</p>
                       </div>
                     </div>
                   </div>
@@ -529,14 +536,14 @@ const PessoalB1: React.FC = () => {
                         <span className="material-symbols-outlined text-primary/40 text-[20px]">cake</span>
                         <div>
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Nascimento</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.data_nascimento ? new Date(selectedPerson.data_nascimento).toLocaleDateString('pt-BR') : 'N/A'}</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.birth_date ? new Date(selectedPerson.birth_date).toLocaleDateString('pt-BR') : 'N/A'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="material-symbols-outlined text-primary/40 text-[20px]">water_drop</span>
                         <div>
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo Sanguíneo</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.tipo_sanguineo || 'N/A'}</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.blood_type || 'N/A'}</p>
                         </div>
                       </div>
                     </div>
@@ -550,13 +557,13 @@ const PessoalB1: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3 p-3 bg-red-50/50 rounded-xl border border-red-100/50">
-                      <span className={`material-symbols-outlined ${selectedPerson.porte_arma ? 'text-green-600' : 'text-gray-400'}`}>
-                        {selectedPerson.porte_arma ? 'verified_user' : 'cancel'}
+                      <span className={`material-symbols-outlined ${selectedPerson.weapon_permit ? 'text-green-600' : 'text-gray-400'}`}>
+                        {selectedPerson.weapon_permit ? 'verified_user' : 'cancel'}
                       </span>
                       <div>
                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Porte de Arma</p>
-                        <p className={`text-[10px] font-black uppercase ${selectedPerson.porte_arma ? 'text-green-600' : 'text-gray-400'}`}>
-                          {selectedPerson.porte_arma ? 'AUTORIZADO / ACAUTELADO' : 'NÃO POSSUI'}
+                        <p className={`text-[10px] font-black uppercase ${selectedPerson.weapon_permit ? 'text-green-600' : 'text-gray-400'}`}>
+                          {selectedPerson.weapon_permit ? 'AUTORIZADO / ACAUTELADO' : 'NÃO POSSUI'}
                         </p>
                       </div>
                     </div>

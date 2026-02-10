@@ -100,7 +100,7 @@ const SSCI: React.FC = () => {
                 descricao_solicitacao: description,
                 incluir_web: includeWebAnalysis,
                 arquivos: processedFiles
-            }, docs);
+            } as any, docs);
 
             const uploadedUrls: string[] = [];
             for (const file of analysisFiles) {
@@ -110,20 +110,20 @@ const SSCI: React.FC = () => {
             }
 
             const analysisData: SSCIAnalysis = {
-                tipo_solicitacao: requestType,
-                numero_protocolo: protocol,
-                descricao_solicitacao: description,
-                resposta_ia: geminiResult.resposta,
-                documentos_anexados: uploadedUrls,
-                usuario_responsavel: "Capitão Técnico",
-                fonte_web: geminiResult.fonte_web,
-                links_cbmsc: geminiResult.links_cbmsc,
-                modelo_ia: 'gemini-pro',
-                normativas_citadas: GeminiService.extrairNormativas(geminiResult.resposta)
+                request_type: requestType,
+                protocol_number: protocol,
+                request_description: description,
+                ai_response: geminiResult.resposta,
+                attached_documents: uploadedUrls,
+                responsible_user: "Capitão Técnico",
+                web_source: geminiResult.web_source,
+                cbmsc_links: geminiResult.cbmsc_links,
+                ai_model: 'gemini-pro',
+                cited_normatives: GeminiService.extrairNormativas(geminiResult.resposta)
             };
 
             const result = await SupabaseService.addSSCIAnalysis(analysisData);
-            setCurrentAnalysis(result[0]);
+            setCurrentAnalysis(result as any);
             setProtocol("");
             setDescription("");
             setAnalysisFiles([]);
@@ -170,8 +170,8 @@ const SSCI: React.FC = () => {
 
     const handleNewChat = async () => {
         const newSession = await SupabaseService.createSSCIChatSession({
-            titulo_sessao: `Consulta ${new Date().toLocaleTimeString()}`,
-            usuario: "Usuário Logado"
+            session_title: `Consulta ${new Date().toLocaleTimeString()}`,
+            user: "Usuário Logado"
         });
         setChatSessions([newSession, ...chatSessions]);
         handleSelectSession(newSession);
@@ -184,9 +184,9 @@ const SSCI: React.FC = () => {
         setIsTyping(true);
 
         const userMsg: SSCIChatMessage = {
-            sessao_id: currentSession.id!,
-            mensagem_usuario: msgText,
-            resposta_ia: "..." // Temp
+            session_id: currentSession.id!,
+            user_message: msgText,
+            ai_response: "..." // Temp
         };
 
         try {
@@ -195,8 +195,8 @@ const SSCI: React.FC = () => {
 
             // 2. Map history
             const history = messages.map(m => ([
-                { role: 'user' as const, content: m.mensagem_usuario },
-                { role: 'model' as const, content: m.resposta_ia }
+                { role: 'user' as const, content: m.user_message },
+                { role: 'model' as const, content: m.ai_response }
             ])).flat();
 
             // 3. Call Gemini Chat
@@ -204,9 +204,9 @@ const SSCI: React.FC = () => {
 
             const finalMsg = await SupabaseService.addSSCIChatMessage({
                 ...userMsg,
-                resposta_ia: geminiResult.resposta,
-                documentos_referenciados: geminiResult.documentos_referenciados,
-                normativas_referenciadas: geminiResult.links_externos
+                ai_response: geminiResult.resposta,
+                referenced_documents: geminiResult.documentos_referenciados,
+                referenced_normatives: geminiResult.links_externos
             });
             setMessages(prev => [...prev, finalMsg]);
         } catch (error: any) {
@@ -227,14 +227,14 @@ const SSCI: React.FC = () => {
             const url = SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName);
 
             await SupabaseService.addSSCINormativeDocument({
-                nome_documento: docName,
-                tipo_documento: docType,
-                numero_codigo: docCode,
-                orgao_emissor: docIssuer,
-                categoria: docCategory,
-                arquivo_url: url,
-                tamanho_kb: Math.round(docFile.size / 1024),
-                status: 'ativo'
+                document_name: docName,
+                document_type: docType,
+                code_number: docCode,
+                issuing_body: docIssuer,
+                category: docCategory,
+                file_url: url,
+                size_kb: Math.round(docFile.size / 1024),
+                status: 'Active'
             });
 
             alert("Documento adicionado ao Banco de Conhecimento!");
@@ -250,9 +250,9 @@ const SSCI: React.FC = () => {
     };
 
     const filteredDocs = normativeDocs.filter(doc => {
-        const matchesSearch = doc.nome_documento.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            doc.numero_codigo?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesType = filterType === "Todos" || doc.tipo_documento === filterType;
+        const matchesSearch = doc.document_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            doc.code_number?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesType = filterType === "Todos" || doc.document_type === filterType;
         return matchesSearch && matchesType;
     });
 
@@ -400,7 +400,7 @@ const SSCI: React.FC = () => {
                                             <h3 className="font-black text-lg text-[#181111]">Manifestação Jurídica Estruturada</h3>
                                             <div className="flex gap-2">
                                                 {profile?.p_ssci === 'editor' && (
-                                                    <button onClick={() => handleDeleteAnalysis(currentAnalysis.id!, currentAnalysis.documentos_anexados || [])} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-400"><span className="material-symbols-outlined text-[20px]">delete</span></button>
+                                                    <button onClick={() => handleDeleteAnalysis(currentAnalysis.id!, currentAnalysis.attached_documents || [])} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-400"><span className="material-symbols-outlined text-[20px]">delete</span></button>
                                                 )}
                                                 <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">print</span></button>
                                                 <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">content_copy</span></button>
@@ -409,18 +409,18 @@ const SSCI: React.FC = () => {
                                         </div>
                                         <div className="p-8 overflow-y-auto bg-[#fafafa] flex flex-col gap-6">
                                             <div className="max-w-3xl mx-auto bg-white border border-stone-200 p-10 shadow-sm font-serif leading-relaxed whitespace-pre-wrap text-gray-800">
-                                                {currentAnalysis.resposta_ia}
+                                                {currentAnalysis.ai_response}
                                             </div>
 
-                                            {currentAnalysis.fonte_web && currentAnalysis.fonte_web.length > 0 && (
+                                            {currentAnalysis.web_source && currentAnalysis.web_source.length > 0 && (
                                                 <div className="max-w-3xl mx-auto w-full bg-blue-50/30 border border-blue-100 p-6 rounded-xl">
                                                     <h4 className="text-xs font-black uppercase text-blue-600 mb-4 flex items-center gap-2">
                                                         <span className="material-symbols-outlined text-[16px]">language</span> Fontes Consultadas no Site CBMSC
                                                     </h4>
                                                     <div className="space-y-3">
-                                                        {currentAnalysis.fonte_web.map((fonte: any, idx: number) => (
-                                                            <a key={idx} href={fonte.link} target="_blank" rel="noopener noreferrer" className="block p-3 bg-white border border-blue-100 rounded-lg hover:shadow-md transition-all">
-                                                                <p className="text-sm font-bold text-blue-800">{fonte.titulo}</p>
+                                                        {currentAnalysis.web_source.map((fonte: any, idx: number) => (
+                                                            <a key={idx} href={fonte.url} target="_blank" rel="noopener noreferrer" className="block p-3 bg-white border border-blue-100 rounded-lg hover:shadow-md transition-all">
+                                                                <p className="text-sm font-bold text-blue-800">{fonte.title}</p>
                                                                 <p className="text-[11px] text-gray-500 mt-1 line-clamp-1">{fonte.snippet}</p>
                                                             </a>
                                                         ))}
@@ -457,9 +457,9 @@ const SSCI: React.FC = () => {
                                             onClick={() => handleSelectSession(sess)}
                                             className={`group w-full text-left p-4 border-b hover:bg-stone-50 transition-colors ${currentSession?.id === sess.id ? 'bg-stone-100 border-l-4 border-primary' : ''}`}
                                         >
-                                            <p className="font-bold text-sm truncate">{sess.titulo_sessao}</p>
+                                            <p className="font-bold text-sm truncate">{sess.session_title}</p>
                                             <div className="flex justify-between items-center mt-1">
-                                                <span className="text-[10px] text-gray-400 font-bold">{new Date(sess.data_inicio!).toLocaleDateString('pt-BR')}</span>
+                                                <span className="text-[10px] text-gray-400 font-bold">{sess.start_date ? new Date(sess.start_date).toLocaleDateString('pt-BR') : 'N/A'}</span>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleDeleteChatSession(sess.id!); }}
                                                     className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-red-300 hover:text-red-500 rounded transition-all"
@@ -478,7 +478,7 @@ const SSCI: React.FC = () => {
                                 <div className="p-4 bg-stone-50 border-b flex justify-between items-center">
                                     <h3 className="font-black text-sm flex items-center gap-2 text-primary">
                                         <span className="material-symbols-outlined">forum</span>
-                                        {currentSession ? currentSession.titulo_sessao : 'Selecione ou inicie uma conversa'}
+                                        {currentSession ? currentSession.session_title : 'Selecione ou inicie uma conversa'}
                                     </h3>
                                     <div className="flex items-center gap-4">
                                         <div className="flex items-center gap-2 pr-4 border-r border-gray-200">
@@ -500,16 +500,16 @@ const SSCI: React.FC = () => {
                                             {/* User Message */}
                                             <div className="flex justify-end">
                                                 <div className="bg-secondary-green text-white p-4 rounded-2xl rounded-tr-none max-w-[80%] shadow-sm">
-                                                    <p className="text-sm font-medium">{msg.mensagem_usuario}</p>
-                                                    <span className="text-[9px] font-black opacity-50 block mt-1 text-right">VOCÊ • {new Date(msg.timestamp_pergunta!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    <p className="text-sm font-medium">{msg.user_message}</p>
+                                                    <span className="text-[9px] font-black opacity-50 block mt-1 text-right">VOCÊ • {msg.query_timestamp ? new Date(msg.query_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                 </div>
                                             </div>
                                             {/* IA Message */}
                                             <div className="flex justify-start">
                                                 <div className="bg-gray-100 text-[#181111] p-4 rounded-2xl rounded-tl-none max-w-[80%] border border-gray-200 shadow-sm relative overflow-hidden">
                                                     <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                                                    <p className="text-sm leading-relaxed">{msg.resposta_ia}</p>
-                                                    <span className="text-[9px] font-black text-gray-400 block mt-2">ASSISTENTE SSCI • {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    <p className="text-sm leading-relaxed">{msg.ai_response}</p>
+                                                    <span className="text-[9px] font-black text-gray-400 block mt-2">ASSISTENTE SSCI • {msg.response_timestamp ? new Date(msg.response_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -527,6 +527,20 @@ const SSCI: React.FC = () => {
                                                         <span className="material-symbols-outlined text-[14px]">language</span> Buscando no site CBMSC...
                                                     </span>
                                                 )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!currentAnalysis && analyses.length > 0 && (
+                                        <div className="bg-white rounded-2xl border border-rustic-border shadow-sm p-6">
+                                            <h3 className="font-black text-sm mb-4 uppercase text-gray-400">Análises Recentes</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {analyses.map(an => (
+                                                    <div key={an.id} onClick={() => setCurrentAnalysis(an)} className="p-4 border rounded-xl hover:bg-stone-50 cursor-pointer transition-all">
+                                                        <p className="font-bold text-sm">{an.protocol_number}</p>
+                                                        <p className="text-[10px] text-gray-500 line-clamp-2">{an.request_description}</p>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
@@ -599,10 +613,10 @@ const SSCI: React.FC = () => {
                                     <div key={doc.id} className="bg-white rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all overflow-hidden relative group">
                                         <div className="p-5 h-full flex flex-col">
                                             <div className="flex justify-between items-start mb-3">
-                                                <span className="text-[9px] font-black bg-stone-100 px-2 py-1 rounded uppercase tracking-tighter">{doc.tipo_documento}</span>
+                                                <span className="text-[9px] font-black bg-stone-100 px-2 py-1 rounded uppercase tracking-tighter">{doc.document_type}</span>
                                                 <button onClick={async () => {
                                                     if (confirm("Excluir normativa?")) {
-                                                        const fileName = doc.arquivo_url.split('/').pop()!;
+                                                        const fileName = doc.file_url.split('/').pop()!;
                                                         await SupabaseService.deleteSSCINormativeDocument(doc.id!, fileName);
                                                         loadData();
                                                     }
@@ -610,19 +624,19 @@ const SSCI: React.FC = () => {
                                                     {profile?.p_ssci === 'editor' && <span className="material-symbols-outlined text-[18px]">delete</span>}
                                                 </button>
                                             </div>
-                                            <h4 className="font-bold text-[#181111] text-base leading-tight mb-1 line-clamp-2">{doc.nome_documento}</h4>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase mb-4">{doc.numero_codigo} • {doc.orgao_emissor}</p>
+                                            <h4 className="font-bold text-[#181111] text-base leading-tight mb-1 line-clamp-2">{doc.document_name}</h4>
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase mb-4">{doc.code_number} • {doc.issuing_body}</p>
 
                                             <div className="mt-auto flex items-center justify-between border-t border-stone-50 pt-4">
                                                 <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
                                                     <span className="material-symbols-outlined text-[14px]">visibility</span>
-                                                    {doc.vezes_referenciado || 0}
+                                                    {doc.times_referenced || 0}
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <a href={doc.arquivo_url} target="_blank" className="p-2 rounded-lg bg-stone-50 text-primary hover:bg-stone-100 transition-colors">
+                                                    <a href={doc.file_url} target="_blank" className="p-2 rounded-lg bg-stone-50 text-primary hover:bg-stone-100 transition-colors">
                                                         <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                     </a>
-                                                    <a href={doc.arquivo_url} download className="p-2 rounded-lg bg-stone-50 text-gray-400 hover:text-gray-600 hover:bg-stone-100 transition-colors">
+                                                    <a href={doc.file_url} download className="p-2 rounded-lg bg-stone-50 text-gray-400 hover:text-gray-600 hover:bg-stone-100 transition-colors">
                                                         <span className="material-symbols-outlined text-[18px]">download</span>
                                                     </a>
                                                 </div>
@@ -655,6 +669,18 @@ const SSCI: React.FC = () => {
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Código</label>
                                                     <input value={docCode} onChange={e => setDocCode(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: IN 001/2023" />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Órgão Emissor</label>
+                                                    <input value={docIssuer} onChange={e => setDocIssuer(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: CBMSC" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Categoria</label>
+                                                    <select value={docCategory} onChange={e => setDocCategory(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm">
+                                                        <option>Técnico</option><option>Operacional</option><option>Administrativo</option>
+                                                    </select>
                                                 </div>
                                             </div>
                                             <label className={`flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-xl cursor-pointer hover:bg-stone-50 transition-all ${docFile ? 'border-secondary-green bg-green-50/10' : 'border-gray-200'}`}>

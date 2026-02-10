@@ -3,9 +3,9 @@ import { Vehicle, ChecklistItem, DailyChecklist, PendingNotice } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const VEHICLE_FIELDS = 'id, nome, tipo, placa, status, km_atual, ultima_revisao';
-const CHECKLIST_ITEM_FIELDS = 'id, nome_item, categoria, viatura_id, ordem, ativo';
-const DAILY_CHECKLIST_FIELDS = 'id, item_id, viatura_id, status, observacoes, created_at';
+const VEHICLE_FIELDS = 'id, name, type, plate, status, current_km, last_revision';
+const CHECKLIST_ITEM_FIELDS = 'id, category, item_name, viatura_id, description, is_active, sort_order';
+const DAILY_CHECKLIST_FIELDS = 'id, item_id, viatura_id, inspection_date, status, notes, responsible, created_at';
 
 // Instâncias dos serviços base
 const fleetBase = new BaseService<Vehicle>('fleet', VEHICLE_FIELDS);
@@ -70,13 +70,13 @@ export const FleetService = {
      */
     getChecklistItems: async (categoria?: string, viaturaId?: string): Promise<ChecklistItem[]> => {
         try {
-            const filters: Record<string, unknown> = { ativo: true };
+            const filters: Record<string, unknown> = { is_active: true };
             if (categoria) {
-                filters.categoria = categoria;
+                filters.category = categoria;
             }
 
             const result = await checklistItemsBase.query(filters, {
-                orderBy: 'ordem',
+                orderBy: 'sort_order',
                 ascending: true,
             });
 
@@ -111,11 +111,11 @@ export const FleetService = {
 
                 if (itemData) {
                     const notice: Partial<PendingNotice> = {
-                        conferencia_id: created.id,
-                        tipo: itemData.categoria === 'viaturas' ? 'viatura' : 'material',
-                        destino_modulo: 'B4',
+                        inspection_id: created.id,
+                        type: itemData.category === 'viaturas' ? 'viatura' : 'material',
+                        target_module: 'B4',
                         viatura_id: entry.viatura_id || itemData.viatura_id,
-                        descricao: `Faltante: ${itemData.nome_item} reportado na conferência diária.`,
+                        description: `Faltante: ${itemData.item_name} reportado na conferência diária.`,
                         status: 'pendente',
                     };
 
