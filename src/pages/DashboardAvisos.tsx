@@ -42,7 +42,7 @@ const DashboardAvisos: React.FC = () => {
           event: '*',
           schema: 'public',
           table: 'missoes_diarias',
-          filter: `data_missao=eq.${selectedDate}`
+          filter: `mission_date=eq.${selectedDate}`
         },
         () => {
           loadData();
@@ -76,8 +76,11 @@ const DashboardAvisos: React.FC = () => {
     if (!guReportText) return alert("Digite algo no aviso.");
 
     await SupabaseService.addGuReport({
-      report_text: guReportText,
-      date: selectedDate
+      title: "Aviso Gerais",
+      description: guReportText,
+      type: "geral",
+      responsible_id: "user-id-placeholder", // TODO: Get actual user ID
+      report_date: selectedDate
     });
 
     alert("Aviso salvo!");
@@ -103,7 +106,7 @@ const DashboardAvisos: React.FC = () => {
   };
 
   const targetDate = getYesterdayDate(selectedDate);
-  const avisoDoDia = reports.find(r => r.date === targetDate);
+  const avisoDoDia = reports.find(r => r.report_date === targetDate);
 
   // We also want to display Today's report if I (the current Chief) wrote one, 
   // but the prompt stresses "aviso diversa ao chefe que entra... aparecer o texto do dia anterior".
@@ -158,7 +161,7 @@ const DashboardAvisos: React.FC = () => {
               {avisoDoDia ? (
                 <div className="bg-white/80 p-5 rounded-lg border border-yellow-100 shadow-sm backdrop-blur-sm">
                   <p className="text-[#2c1810] whitespace-pre-line text-lg font-medium leading-relaxed">
-                    "{avisoDoDia.report_text}"
+                    "{avisoDoDia.description}"
                   </p>
                 </div>
               ) : (
@@ -198,27 +201,27 @@ const DashboardAvisos: React.FC = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <p className={`font-medium text-[#2c1810] ${mission.status === 'concluida' ? 'line-through text-rustic-brown/50' : ''}`}>
-                              {mission.titulo}
+                              {mission.title}
                             </p>
-                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${mission.prioridade === 'urgente' ? 'bg-red-100 text-red-600' :
-                              mission.prioridade === 'alta' ? 'bg-orange-100 text-orange-600' :
-                                mission.prioridade === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
+                              mission.priority === 'alta' ? 'bg-orange-100 text-orange-600' :
+                                mission.priority === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
                               }`}>
-                              {mission.prioridade}
+                              {mission.priority}
                             </span>
                           </div>
-                          {mission.descricao && <p className="text-[11px] text-gray-500 mt-0.5">{mission.descricao}</p>}
+                          {mission.description && <p className="text-[11px] text-gray-500 mt-0.5">{mission.description}</p>}
                           <div className="flex items-center gap-3 mt-1">
-                            {mission.hora_inicio && (
+                            {mission.start_time && (
                               <span className="text-[10px] font-bold text-primary flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[14px]">schedule</span>
-                                {mission.hora_inicio}
+                                {mission.start_time}
                               </span>
                             )}
-                            {mission.responsavel_nome && (
+                            {mission.responsible_name && (
                               <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[14px]">person</span>
-                                {mission.responsavel_nome}
+                                {mission.responsible_name}
                               </span>
                             )}
                           </div>
@@ -311,8 +314,8 @@ const DashboardAvisos: React.FC = () => {
                     {reports.map((rep) => (
                       <div key={rep.id} className="text-xs p-2 bg-gray-50 rounded border border-gray-100 flex justify-between items-start gap-4">
                         <div className="flex-1">
-                          <span className="font-bold block text-primary">{rep.date}</span>
-                          <p className="text-rustic-brown/80 line-clamp-2">{rep.report_text}</p>
+                          <span className="font-bold block text-primary">{rep.report_date}</span>
+                          <p className="text-rustic-brown/80 line-clamp-2">{rep.description}</p>
                         </div>
                         <button onClick={() => handleDeleteReport(rep.id!)} className="text-gray-300 hover:text-red-500 transition-colors">
                           <span className="material-symbols-outlined text-[16px]">delete</span>

@@ -33,12 +33,12 @@ const SSCI: React.FC = () => {
     const [isAddingDoc, setIsAddingDoc] = useState(false);
 
     // Doc Form
-    const [docFile, setDocFile] = useState<File | null>(null);
-    const [docName, setDocName] = useState("");
-    const [docType, setDocType] = useState("Instrução Normativa");
-    const [docCode, setDocCode] = useState("");
-    const [docIssuer, setDocIssuer] = useState("CBMSC");
-    const [docCategory, setDocCategory] = useState("Técnico");
+    const [documentFile, setDocumentFile] = useState<File | null>(null);
+    const [documentName, setDocumentName] = useState("");
+    const [documentType, setDocumentType] = useState("Instrução Normativa");
+    const [documentCode, setDocumentCode] = useState("");
+    const [documentIssuer, setDocumentIssuer] = useState("CBMSC");
+    const [documentCategory, setDocumentCategory] = useState("Técnico");
 
     useEffect(() => {
         loadData();
@@ -95,9 +95,9 @@ const SSCI: React.FC = () => {
 
             // 3. Call Gemini for deep analysis with files
             const geminiResult = await GeminiService.analisarRequerimentoComGemini({
-                tipo_solicitacao: requestType,
-                numero_protocolo: protocol,
-                descricao_solicitacao: description,
+                request_type: requestType,
+                protocol_number: protocol,
+                request_description: description,
                 incluir_web: includeWebAnalysis,
                 arquivos: processedFiles
             } as any, docs);
@@ -105,21 +105,21 @@ const SSCI: React.FC = () => {
             const uploadedUrls: string[] = [];
             for (const file of analysisFiles) {
                 const fileName = `${Date.now()}_${file.name}`;
-                await SupabaseService.uploadFile('ssci-anexos', fileName, file);
-                uploadedUrls.push(SupabaseService.getPublicUrl('ssci-anexos', fileName));
+                await SupabaseService.uploadFile('ssci-normative-documents', fileName, file);
+                uploadedUrls.push(SupabaseService.getPublicUrl('ssci-normative-documents', fileName));
             }
 
             const analysisData: SSCIAnalysis = {
                 request_type: requestType,
                 protocol_number: protocol,
                 request_description: description,
-                ai_response: geminiResult.resposta,
+                ai_response: geminiResult.ai_response,
                 attached_documents: uploadedUrls,
                 responsible_user: "Capitão Técnico",
                 web_source: geminiResult.web_source,
                 cbmsc_links: geminiResult.cbmsc_links,
                 ai_model: 'gemini-pro',
-                cited_normatives: GeminiService.extrairNormativas(geminiResult.resposta)
+                cited_normatives: GeminiService.extrairNormativas(geminiResult.ai_response)
             };
 
             const result = await SupabaseService.addSSCIAnalysis(analysisData);
@@ -136,7 +136,7 @@ const SSCI: React.FC = () => {
         }
     };
 
-    const handleDeleteAnalysis = async (id: string, files: string[]) => {
+    const handleDeleteAnalysis = async (id: string) => {
         if (!confirm("Excluir esta análise permanentemente? Os arquivos anexados também serão removidos.")) return;
         try {
             await SupabaseService.deleteSSCIAnalysis(id);
@@ -204,9 +204,9 @@ const SSCI: React.FC = () => {
 
             const finalMsg = await SupabaseService.addSSCIChatMessage({
                 ...userMsg,
-                ai_response: geminiResult.resposta,
-                referenced_documents: geminiResult.documentos_referenciados,
-                referenced_normatives: geminiResult.links_externos
+                ai_response: geminiResult.ai_response,
+                referenced_documents: geminiResult.referenced_documents,
+                referenced_normatives: geminiResult.referenced_normatives
             });
             setMessages(prev => [...prev, finalMsg]);
         } catch (error: any) {
@@ -219,28 +219,28 @@ const SSCI: React.FC = () => {
 
     // --- KNOWLEDGE BASE HANDLERS ---
     const handleAddDocument = async () => {
-        if (!docFile || !docName) return alert("Arguivo e Nome são obrigatórios.");
+        if (!documentFile || !documentName) return alert("Arquivo e Nome são obrigatórios.");
         setLoading(true);
         try {
-            const fileName = `${Date.now()}_${docFile.name}`;
-            await SupabaseService.uploadFile('ssci-documentos-normativos', fileName, docFile);
-            const url = SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName);
+            const fileName = `${Date.now()}_${documentFile.name}`;
+            await SupabaseService.uploadFile('ssci-normative-documents', fileName, documentFile);
+            const url = SupabaseService.getPublicUrl('ssci-normative-documents', fileName);
 
             await SupabaseService.addSSCINormativeDocument({
-                document_name: docName,
-                document_type: docType,
-                code_number: docCode,
-                issuing_body: docIssuer,
-                category: docCategory,
+                document_name: documentName,
+                document_type: documentType,
+                code_number: documentCode,
+                issuing_body: documentIssuer,
+                category: documentCategory,
                 file_url: url,
-                size_kb: Math.round(docFile.size / 1024),
+                size_kb: Math.round(documentFile.size / 1024),
                 status: 'Active'
             });
 
             alert("Documento adicionado ao Banco de Conhecimento!");
             setIsAddingDoc(false);
-            setDocFile(null);
-            setDocName("");
+            setDocumentFile(null);
+            setDocumentName("");
             loadData();
         } catch (error) {
             alert("Erro ao salvar documento.");
@@ -400,7 +400,7 @@ const SSCI: React.FC = () => {
                                             <h3 className="font-black text-lg text-[#181111]">Manifestação Jurídica Estruturada</h3>
                                             <div className="flex gap-2">
                                                 {profile?.p_ssci === 'editor' && (
-                                                    <button onClick={() => handleDeleteAnalysis(currentAnalysis.id!, currentAnalysis.attached_documents || [])} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-400"><span className="material-symbols-outlined text-[20px]">delete</span></button>
+                                                    <button onClick={() => handleDeleteAnalysis(currentAnalysis.id!)} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-400"><span className="material-symbols-outlined text-[20px]">delete</span></button>
                                                 )}
                                                 <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">print</span></button>
                                                 <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">content_copy</span></button>
@@ -657,35 +657,35 @@ const SSCI: React.FC = () => {
                                         <div className="p-8 space-y-6">
                                             <div>
                                                 <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Nome do Documento</label>
-                                                <input value={docName} onChange={e => setDocName(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: Sistemas de Hidrantes" />
+                                                <input value={documentName} onChange={e => setDocumentName(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: Sistemas de Hidrantes" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Tipo</label>
-                                                    <select value={docType} onChange={e => setDocType(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm">
+                                                    <select value={documentType} onChange={e => setDocumentType(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm">
                                                         <option>Instrução Normativa</option><option>Portaria</option><option>Lei</option>
                                                     </select>
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Código</label>
-                                                    <input value={docCode} onChange={e => setDocCode(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: IN 001/2023" />
+                                                    <input value={documentCode} onChange={e => setDocumentCode(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: IN 001/2023" />
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Órgão Emissor</label>
-                                                    <input value={docIssuer} onChange={e => setDocIssuer(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: CBMSC" />
+                                                    <input value={documentIssuer} onChange={e => setDocumentIssuer(e.target.value)} type="text" className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: CBMSC" />
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Categoria</label>
-                                                    <select value={docCategory} onChange={e => setDocCategory(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm">
+                                                    <select value={documentCategory} onChange={e => setDocumentCategory(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm">
                                                         <option>Técnico</option><option>Operacional</option><option>Administrativo</option>
                                                     </select>
                                                 </div>
                                             </div>
-                                            <label className={`flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-xl cursor-pointer hover:bg-stone-50 transition-all ${docFile ? 'border-secondary-green bg-green-50/10' : 'border-gray-200'}`}>
-                                                <span className="text-xs font-bold text-gray-400">{docFile ? docFile.name : 'Selecionar Arquivo PDF'}</span>
-                                                <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files && setDocFile(e.target.files[0])} />
+                                            <label className={`flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-xl cursor-pointer hover:bg-stone-50 transition-all ${documentFile ? 'border-secondary-green bg-green-50/10' : 'border-gray-200'}`}>
+                                                <span className="text-xs font-bold text-gray-400">{documentFile ? documentFile.name : 'Selecionar Arquivo PDF'}</span>
+                                                <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files && setDocumentFile(e.target.files[0])} />
                                             </label>
                                             <button onClick={handleAddDocument} disabled={loading} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all">
                                                 SALVAR NA BASE DE CONHECIMENTO

@@ -2,8 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchService } from "./SearchService";
 
 const env = (import.meta as any).env || {};
-const globalEnv = (window as any).process?.env || {};
-const EMERGENCY_KEY = ""; // LIMPO - AGUARDANDO NOVA CHAVE
 // Tenta pegar do localStorage primeiro, depois das env vars
 const getApiKey = () => {
     const localKey = localStorage.getItem("MANUAL_API_KEY");
@@ -115,9 +113,9 @@ const generateWithFallback = async (parts: any[]) => {
 };
 
 export interface AnalysisInput {
-    tipo_solicitacao: string;
-    numero_protocolo: string;
-    descricao_solicitacao: string;
+    request_type: string;
+    protocol_number: string;
+    request_description: string;
     incluir_web?: boolean;
     arquivos?: { mimeType: string, data: string }[];
 }
@@ -130,14 +128,14 @@ export interface ChatMessage {
 export const GeminiService = {
     analisarRequerimentoComGemini: async (dados: AnalysisInput, documentosLocais: any[]) => {
         try {
-            console.log(`[GeminiService] Iniciando análise profunda para protocolo: ${dados.numero_protocolo}`);
+            console.log(`[GeminiService] Iniciando análise profunda para protocolo: ${dados.protocol_number}`);
 
             let contextoWeb = "";
             let webResults: any[] = [];
 
             if (dados.incluir_web) {
                 try {
-                    const busca = await SearchService.buscarSiteCBMSC(dados.descricao_solicitacao);
+                    const busca = await SearchService.searchCBMSCWebsite(dados.request_description);
                     if (busca) {
                         contextoWeb = busca.map(r => `FONTE: ${r.title}\nLINK: ${r.url}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
                         webResults = busca;
@@ -159,16 +157,21 @@ DIRETRIZES DE ANÁLISE:
 
 CONTEXTO LOCAL (Documentos do Banco de Conhecimento):
 ${documentosLocais.length > 0
-                    ? JSON.stringify(documentosLocais.map(d => ({ nome: d.nome_documento, tipo: d.tipo_documento, codigo: d.numero_codigo, resumo: d.resumo_ementa })))
+                    ? JSON.stringify(documentosLocais.map(d => ({
+                        document_name: d.document_name,
+                        document_type: d.document_type,
+                        code_number: d.code_number,
+                        summary: d.summary
+                    })))
                     : '[]'}
 
 CONTEXTO WEB (Pesquisa em cbm.sc.gov.br):
 ${contextoWeb || "Nenhum resultado de pesquisa na web."}
 
 DADOS DA SOLICITAÇÃO:
-Tipo: ${dados.tipo_solicitacao.toUpperCase()}
-Protocolo: ${dados.numero_protocolo}
-Descrição: ${dados.descricao_solicitacao}
+Tipo: ${dados.request_type.toUpperCase()}
+Protocolo: ${dados.protocol_number}
+Descrição: ${dados.request_description}
 `;
 
             const parts: any[] = [{ text: promptSistema }];
@@ -188,11 +191,11 @@ Descrição: ${dados.descricao_solicitacao}
                 const { text, model } = await generateWithFallback(parts);
 
                 return {
-                    resposta: text,
-                    documentos_utilizados: documentosLocais.map(d => d.id),
+                    ai_response: text,
+                    used_documents: documentosLocais.map(d => d.id),
                     web_source: webResults,
                     cbmsc_links: webResults.map(r => r.url),
-                    modelo_ia: model
+                    ai_model: model
                 };
             } catch (error: any) {
                 console.error("[GeminiService] Erro em todos os modelos:", error);
@@ -217,7 +220,7 @@ Descrição: ${dados.descricao_solicitacao}
             let informacoesWeb = null;
             if (incluirWeb) {
                 try {
-                    informacoesWeb = await SearchService.buscarSiteCBMSC(mensagemUsuario);
+                    informacoesWeb = await SearchService.searchCBMSCWebsite(mensagemUsuario);
                 } catch (e) {
                     console.warn('[GeminiService] Busca web no chat falhou:', e);
                 }
@@ -227,7 +230,12 @@ Descrição: ${dados.descricao_solicitacao}
             const contexto = `
         DOCUMENTOS LOCAIS DISPONÍVEIS:
         ${documentosRelevantes.length > 0
-                    ? JSON.stringify(documentosRelevantes.map(doc => ({ nome: doc.nome_documento, tipo: doc.tipo_documento, codigo: doc.numero_codigo, resumo: doc.resumo_ementa })))
+                    ? JSON.stringify(documentosRelevantes.map(doc => ({
+                        document_name: doc.document_name,
+                        document_type: doc.document_type,
+                        code_number: doc.code_number,
+                        summary: doc.summary
+                    })))
                     : '[]'}
 
         FONTES WEB (CBMSC):
@@ -247,7 +255,7 @@ INSTRUÇÕES:
 - Cite sempre as fontes de forma clara.
 - Se utilizar qualquer informação vinda das FONTES WEB, você deve obrigatoriamente indicar com a etiqueta "[WEB]" ao final da frase ou parágrafo.
 - Se a informação não estiver disponível em nenhuma das fontes, decline educadamente e recomende consulta ao SSCI.
-- Seja objetivo, claro e mantenha o tom profissional.
+- Seja objetivo, clara e mantenha o tom profissional.
 `};
                 const userMessage = { role: "user", content: `PERGUNTA DO USUÁRIO: ${mensagemUsuario}\n\nCONTEXTO:\n${contexto}` };
 
@@ -261,9 +269,9 @@ INSTRUÇÕES:
                 const { text } = await generateWithOpenAI(messages, openAIModel, apiKey);
 
                 return {
-                    resposta: text,
-                    documentos_referenciados: documentosRelevantes.map(d => d.id),
-                    links_externos: informacoesWeb?.map(info => info.url) || []
+                    ai_response: text,
+                    referenced_documents: documentosRelevantes.map(d => d.id),
+                    referenced_normatives: informacoesWeb?.map(info => info.url) || []
                 };
 
             } else {
@@ -304,9 +312,9 @@ INSTRUÇÕES:
                 const resposta = response.text();
 
                 return {
-                    resposta: resposta,
-                    documentos_referenciados: documentosRelevantes.map(d => d.id),
-                    links_externos: informacoesWeb?.map(info => info.url) || []
+                    ai_response: resposta,
+                    referenced_documents: documentosRelevantes.map(d => d.id),
+                    referenced_normatives: informacoesWeb?.map(info => info.url) || []
                 };
             }
         } catch (error: any) {

@@ -8,21 +8,30 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+async function checkTable(tableName: string) {
+    console.log(`\n--- Checking ${tableName} ---`);
+    const { data, error } = await supabase.from(tableName).select('*').limit(1);
+    if (error) {
+        console.error(`${tableName} Error:`, error.message);
+    } else {
+        console.log(`${tableName} Columns:`, data?.[0] ? Object.keys(data[0]) : 'No records found to infer columns');
+    }
+}
+
 async function checkSchema() {
-    console.log('--- Checking Personnel Table ---');
-    const { data: personnel, error: pError } = await supabase.from('personnel').select('*').limit(1);
-    if (pError) console.error('Personnel Error:', pError.message);
-    else console.log('Personnel Sample:', personnel?.[0] ? Object.keys(personnel[0]) : 'No records found');
+    const tables = [
+        'personnel',
+        'fleet',
+        'social_posts',
+        'materias_instrucao',
+        'materias_apresentacoes',
+        'materias_videos',
+        'ssci_uso_documentos'
+    ];
 
-    console.log('\n--- Checking Fleet Table ---');
-    const { data: fleet, error: fError } = await supabase.from('fleet').select('*').limit(1);
-    if (fError) console.error('Fleet Error:', fError.message);
-    else console.log('Fleet Sample:', fleet?.[0] ? Object.keys(fleet[0]) : 'No records found');
-
-    console.log('\n--- Checking Social Posts Table ---');
-    const { data: social, error: sError } = await supabase.from('social_posts').select('*').limit(1);
-    if (sError) console.error('Social Error:', sError.message);
-    else console.log('Social Sample:', social?.[0] ? Object.keys(social[0]) : 'No records found');
+    for (const table of tables) {
+        await checkTable(table);
+    }
 }
 
 checkSchema();

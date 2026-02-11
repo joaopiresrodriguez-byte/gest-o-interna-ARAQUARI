@@ -9,9 +9,9 @@ const VIDEO_FIELDS = 'id, materia_id, title, video_url, duration, sort_order';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 
 // Instâncias dos serviços base
-const materiasBase = new BaseService<MateriaInstrucao>('instruction_materials', MATERIA_FIELDS);
-const apresentacoesBase = new BaseService<MateriaApresentacao>('material_presentations', APRESENTACAO_FIELDS);
-const videosBase = new BaseService<MateriaVideo>('material_videos', VIDEO_FIELDS);
+const materiasBase = new BaseService<MateriaInstrucao>('materias_instrucao', MATERIA_FIELDS);
+const apresentacoesBase = new BaseService<MateriaApresentacao>('materias_apresentacoes', APRESENTACAO_FIELDS);
+const videosBase = new BaseService<MateriaVideo>('materias_videos', VIDEO_FIELDS);
 const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
 
 export const InstructionService = {

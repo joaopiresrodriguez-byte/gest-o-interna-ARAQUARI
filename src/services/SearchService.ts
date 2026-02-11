@@ -5,7 +5,7 @@ export interface SearchResult {
 }
 
 export const SearchService = {
-    buscarSiteCBMSC: async (termosBusca: string): Promise<SearchResult[] | null> => {
+    searchCBMSCWebsite: async (searchTerm: string): Promise<SearchResult[] | null> => {
         try {
             const apiKey = import.meta.env.VITE_GOOGLE_SEARCH_API_KEY;
             const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID;
@@ -15,7 +15,7 @@ export const SearchService = {
                 return null;
             }
 
-            const searchQuery = `site:cbm.sc.gov.br ${termosBusca}`;
+            const searchQuery = `site:cbm.sc.gov.br ${searchTerm}`;
             const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}`;
 
             const response = await fetch(url);
@@ -26,15 +26,15 @@ export const SearchService = {
                 return null;
             }
 
-            const resultados: SearchResult[] = data.items?.slice(0, 5).map((item: any) => ({
+            const results: SearchResult[] = data.items?.slice(0, 5).map((item: any) => ({
                 title: item.title,
                 snippet: item.snippet,
                 url: item.link
             })) || [];
 
-            return resultados;
+            return results;
         } catch (error) {
-            console.error('Erro ao buscar no site CBMSC:', error);
+            console.error('Error searching CBMSC website:', error);
             return null;
         }
     }

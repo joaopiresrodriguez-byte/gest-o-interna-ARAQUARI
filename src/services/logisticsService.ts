@@ -4,7 +4,7 @@ import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
 const PURCHASE_FIELDS = 'id, item, quantity, unit_price, supplier, status, created_at';
-const RECEIPT_FIELDS = 'id, product, quantity, supplier, arrival_date, notes, created_at';
+const RECEIPT_FIELDS = 'id, photo_url, fiscal_note_number, receipt_date, notes, created_at';
 const NOTICE_FIELDS = 'id, type, description, status, viatura_id, priority, target_module, inspection_id, created_at';
 
 // Instâncias dos serviços base
