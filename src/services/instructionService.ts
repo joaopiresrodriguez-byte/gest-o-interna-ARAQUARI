@@ -211,7 +211,7 @@ export const InstructionService = {
             // Query com join precisa ser feita manualmente
             const { data, error } = await supabase
                 .from('training_schedule')
-                .select('*, materia:instruction_materials(*)')
+                .select('*, materia:materias_instrucao(*)')
                 .order('date', { ascending: true });
 
             if (error) {

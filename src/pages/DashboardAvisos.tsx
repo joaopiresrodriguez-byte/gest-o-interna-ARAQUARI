@@ -6,21 +6,33 @@ import { BirthdayCard } from '../components/BirthdayCard';
 
 const DashboardAvisos: React.FC = () => {
   const [missions, setMissions] = useState<DailyMission[]>([]);
+  const [previousMissions, setPreviousMissions] = useState<DailyMission[]>([]); // New State
   const [fleet, setFleet] = useState<Vehicle[]>([]);
   const [reports, setReports] = useState<GuReport[]>([]);
   const [guReportText, setGuReportText] = useState("");
   const [selectedDate, setSelectedDate] = useState(SupabaseService.getTodayDate());
   const [loading, setLoading] = useState(true);
 
+  // Logic to find "Yesterday's" date relative to selectedDate
+  const getYesterdayDate = (dateStr: string) => {
+    const date = new Date(dateStr + 'T12:00:00');
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split('T')[0];
+  };
+
+  const targetDate = getYesterdayDate(selectedDate);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [missionsData, fleetData, reportsData] = await Promise.all([
+      const [missionsData, prevMissionsData, fleetData, reportsData] = await Promise.all([
         SupabaseService.getDailyMissions({ data: selectedDate }),
+        SupabaseService.getDailyMissions({ data: targetDate }), // Fetch Yesterday's Missions
         SupabaseService.getFleet(),
         SupabaseService.getGuReports()
       ]);
       setMissions(missionsData);
+      setPreviousMissions(prevMissionsData.filter(m => m.status === 'concluida')); // Filter only concluded
       setFleet(fleetData);
       setReports(reportsData);
     } catch (error) {
@@ -98,14 +110,6 @@ const DashboardAvisos: React.FC = () => {
     }
   };
 
-  // Logic to find "Yesterday's" report relative to selectedDate
-  const getYesterdayDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T12:00:00');
-    date.setDate(date.getDate() - 1);
-    return date.toISOString().split('T')[0];
-  };
-
-  const targetDate = getYesterdayDate(selectedDate);
   const avisoDoDia = reports.find(r => r.report_date === targetDate);
 
   // We also want to display Today's report if I (the current Chief) wrote one, 
@@ -168,6 +172,27 @@ const DashboardAvisos: React.FC = () => {
                 <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-yellow-200 rounded-lg text-yellow-700/50">
                   <span className="material-symbols-outlined text-4xl mb-2">unpublished</span>
                   <p className="font-bold">Nenhum aviso deixado pelo plantão anterior.</p>
+                </div>
+              )}
+
+              {/* Missões do Plantão Anterior (Concluídas) */}
+              {previousMissions.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-yellow-200/50">
+                  <h3 className="text-xs font-black uppercase text-yellow-700 mb-2 flex items-center gap-2 opacity-70">
+                    <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                    Missões Concluídas no Plantão Anterior
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {previousMissions.map(m => (
+                      <div key={m.id} className="flex items-start gap-2 bg-white/50 p-2 rounded border border-yellow-100 text-yellow-900/80 text-xs">
+                        <span className="material-symbols-outlined text-[14px] mt-0.5 text-green-600">check_circle</span>
+                        <div>
+                          <p className="font-bold leading-tight">{m.title}</p>
+                          {m.responsible_name && <p className="text-[9px] opacity-70">{m.responsible_name}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </section>
@@ -330,8 +355,8 @@ const DashboardAvisos: React.FC = () => {
           </div>
 
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 

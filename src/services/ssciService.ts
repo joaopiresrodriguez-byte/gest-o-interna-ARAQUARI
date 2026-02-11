@@ -166,7 +166,7 @@ export const SSCIService = {
         try {
             // Remove do storage
             const { error: storageError } = await supabase.storage
-                .from('ssci-normative-documents')
+                .from('ssci-documentos-normativos')
                 .remove([fileName]);
 
             if (storageError) {

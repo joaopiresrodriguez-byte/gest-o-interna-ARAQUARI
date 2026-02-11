@@ -105,8 +105,8 @@ const SSCI: React.FC = () => {
             const uploadedUrls: string[] = [];
             for (const file of analysisFiles) {
                 const fileName = `${Date.now()}_${file.name}`;
-                await SupabaseService.uploadFile('ssci-normative-documents', fileName, file);
-                uploadedUrls.push(SupabaseService.getPublicUrl('ssci-normative-documents', fileName));
+                await SupabaseService.uploadFile('ssci-documentos-normativos', fileName, file);
+                uploadedUrls.push(SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName));
             }
 
             const analysisData: SSCIAnalysis = {
@@ -223,8 +223,8 @@ const SSCI: React.FC = () => {
         setLoading(true);
         try {
             const fileName = `${Date.now()}_${documentFile.name}`;
-            await SupabaseService.uploadFile('ssci-normative-documents', fileName, documentFile);
-            const url = SupabaseService.getPublicUrl('ssci-normative-documents', fileName);
+            await SupabaseService.uploadFile('ssci-documentos-normativos', fileName, documentFile);
+            const url = SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName);
 
             await SupabaseService.addSSCINormativeDocument({
                 document_name: documentName,

@@ -41,6 +41,56 @@ const PessoalB1: React.FC = () => {
   const [vacaEnd, setVacaEnd] = useState("");
   const [vacaObs, setVacaObs] = useState("");
 
+  // Roster State
+  const [rosterStartDate, setRosterStartDate] = useState("2024-01-01");
+  const [teamA, setTeamA] = useState<number[]>([]);
+  const [teamB, setTeamB] = useState<number[]>([]);
+  const [teamC, setTeamC] = useState<number[]>([]);
+  const [teamD, setTeamD] = useState<number[]>([]);
+  const [rosterMonth, setRosterMonth] = useState(new Date().getMonth());
+  const [rosterYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    const saved = localStorage.getItem('roster_config');
+    if (saved) {
+      const config = JSON.parse(saved);
+      setRosterStartDate(config.startDate || "2024-01-01");
+      setTeamA(config.teamA || []);
+      setTeamB(config.teamB || []);
+      setTeamC(config.teamC || []);
+      setTeamD(config.teamD || []);
+    }
+  }, []);
+
+  const saveRosterConfig = () => {
+    localStorage.setItem('roster_config', JSON.stringify({
+      startDate: rosterStartDate, teamA, teamB, teamC, teamD
+    }));
+    toast.success("Configuração da escala salva!");
+  };
+
+  const getTeamForDate = (date: Date) => {
+    const start = new Date(rosterStartDate);
+    start.setHours(0, 0, 0, 0); // normalize
+    const target = new Date(date);
+    target.setHours(0, 0, 0, 0);
+
+    const diffTime = target.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Cycle: 0=A, 1=B, 2=C, 3=D
+    let cycle = diffDays % 4;
+    if (cycle < 0) cycle += 4; // handle past dates
+
+    if (cycle === 0) return { name: 'Alpha', color: 'bg-red-100 text-red-700', members: teamA };
+    if (cycle === 1) return { name: 'Bravo', color: 'bg-blue-100 text-blue-700', members: teamB };
+    if (cycle === 2) return { name: 'Charlie', color: 'bg-green-100 text-green-700', members: teamC };
+    return { name: 'Delta', color: 'bg-yellow-100 text-yellow-700', members: teamD };
+  };
+
+  const daysInMonth = new Date(rosterYear, rosterMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(rosterYear, rosterMonth, 1).getDay();
+
   useEffect(() => {
     loadData();
   }, [activeTab]);
@@ -453,9 +503,133 @@ const PessoalB1: React.FC = () => {
             </div>
           )}
 
-          {/* ESCALA & REUNIAO (Keeping Simplified) */}
+          {/* TAB: ESCALA - 24x72 Generator */}
           {activeTab === 'ESCALA' && (
-            <div className="bg-white p-8 rounded-2xl border border-rustic-border text-center py-20 text-gray-400 italic">Módulo de Escala Padrão. Consulte o B1 para detalhes.</div>
+            <div className="space-y-8">
+              {/* Configuration Panel */}
+              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                <div className="flex justify-between items-center mb-6 border-b border-rustic-border pb-4">
+                  <h3 className="font-black text-lg flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">groups</span>
+                    Configuração das Equipes (24x72)
+                  </h3>
+                  <div className="flex items-center gap-4">
+                    <label className="text-xs font-bold text-gray-500">
+                      Data Base (Equipe A):
+                      <input type="date" value={rosterStartDate} onChange={e => setRosterStartDate(e.target.value)} className="ml-2 border rounded p-1 text-sm bg-stone-50" />
+                    </label>
+                    <button onClick={saveRosterConfig} className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110">SALVAR CONFIG</button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {[
+                    { id: 'A', name: 'Equipe Alpha', state: teamA, setter: setTeamA, color: 'bg-red-50 border-red-100' },
+                    { id: 'B', name: 'Equipe Bravo', state: teamB, setter: setTeamB, color: 'bg-blue-50 border-blue-100' },
+                    { id: 'C', name: 'Equipe Charlie', state: teamC, setter: setTeamC, color: 'bg-green-50 border-green-100' },
+                    { id: 'D', name: 'Equipe Delta', state: teamD, setter: setTeamD, color: 'bg-yellow-50 border-yellow-100' },
+                  ].map(team => (
+                    <div key={team.id} className={`p-4 rounded-xl border ${team.color}`}>
+                      <h4 className="font-black text-sm uppercase mb-3 text-center opacity-70">{team.name}</h4>
+                      <div className="h-48 overflow-y-auto bg-white rounded-lg border border-gray-100 p-2 space-y-1">
+                        {personnelList.filter(p => !team.state.includes(p.id!) && p.status === 'ATIVO').length === 0 && (
+                          <p className="text-[10px] text-center text-gray-300 py-2">Todos alocados</p>
+                        )}
+                        {/* Selected Members */}
+                        {team.state.map(id => {
+                          const p = personnelList.find(x => x.id === id);
+                          return p ? (
+                            <div key={id} className="flex justify-between items-center text-xs p-1.5 bg-gray-50 rounded border border-gray-100">
+                              <span className="font-bold truncate">{p.war_name || p.name.split(' ')[0]}</span>
+                              <button onClick={() => team.setter(prev => prev.filter(x => x !== id))} className="text-red-400 hover:text-red-600">×</button>
+                            </div>
+                          ) : null;
+                        })}
+
+                        <hr className="my-2 border-dashed" />
+
+                        {/* Available Members Selector */}
+                        <select
+                          className="w-full text-[10px] p-1 border rounded bg-stone-50"
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              team.setter(prev => [...prev, Number(e.target.value)]);
+                              e.target.value = "";
+                            }
+                          }}
+                        >
+                          <option value="">+ Adicionar Militar...</option>
+                          {personnelList
+                            .filter(p => !teamA.includes(p.id!) && !teamB.includes(p.id!) && !teamC.includes(p.id!) && !teamD.includes(p.id!) && p.status === 'ATIVO')
+                            .map(p => (
+                              <option key={p.id} value={p.id}>{p.rank} {p.war_name}</option>
+                            ))
+                          }
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Calendar View */}
+              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="font-black text-lg">Escala Mensal</h3>
+                  <div className="flex gap-2">
+                    <button onClick={() => setRosterMonth(prev => prev - 1)} className="p-1 rounded bg-stone-100 hover:bg-stone-200">
+                      <span className="material-symbols-outlined">chevron_left</span>
+                    </button>
+                    <span className="font-bold uppercase w-32 text-center pt-1">
+                      {new Date(rosterYear, rosterMonth).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <button onClick={() => setRosterMonth(prev => prev + 1)} className="p-1 rounded bg-stone-100 hover:bg-stone-200">
+                      <span className="material-symbols-outlined">chevron_right</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+                  {/* Headers */}
+                  {['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'].map(d => (
+                    <div key={d} className="bg-stone-100 p-2 text-center text-[10px] font-black uppercase text-gray-500">{d}</div>
+                  ))}
+
+                  {/* Empty Days */}
+                  {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                    <div key={`empty-${i}`} className="bg-white min-h-[100px]" />
+                  ))}
+
+                  {/* Days */}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const date = new Date(rosterYear, rosterMonth, day);
+                    const team = getTeamForDate(date);
+                    const isToday = new Date().toDateString() === date.toDateString();
+
+                    return (
+                      <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-stone-50 transition-colors ${isToday ? 'ring-2 ring-primary/20 bg-red-50/10' : ''}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={`text-xs font-bold ${isToday ? 'bg-primary text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-700'}`}>{day}</span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${team.color}`}>{team.name}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {team.members.map(mid => {
+                            const p = personnelList.find(x => x.id === mid);
+                            return p ? (
+                              <div key={mid} className="text-[10px] font-medium text-gray-600 truncate flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+                                {p.war_name || p.name.split(' ')[0]}
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           )}
 
         </div>

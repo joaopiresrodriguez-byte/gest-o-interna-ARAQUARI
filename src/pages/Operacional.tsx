@@ -226,11 +226,27 @@ const Operacional: React.FC = () => {
                     {receipts.map(rec => (
                       <div key={rec.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-rustic-border/50">
                         <img src={rec.photo_url} className="w-16 h-16 rounded object-cover border border-gray-200" alt="Produto" loading="lazy" />
-                        <div className="flex flex-col">
+                        <div className="flex flex-col flex-1">
                           <span className="text-xs font-bold text-[#181111]">NF: {rec.fiscal_note_number}</span>
                           <span className="text-[10px] text-gray-500">{rec.receipt_date ? new Date(rec.receipt_date).toLocaleDateString('pt-BR') : 'N/A'}</span>
                           <span className="text-[10px] text-gray-400 mt-1 line-clamp-1">{rec.notes}</span>
                         </div>
+                        {profile?.p_operacional === 'editor' && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Excluir este recebimento?')) return;
+                              try {
+                                await SupabaseService.deleteProductReceipt(rec.id!);
+                                toast.success('Recebimento excluído.');
+                                loadOperationalData();
+                              } catch { toast.error('Erro ao excluir.'); }
+                            }}
+                            className="p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors flex-shrink-0"
+                            title="Excluir recebimento"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        )}
                       </div>
                     ))}
                     {receipts.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Nenhum recebimento registrado.</p>}

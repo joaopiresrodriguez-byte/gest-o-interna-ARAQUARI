@@ -48,6 +48,16 @@ async function verify() {
         console.error("❌ Daily Missions Fetch Failed:", e);
     }
 
+    // 4. Verify Training Fetch (Join Fix)
+    console.log("\n4. Verifying Trainings Fetch (Join)...");
+    try {
+        const trainings = await SupabaseService.getTrainings();
+        // If table name match fails, Supabase throws error
+        console.log("✅ Trainings Fetch Success. Count:", trainings.length);
+    } catch (e) {
+        console.error("❌ Trainings Fetch Failed:", e);
+    }
+
     console.log("\nVerification Complete.");
 }
 
