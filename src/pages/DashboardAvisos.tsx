@@ -41,7 +41,7 @@ const DashboardAvisos: React.FC = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'missoes_diarias',
+          table: 'daily_missions',
           filter: `mission_date=eq.${selectedDate}`
         },
         () => {
