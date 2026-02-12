@@ -38,12 +38,15 @@ export const GroqService = {
             if (dados.incluir_web) {
                 try {
                     const busca = await SearchService.searchCBMSCWebsite(dados.descricao);
-                    if (busca) {
+                    if (busca && busca.length > 0) {
+                        console.log(`[GroqService] ${busca.length} resultados encontrados na web.`);
                         contextoWeb = busca.map(r => `FONTE: ${r.title}\nLINK: ${r.url}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
                         webResults = busca;
+                    } else {
+                        console.log('[GroqService] Nenhum resultado relevante encontrado na web.');
                     }
                 } catch (searchError) {
-                    console.warn('[GroqService] Busca no site do CBMSC falhou:', searchError);
+                    console.warn('[GroqService] Busca no site do CBMSC falhou (não bloqueante):', searchError);
                 }
             }
 
@@ -115,8 +118,13 @@ export const GroqService = {
             if (incluirWeb) {
                 try {
                     informacoesWeb = await SearchService.searchCBMSCWebsite(mensagemUsuario);
+                    if (informacoesWeb && informacoesWeb.length > 0) {
+                        console.log(`[GroqService Chat] ${informacoesWeb.length} resultados encontrados na web.`);
+                    } else {
+                        console.log('[GroqService Chat] Nenhum resultado web encontrado.');
+                    }
                 } catch (e) {
-                    console.warn('[GroqService] Busca web no chat falhou:', e);
+                    console.warn('[GroqService] Busca web no chat falhou (não bloqueante):', e);
                 }
             }
 
