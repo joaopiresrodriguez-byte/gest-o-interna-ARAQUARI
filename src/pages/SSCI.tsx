@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { SupabaseService, SSCIAnalysis, SSCIChatSession, SSCIChatMessage, SSCINormativeDocument } from '../services/SupabaseService';
-import { GeminiService } from '../services/GeminiService';
+import { GroqService } from '../services/GroqService';
 
 const SSCI: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'ANALISE' | 'PESQUISA' | 'CONHECIMENTO'>('ANALISE');
@@ -78,9 +78,9 @@ const SSCI: React.FC = () => {
         try {
             // 1. Fetch relevant normative docs for context
             const docs = await SupabaseService.getSSCINormativeDocuments();
-            // Filter or just send titles/ementas for context (GeminiService handles formatting)
+            // Filter or just send titles/ementas for context (GroqService handles formatting)
 
-            // 2. Prepare files for Gemini (Multimodal)
+            // 2. Prepare files for Groq (Multimodal)
             const processedFiles = await Promise.all(analysisFiles.map(async (file) => {
                 return new Promise<{ mimeType: string, data: string }>((resolve, reject) => {
                     const reader = new FileReader();
@@ -93,14 +93,14 @@ const SSCI: React.FC = () => {
                 });
             }));
 
-            // 3. Call Gemini for deep analysis with files
-            const geminiResult = await GeminiService.analisarRequerimentoComGemini({
-                request_type: requestType,
-                protocol_number: protocol,
-                request_description: description,
+            // 3. Call Groq for deep analysis
+            const groqResult = await GroqService.analisarRequerimentoComGroq({
+                tipo: requestType,
+                protocolo: protocol,
+                descricao: description,
                 incluir_web: includeWebAnalysis,
                 arquivos: processedFiles
-            } as any, docs);
+            }, docs);
 
             const uploadedUrls: string[] = [];
             for (const file of analysisFiles) {
@@ -113,13 +113,13 @@ const SSCI: React.FC = () => {
                 request_type: requestType,
                 protocol_number: protocol,
                 request_description: description,
-                ai_response: geminiResult.ai_response,
+                ai_response: groqResult.ai_response,
                 attached_documents: uploadedUrls,
                 responsible_user: "Capitão Técnico",
-                web_source: geminiResult.web_source,
-                cbmsc_links: geminiResult.cbmsc_links,
-                ai_model: 'gemini-pro',
-                cited_normatives: GeminiService.extrairNormativas(geminiResult.ai_response)
+                web_source: groqResult.web_source,
+                cbmsc_links: groqResult.cbmsc_links,
+                ai_model: groqResult.ai_model,
+                cited_normatives: GroqService.extrairNormativas(groqResult.ai_response)
             };
 
             const result = await SupabaseService.addSSCIAnalysis(analysisData);
@@ -199,14 +199,14 @@ const SSCI: React.FC = () => {
                 { role: 'model' as const, content: m.ai_response }
             ])).flat();
 
-            // 3. Call Gemini Chat
-            const geminiResult = await GeminiService.chatNormativoGemini(msgText, history, docs, includeWebChat);
+            // 3. Call Groq Chat
+            const groqResult = await GroqService.chatNormativoGroq(msgText, history, docs, includeWebChat);
 
             const finalMsg = await SupabaseService.addSSCIChatMessage({
                 ...userMsg,
-                ai_response: geminiResult.ai_response,
-                referenced_documents: geminiResult.referenced_documents,
-                referenced_normatives: geminiResult.referenced_normatives
+                ai_response: groqResult.ai_response,
+                referenced_documents: groqResult.referenced_documents,
+                referenced_normatives: groqResult.referenced_normatives
             });
             setMessages(prev => [...prev, finalMsg]);
         } catch (error: any) {
@@ -271,22 +271,24 @@ const SSCI: React.FC = () => {
                     <div className="flex items-center gap-2 bg-[#2d2f31] p-1.5 rounded-lg border border-[#3d3f41]">
                         <input
                             type="password"
-                            placeholder="Cole sua NOVA API Key aqui..."
+                            placeholder="API Key (Groq)..."
                             className="bg-transparent text-white text-xs px-2 outline-none w-48"
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                    GeminiService.setManualKey(e.currentTarget.value);
+                                    localStorage.setItem("MANUAL_GROQ_KEY", e.currentTarget.value);
+                                    window.location.reload();
                                 }
                             }}
                         />
                         <button
                             onClick={(e) => {
                                 const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                                GeminiService.setManualKey(input.value);
+                                localStorage.setItem("MANUAL_GROQ_KEY", input.value);
+                                window.location.reload();
                             }}
                             className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded"
                         >
-                            SALVAR NOVA CHAVE
+                            SALVAR
                         </button>
                     </div>
 
