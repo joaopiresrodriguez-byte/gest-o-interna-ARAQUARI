@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 const PatrimonioB4: React.FC = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes'>('missoes');
+  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes' | 'conferencias'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
   const [initialNotices, setInitialNotices] = useState<PendingNotice[]>([]);
@@ -248,14 +248,14 @@ const PatrimonioB4: React.FC = () => {
           {/* Tabs */}
           <div className="bg-surface rounded-xl shadow-sm border border-rustic-border overflow-hidden">
             <div className="border-b border-rustic-border bg-stone-50/50 px-6 pt-4 flex gap-8 overflow-x-auto">
-              {(['missoes', 'listagem', 'cadastro', 'compras'] as const).map(tab => (
+              {(['missoes', 'listagem', 'cadastro', 'compras', 'conferencias'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
                 >
-                  <span className="material-symbols-outlined">{tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cadastro' ? 'add_box' : 'shopping_basket'}</span>
-                  {tab === 'missoes' ? 'Missões Diárias' : tab}
+                  <span className="material-symbols-outlined">{tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : 'checklist'}</span>
+                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'conferencias' ? 'Conferências' : tab}
                 </button>
               ))}
             </div>
@@ -567,6 +567,33 @@ const PatrimonioB4: React.FC = () => {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'conferencias' && (
+                <div className="space-y-6">
+                  <div className="bg-white border border-rustic-border rounded-xl p-6">
+                    <h3 className="text-lg font-bold mb-4">Conferências Diárias (Pendências)</h3>
+                    <div className="space-y-4">
+                      {notices.map(notice => (
+                        <div key={notice.id} className="p-4 border border-rustic-border rounded-lg flex justify-between items-center bg-stone-50">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${notice.status === 'pendente' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{notice.status}</span>
+                              <span className="font-bold text-sm">{notice.description}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">Registrado em: {new Date(notice.created_at!).toLocaleDateString()}</p>
+                          </div>
+                          {profile?.p_logistica === 'editor' && notice.status === 'pendente' && (
+                            <button onClick={() => handleResolveNotice(notice.id!)} className="text-xs font-bold text-primary border border-primary px-3 py-1 rounded hover:bg-primary hover:text-white transition-colors">
+                              RESOLVER
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {notices.length === 0 && <p className="text-center text-gray-400 italic">Nenhuma conferência/pendência registrada.</p>}
                     </div>
                   </div>
                 </div>

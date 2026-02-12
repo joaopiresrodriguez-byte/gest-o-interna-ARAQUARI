@@ -3,7 +3,7 @@ import { MateriaInstrucao, MateriaApresentacao, MateriaVideo, Training } from '.
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const MATERIA_FIELDS = 'id, name, category, level, status, total_presentations, total_videos, created_at, updated_at';
+const MATERIA_FIELDS = 'id, name, category, level, status, credit_hours, description, instructor, notes, total_presentations, total_videos, created_at, updated_at';
 const APRESENTACAO_FIELDS = 'id, materia_id, title, file_path, sort_order';
 const VIDEO_FIELDS = 'id, materia_id, title, video_url, duration, sort_order';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
@@ -12,7 +12,7 @@ const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 const materiasBase = new BaseService<MateriaInstrucao>('materias_instrucao', MATERIA_FIELDS);
 const apresentacoesBase = new BaseService<MateriaApresentacao>('materias_apresentacoes', APRESENTACAO_FIELDS);
 const videosBase = new BaseService<MateriaVideo>('materias_videos', VIDEO_FIELDS);
-const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
+const trainingsBase = new BaseService<Training>('cronograma_instrucao', TRAINING_FIELDS);
 
 export const InstructionService = {
     // ==================== MATÉRIAS DE INSTRUÇÃO ====================
@@ -210,7 +210,7 @@ export const InstructionService = {
         try {
             // Query com join precisa ser feita manualmente
             const { data, error } = await supabase
-                .from('training_schedule')
+                .from('cronograma_instrucao')
                 .select('*, materia:materias_instrucao(*)')
                 .order('date', { ascending: true });
 

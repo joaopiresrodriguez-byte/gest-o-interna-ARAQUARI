@@ -220,4 +220,59 @@ export const PersonnelService = {
             throw error;
         }
     },
+
+    /**
+     * Buscar escala por data
+     */
+    getEscalaByDate: async (date: string): Promise<any> => {
+        try {
+            const { data, error } = await supabase
+                .from('escalas')
+                .select('*')
+                .eq('data', date)
+                .single();
+
+            if (error && error.code !== 'PGRST116') { // Ignorar erro de não encontrado
+                console.error('Error fetching escala:', error);
+                throw error;
+            }
+            return data;
+        } catch (error) {
+            return null; // Retorna null se não encontrar
+        }
+    },
+
+    /**
+     * Salvar escala do dia
+     */
+    saveEscala: async (escala: { data: string, equipe: string, militares: number[] }): Promise<any> => {
+        try {
+            // Verificar se já existe
+            const existing = await PersonnelService.getEscalaByDate(escala.data);
+
+            if (existing) {
+                const { data, error } = await supabase
+                    .from('escalas')
+                    .update({ equipe: escala.equipe, militares: escala.militares })
+                    .eq('id', existing.id)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                return data;
+            } else {
+                const { data, error } = await supabase
+                    .from('escalas')
+                    .insert(escala)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                return data;
+            }
+        } catch (error) {
+            console.error('Error saving escala:', error);
+            throw error;
+        }
+    }
 };

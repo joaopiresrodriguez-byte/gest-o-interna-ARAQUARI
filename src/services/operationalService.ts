@@ -3,13 +3,13 @@ import { DailyMission, Mission, GuReport, Training } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_time, responsible_id, status, priority, created_at, updated_at';
+const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_time, responsible_id, status, priority, created_at, updated_at, responsible:personnel(name, rank)';
 const GU_REPORT_FIELDS = 'id, title, description, type, report_date, responsible_id, created_at';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 const MISSION_FIELDS = 'id, title, description, date, completed';
 
 // Instâncias dos serviços base
-const dailyMissionsBase = new BaseService<DailyMission>('daily_missions', DAILY_MISSION_FIELDS);
+const dailyMissionsBase = new BaseService<DailyMission>('missoes_diarias', DAILY_MISSION_FIELDS);
 const guReportsBase = new BaseService<GuReport>('gu_reports', GU_REPORT_FIELDS);
 const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
 const missionsBase = new BaseService<Mission>('missions', MISSION_FIELDS);
@@ -29,7 +29,7 @@ export const OperationalService = {
             // Se tem filtro de status (array), precisa usar query customizada
             if (filters?.status && filters.status.length > 0) {
                 let query = supabase
-                    .from('daily_missions')
+                    .from('missoes_diarias')
                     .select(DAILY_MISSION_FIELDS)
                     .in('status', filters.status);
 
@@ -49,7 +49,12 @@ export const OperationalService = {
                     throw error;
                 }
 
-                return (data as DailyMission[]) || [];
+                return (data || []).map((m: any) => ({
+                    ...m,
+                    responsible_name: m.responsible // Already exists or mapped
+                        ? `${m.responsible.rank ? m.responsible.rank + ' ' : ''}${m.responsible.name}`
+                        : m.responsible_name
+                }));
             }
 
             // Filtros simples podem usar o BaseService
@@ -67,7 +72,14 @@ export const OperationalService = {
                     ascending: false,
                 });
 
-            return Array.isArray(result) ? result : result.data;
+            const flatData = Array.isArray(result) ? result : result.data;
+
+            return flatData.map((m: any) => ({
+                ...m,
+                responsible_name: m.responsible
+                    ? `${m.responsible.rank ? m.responsible.rank + ' ' : ''}${m.responsible.name}`
+                    : m.responsible_name
+            }));
         } catch (error) {
             console.error('Error fetching daily missions:', error);
             throw error;

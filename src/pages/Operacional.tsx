@@ -5,6 +5,57 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { Button, Input, TextArea } from '../components/ui';
 
+const GarrisonDisplay = () => {
+  const [escala, setEscala] = useState<any>(null);
+  const [personnel, setPersonnel] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchEscala = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const [escalaData, personnelData] = await Promise.all([
+          SupabaseService.getEscalaByDate(today),
+          SupabaseService.getPersonnel()
+        ]);
+        setEscala(escalaData);
+        setPersonnel(personnelData);
+      } catch (error) {
+        console.error("Erro ao buscar guarnição:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEscala();
+  }, []);
+
+  if (loading) return <div className="text-xs text-gray-500 animate-pulse">Carregando guarnição...</div>;
+  if (!escala) return <div className="text-xs text-gray-400 italic">Nenhuma escala publicada para hoje. (Verifique com o B1)</div>;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-xs font-bold text-rustic-brown">Equipe:</span>
+        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-black uppercase">{escala.equipe}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {escala.militares?.map((id: number) => {
+          const p = personnel.find(px => px.id === id);
+          return p ? (
+            <div key={id} className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg shadow-sm">
+              <div className="w-8 h-8 rounded-full bg-cover bg-center" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
+              <div className="leading-tight">
+                <p className="text-[10px] font-black text-primary uppercase">{p.rank}</p>
+                <p className="text-xs font-bold text-gray-700">{p.war_name || p.name.split(' ')[0]}</p>
+              </div>
+            </div>
+          ) : null;
+        })}
+      </div>
+    </div>
+  );
+};
+
 const Operacional: React.FC = () => {
   // New States for Advanced Features
   const [activeChecklistTab, setActiveChecklistTab] = useState<'materiais' | 'equipamentos' | 'viaturas'>('materiais');
@@ -160,6 +211,19 @@ const Operacional: React.FC = () => {
 
       <div className="p-8 max-w-7xl mx-auto w-full flex-1 space-y-8">
         <div className="flex flex-col gap-8">
+
+          {/* 0. Guarnição do Dia */}
+          <section className="bg-white rounded-xl shadow-sm border border-rustic-border overflow-hidden">
+            <div className="bg-gradient-to-r from-red-700 to-red-900 p-4 text-white flex items-center justify-between">
+              <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                <span className="material-symbols-outlined">groups</span> Guarnição do Dia
+              </h3>
+              <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded">{new Date().toLocaleDateString('pt-BR')}</span>
+            </div>
+            <div className="p-4 bg-red-50/10">
+              <GarrisonDisplay />
+            </div>
+          </section>
 
           {/* 1. Recebimento de Produtos */}
           <section className="bg-white rounded-xl shadow-sm border border-rustic-border overflow-hidden">

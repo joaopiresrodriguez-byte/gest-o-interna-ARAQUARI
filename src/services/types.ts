@@ -261,6 +261,13 @@ export interface SSCINormativeDocument {
     size_kb?: number;
     status?: string;
     times_referenced?: number;
-    uploaded_by?: string;
     upload_date?: string;
+}
+
+export interface Escala {
+    id?: string;
+    data: string;
+    equipe: string;
+    militares: number[]; // IDs dos militares
+    created_at?: string;
 }

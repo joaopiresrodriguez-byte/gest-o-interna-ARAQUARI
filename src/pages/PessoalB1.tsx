@@ -514,6 +514,28 @@ const PessoalB1: React.FC = () => {
                     Configuração das Equipes (24x72)
                   </h3>
                   <div className="flex items-center gap-4">
+                    <button
+                      onClick={async () => {
+                        const today = new Date();
+                        const team = getTeamForDate(today);
+                        if (!confirm(`Publicar escala de hoje (${today.toLocaleDateString()}) para a Equipe ${team.name}?`)) return;
+
+                        try {
+                          await SupabaseService.saveEscala({
+                            data: today.toISOString().split('T')[0],
+                            equipe: team.name,
+                            militares: team.members
+                          });
+                          toast.success("Escala publicada com sucesso!");
+                        } catch (err) {
+                          toast.error("Erro ao publicar escala.");
+                        }
+                      }}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110 flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">publish</span>
+                      PUBLICAR HOJE
+                    </button>
                     <label className="text-xs font-bold text-gray-500">
                       Data Base (Equipe A):
                       <input type="date" value={rosterStartDate} onChange={e => setRosterStartDate(e.target.value)} className="ml-2 border rounded p-1 text-sm bg-stone-50" />

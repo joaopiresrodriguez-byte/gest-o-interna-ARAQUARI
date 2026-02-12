@@ -10,7 +10,7 @@ const DAILY_CHECKLIST_FIELDS = 'id, item_id, viatura_id, inspection_date, status
 // Instâncias dos serviços base
 const fleetBase = new BaseService<Vehicle>('fleet', VEHICLE_FIELDS);
 const checklistItemsBase = new BaseService<ChecklistItem>('checklist_items', CHECKLIST_ITEM_FIELDS);
-const dailyChecklistsBase = new BaseService<DailyChecklist>('daily_checklists', DAILY_CHECKLIST_FIELDS);
+const dailyChecklistsBase = new BaseService<DailyChecklist>('conferencias_diarias', DAILY_CHECKLIST_FIELDS);
 
 export const FleetService = {
     /**
