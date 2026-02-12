@@ -3,14 +3,14 @@ import { Vehicle, ChecklistItem, DailyChecklist, PendingNotice } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const VEHICLE_FIELDS = 'id, name, type, plate, status, current_km, last_revision';
+const VEHICLE_FIELDS = 'id, name, type, plate, status, details, current_km, last_revision';
 const CHECKLIST_ITEM_FIELDS = 'id, category, item_name, viatura_id, description, is_active, sort_order';
 const DAILY_CHECKLIST_FIELDS = 'id, item_id, viatura_id, inspection_date, status, notes, responsible, created_at';
 
 // Instâncias dos serviços base
 const fleetBase = new BaseService<Vehicle>('fleet', VEHICLE_FIELDS);
 const checklistItemsBase = new BaseService<ChecklistItem>('checklist_items', CHECKLIST_ITEM_FIELDS);
-const dailyChecklistsBase = new BaseService<DailyChecklist>('conferencias_diarias', DAILY_CHECKLIST_FIELDS);
+const dailyChecklistsBase = new BaseService<DailyChecklist>('daily_checklists', DAILY_CHECKLIST_FIELDS);
 
 export const FleetService = {
     /**
@@ -90,6 +90,27 @@ export const FleetService = {
             return items;
         } catch (error) {
             console.error('Error fetching checklist items:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Buscar conferências diárias
+     */
+    getDailyChecklists: async (): Promise<DailyChecklist[]> => {
+        try {
+            // Need to join with vehicle name and item name manually or via view if fields are just IDs
+            // For now, fetching raw. Ideally we should select relations.
+
+            const { data, error } = await supabase
+                .from('daily_checklists')
+                .select(DAILY_CHECKLIST_FIELDS)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return (data as any) || [];
+        } catch (error) {
+            console.error('Error fetching daily checklists:', error);
             return [];
         }
     },

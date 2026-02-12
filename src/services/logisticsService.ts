@@ -5,10 +5,10 @@ import { BaseService } from './baseService';
 // Campos específicos para otimizar queries
 const PURCHASE_FIELDS = 'id, item, quantity, unit_price, supplier, status, created_at';
 const RECEIPT_FIELDS = 'id, photo_url, fiscal_note_number, receipt_date, notes, created_at';
-const NOTICE_FIELDS = 'id, type, description, status, viatura_id, priority, target_module, inspection_id, created_at';
+const NOTICE_FIELDS = 'id, type, description, status, viatura_id, target_module, inspection_id, created_at';
 
 // Instâncias dos serviços base
-const purchasesBase = new BaseService<Purchase>('compras', PURCHASE_FIELDS);
+const purchasesBase = new BaseService<Purchase>('purchases', PURCHASE_FIELDS);
 const receiptsBase = new BaseService<ProductReceipt>('product_receipts', RECEIPT_FIELDS);
 const noticesBase = new BaseService<PendingNotice>('pending_notices', NOTICE_FIELDS);
 

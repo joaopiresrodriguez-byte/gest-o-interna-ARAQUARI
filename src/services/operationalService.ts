@@ -3,13 +3,13 @@ import { DailyMission, Mission, GuReport, Training } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_time, responsible_id, status, priority, created_at, updated_at, responsible:personnel(name, rank)';
+const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_time, responsible_id, status, created_at, updated_at, responsible_name';
 const GU_REPORT_FIELDS = 'id, title, description, type, report_date, responsible_id, created_at';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 const MISSION_FIELDS = 'id, title, description, date, completed';
 
 // Instâncias dos serviços base
-const dailyMissionsBase = new BaseService<DailyMission>('missoes_diarias', DAILY_MISSION_FIELDS);
+const dailyMissionsBase = new BaseService<DailyMission>('daily_missions', DAILY_MISSION_FIELDS);
 const guReportsBase = new BaseService<GuReport>('gu_reports', GU_REPORT_FIELDS);
 const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
 const missionsBase = new BaseService<Mission>('missions', MISSION_FIELDS);
@@ -29,7 +29,7 @@ export const OperationalService = {
             // Se tem filtro de status (array), precisa usar query customizada
             if (filters?.status && filters.status.length > 0) {
                 let query = supabase
-                    .from('missoes_diarias')
+                    .from('daily_missions')
                     .select(DAILY_MISSION_FIELDS)
                     .in('status', filters.status);
 
@@ -41,7 +41,7 @@ export const OperationalService = {
                 }
 
                 const { data, error } = await query
-                    .order('priority', { ascending: false })
+                    .order('created_at', { ascending: false })
                     .order('start_time', { ascending: true });
 
                 if (error) {
@@ -64,22 +64,17 @@ export const OperationalService = {
 
             const result = Object.keys(simpleFilters).length > 0
                 ? await dailyMissionsBase.query(simpleFilters, {
-                    orderBy: 'priority',
+                    orderBy: 'created_at',
                     ascending: false,
                 })
                 : await dailyMissionsBase.getAll({
-                    orderBy: 'priority',
+                    orderBy: 'created_at',
                     ascending: false,
                 });
 
             const flatData = Array.isArray(result) ? result : result.data;
 
-            return flatData.map((m: any) => ({
-                ...m,
-                responsible_name: m.responsible
-                    ? `${m.responsible.rank ? m.responsible.rank + ' ' : ''}${m.responsible.name}`
-                    : m.responsible_name
-            }));
+            return flatData;
         } catch (error) {
             console.error('Error fetching daily missions:', error);
             throw error;

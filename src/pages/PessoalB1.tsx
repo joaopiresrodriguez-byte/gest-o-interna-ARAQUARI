@@ -55,12 +55,29 @@ const PessoalB1: React.FC = () => {
     if (saved) {
       const config = JSON.parse(saved);
       setRosterStartDate(config.startDate || "2024-01-01");
-      setTeamA(config.teamA || []);
-      setTeamB(config.teamB || []);
-      setTeamC(config.teamC || []);
-      setTeamD(config.teamD || []);
+
+      // Cleanup orphan IDs from localStorage if they don't exist in personnelList anymore
+      // We'll do this once personnelList is loaded below
     }
   }, []);
+
+  // New Effect to sync localStorage with current personnelList
+  useEffect(() => {
+    if (personnelList.length > 0) {
+      const saved = localStorage.getItem('roster_config');
+      if (saved) {
+        const config = JSON.parse(saved);
+        const validIds = new Set(personnelList.map(p => p.id));
+
+        const cleanTeam = (team: number[]) => (team || []).filter(id => validIds.has(id));
+
+        setTeamA(cleanTeam(config.teamA));
+        setTeamB(cleanTeam(config.teamB));
+        setTeamC(cleanTeam(config.teamC));
+        setTeamD(cleanTeam(config.teamD));
+      }
+    }
+  }, [personnelList]);
 
   const saveRosterConfig = () => {
     localStorage.setItem('roster_config', JSON.stringify({
@@ -95,6 +112,13 @@ const PessoalB1: React.FC = () => {
     loadData();
   }, [activeTab]);
 
+  // Ensure data is loaded on mount as well, to populate personnelList for Roster even if not on LISTAGEM
+  useEffect(() => {
+    if (personnelList.length === 0) {
+      loadData();
+    }
+  }, []);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -106,6 +130,7 @@ const PessoalB1: React.FC = () => {
       setPersonnelList(people);
       setDocuments(docs);
       setVacations(vacas);
+      console.log(`B1: Loaded ${people.length} personnel for roster selection.`);
     } catch (error) {
       console.error("Error loading B1 data:", error);
     } finally {

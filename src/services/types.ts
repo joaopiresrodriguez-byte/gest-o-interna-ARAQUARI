@@ -155,6 +155,8 @@ export interface DailyChecklist {
     notes?: string;
     responsible?: string;
     item?: ChecklistItem;
+    vehicle?: Vehicle;
+    created_at?: string;
 }
 
 export interface PendingNotice {
@@ -165,7 +167,6 @@ export interface PendingNotice {
     viatura_id?: string;
     description: string;
     status: 'pendente' | 'resolvido';
-    priority?: 'baixa' | 'media' | 'alta' | 'urgente';
     created_at?: string;
 }
 
@@ -216,7 +217,6 @@ export interface DailyMission {
     end_time?: string;
     responsible_id?: string;
     responsible_name?: string;
-    priority: 'baixa' | 'media' | 'alta' | 'urgente';
     status: 'agendada' | 'em_andamento' | 'concluida' | 'cancelada';
     notes?: string;
     created_by?: string;
