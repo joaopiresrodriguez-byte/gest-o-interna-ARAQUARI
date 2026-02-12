@@ -65,37 +65,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     useEffect(() => {
-        const initialize = async () => {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                console.log("Auth Session:", session);
-                setSession(session);
-                setUser(session?.user ?? null);
-                if (session?.user) {
-                    await fetchProfile(session.user.id);
-                }
-            } catch (error) {
-                console.error("Auth initialization error:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
+        let mounted = true;
 
-        initialize();
+        const handleAuthChange = async (session: Session | null) => {
+            if (!mounted) return;
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            const currentUser = session?.user ?? null;
             setSession(session);
-            setUser(session?.user ?? null);
-            if (session?.user) {
-                await fetchProfile(session.user.id);
+            setUser(currentUser);
+
+            if (currentUser) {
+                await fetchProfile(currentUser.id);
             } else {
                 setProfile(null);
                 setProfileError(null);
             }
-            setLoading(false);
+
+            if (mounted) setLoading(false);
+        };
+
+        // Get initial session and start listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            console.log("Auth Event:", _event, session?.user?.email);
+            handleAuthChange(session);
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     const refreshProfile = async () => {

@@ -180,6 +180,13 @@ const SSCI: React.FC = () => {
     const handleSendMessage = async () => {
         if (!userInput.trim() || !currentSession) return;
         const msgText = userInput;
+
+        // CHECK API KEY
+        if (includeWebChat && !import.meta.env.VITE_GOOGLE_SEARCH_API_KEY) {
+            alert("AVISO: A chave de API do Google Search não foi detectada. \n\nSe você acabou de configurar o .env, por favor REINICIE o terminal (npm run dev) para que as alterações surtam efeito.");
+            // Prossiga, mas sabendo que a busca falhará (o serviço já trata, mas o alerta ajuda)
+        }
+
         setUserInput("");
         setIsTyping(true);
 
@@ -511,7 +518,14 @@ const SSCI: React.FC = () => {
                                                 <div className="bg-gray-100 text-[#181111] p-4 rounded-2xl rounded-tl-none max-w-[80%] border border-gray-200 shadow-sm relative overflow-hidden">
                                                     <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
                                                     <p className="text-sm leading-relaxed">{msg.ai_response}</p>
-                                                    <span className="text-[9px] font-black text-gray-400 block mt-2">ASSISTENTE SSCI • {msg.response_timestamp ? new Date(msg.response_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                                                    <div className="flex justify-between items-center mt-2 border-t border-gray-200 pt-2">
+                                                        <span className="text-[9px] font-black text-gray-400">ASSISTENTE SSCI • {msg.response_timestamp ? new Date(msg.response_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                                                        {msg.referenced_normatives && msg.referenced_normatives.length > 0 && (
+                                                            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1" title="Fontes Web Consultadas">
+                                                                <span className="material-symbols-outlined text-[10px]">public</span> {msg.referenced_normatives.length}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

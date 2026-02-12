@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel } from '../services/SupabaseService';
+import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 import { useAuth } from '../context/AuthContext';
@@ -14,7 +14,13 @@ const PatrimonioB4: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [dailyChecklists, setDailyChecklists] = useState<DailyChecklist[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Manual Purchase State
+  const [showManualPurchase, setShowManualPurchase] = useState(false);
+  const [manualPurchaseItem, setManualPurchaseItem] = useState("");
+  const [manualPurchaseReason, setManualPurchaseReason] = useState("");
 
   // Form State for Manual Entry (Vehicles)
   const [newItemName, setNewItemName] = useState("");
@@ -45,18 +51,20 @@ const PatrimonioB4: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [fleetData, noticesData, purchasesData, missionsData, personnelData] = await Promise.all([
+      const [fleetData, noticesData, purchasesData, missionsData, personnelData, checklistsData] = await Promise.all([
         SupabaseService.getFleet(),
         SupabaseService.getPendingNotices(),
         SupabaseService.getPurchases(),
         SupabaseService.getDailyMissions(),
-        SupabaseService.getPersonnel()
+        SupabaseService.getPersonnel(),
+        SupabaseService.getDailyChecklists()
       ]);
       setFleet(fleetData);
       setInitialNotices(noticesData);
       setPurchases(purchasesData);
       setDailyMissions(missionsData);
       setPersonnel(personnelData);
+      setDailyChecklists(checklistsData);
     } catch (error) {
       console.error("Error loading B4 data:", error);
     } finally {
@@ -89,6 +97,27 @@ const PatrimonioB4: React.FC = () => {
       loadData();
     } catch (error) {
       alert("Erro ao criar solicitação.");
+    }
+  };
+
+  const handleManualPurchase = async () => {
+    if (!manualPurchaseItem) return toast.error("Nome do item é obrigatório");
+
+    try {
+      await SupabaseService.addPurchase({
+        item: manualPurchaseItem,
+        quantity: 1,
+        unit_price: 0,
+        status: 'Pendente',
+        requester: `Manual (B4) - ${manualPurchaseReason || 'Sem motivo'}`
+      });
+      toast.success("Solicitação de compra manual criada!");
+      setManualPurchaseItem("");
+      setManualPurchaseReason("");
+      setShowManualPurchase(false);
+      loadData();
+    } catch (error) {
+      toast.error("Erro ao criar solicitação manual.");
     }
   };
 
@@ -503,10 +532,41 @@ const PatrimonioB4: React.FC = () => {
                 <div className="space-y-8">
                   {/* Notifications Section */}
                   <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
-                    <h3 className="text-lg font-bold text-orange-900 mb-4 flex items-center gap-2">
-                      <span className="material-symbols-outlined">notification_important</span>
-                      Solicitações de Compra Pendentes (Operacional)
+                    <h3 className="text-lg font-bold text-orange-900 mb-4 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <span className="material-symbols-outlined">notification_important</span>
+                        Solicitações e Pendências
+                      </span>
+                      {profile?.p_logistica === 'editor' && (
+                        <button onClick={() => setShowManualPurchase(!showManualPurchase)} className="text-xs bg-white border border-orange-200 text-orange-800 px-3 py-1 rounded hover:bg-orange-50 font-bold transition-colors">
+                          {showManualPurchase ? 'CANCELAR MANUAL' : '+ NOVA COMPRA MANUAL'}
+                        </button>
+                      )}
                     </h3>
+
+                    {showManualPurchase && (
+                      <div className="bg-white p-4 rounded-lg border border-orange-200 mb-4 animate-in fade-in slide-in-from-top-2">
+                        <h4 className="font-bold text-sm mb-2 text-rustic-brown">Nova Solicitação Manual</h4>
+                        <div className="flex gap-2 mb-2">
+                          <input
+                            value={manualPurchaseItem}
+                            onChange={e => setManualPurchaseItem(e.target.value)}
+                            placeholder="Nome do item/material"
+                            className="flex-1 h-9 px-3 text-sm border border-rustic-border rounded-md"
+                          />
+                          <input
+                            value={manualPurchaseReason}
+                            onChange={e => setManualPurchaseReason(e.target.value)}
+                            placeholder="Motivo/Justificativa"
+                            className="flex-1 h-9 px-3 text-sm border border-rustic-border rounded-md"
+                          />
+                        </div>
+                        <button onClick={handleManualPurchase} className="w-full h-9 bg-orange-600 text-white font-bold text-xs rounded-md hover:bg-orange-700">
+                          ADICIONAR SOLICITAÇÃO
+                        </button>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {notices.filter(n => n.type === 'material' && n.status === 'pendente').map(notice => (
                         <div key={notice.id} className="bg-white border border-orange-200 p-4 rounded-lg shadow-sm flex items-start justify-between gap-4">
@@ -574,8 +634,12 @@ const PatrimonioB4: React.FC = () => {
 
               {activeTab === 'conferencias' && (
                 <div className="space-y-6">
+                  {/* Pending Notices Section */}
                   <div className="bg-white border border-rustic-border rounded-xl p-6">
-                    <h3 className="text-lg font-bold mb-4">Conferências Diárias (Pendências)</h3>
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-red-500">warning</span>
+                      Pendências em Aberto
+                    </h3>
                     <div className="space-y-4">
                       {notices.map(notice => (
                         <div key={notice.id} className="p-4 border border-rustic-border rounded-lg flex justify-between items-center bg-stone-50">
@@ -584,7 +648,7 @@ const PatrimonioB4: React.FC = () => {
                               <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${notice.status === 'pendente' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{notice.status}</span>
                               <span className="font-bold text-sm">{notice.description}</span>
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">Registrado em: {new Date(notice.created_at!).toLocaleDateString()}</p>
+                            <p className="text-xs text-gray-500 mt-1">Registrado em: {new Date(notice.created_at!).toLocaleDateString()} - Viatura: {fleet.find(v => v.id === notice.viatura_id)?.name || 'N/A'}</p>
                           </div>
                           {profile?.p_logistica === 'editor' && notice.status === 'pendente' && (
                             <button onClick={() => handleResolveNotice(notice.id!)} className="text-xs font-bold text-primary border border-primary px-3 py-1 rounded hover:bg-primary hover:text-white transition-colors">
@@ -593,7 +657,55 @@ const PatrimonioB4: React.FC = () => {
                           )}
                         </div>
                       ))}
-                      {notices.length === 0 && <p className="text-center text-gray-400 italic">Nenhuma conferência/pendência registrada.</p>}
+                      {notices.length === 0 && <p className="text-center text-gray-400 italic">Nenhuma pendência em aberto.</p>}
+                    </div>
+                  </div>
+
+                  {/* Daily Checklists History */}
+                  <div className="bg-white border border-rustic-border rounded-xl p-6">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">history</span>
+                      Histórico de Conferências Diárias
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="border-b border-rustic-border text-xs font-bold uppercase text-rustic-brown/50">
+                          <tr>
+                            <th className="py-3 px-4">Data</th>
+                            <th className="py-3 px-4">Viatura/Item</th>
+                            <th className="py-3 px-4">Status</th>
+                            <th className="py-3 px-4">Obs</th>
+                            <th className="py-3 px-4">Responsável</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-rustic-border/30">
+                          {dailyChecklists.slice(0, 50).map((checklist) => (
+                            <tr key={checklist.id}>
+                              <td className="py-3 px-4 whitespace-nowrap text-xs text-gray-500">
+                                {checklist.created_at ? new Date(checklist.created_at).toLocaleString('pt-BR') : '-'}
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-xs">{checklist.vehicle?.name || checklist.viatura_id || '-'}</span>
+                                  <span className="text-[10px] text-gray-500">{checklist.item?.item_name || checklist.item_id}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${checklist.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {checklist.status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-xs italic text-gray-600 max-w-[200px] truncate">{checklist.notes || '-'}</td>
+                              <td className="py-3 px-4 text-xs">{checklist.responsible || '-'}</td>
+                            </tr>
+                          ))}
+                          {dailyChecklists.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="py-8 text-center text-gray-400 italic">Nenhum registro de conferência encontrado.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>

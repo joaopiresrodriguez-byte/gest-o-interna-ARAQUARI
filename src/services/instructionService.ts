@@ -4,9 +4,9 @@ import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
 const MATERIA_FIELDS = 'id, name, category, level, status, credit_hours, description, instructor, notes, total_presentations, total_videos, created_at, updated_at';
-const APRESENTACAO_FIELDS = 'id, materia_id, title, file_path, sort_order';
-const VIDEO_FIELDS = 'id, materia_id, title, video_url, duration, sort_order';
-const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
+const APRESENTACAO_FIELDS = 'id, materia_id, title, file_url, file_name, size_kb, page_count, sort_order, uploaded_by, upload_date';
+const VIDEO_FIELDS = 'id, materia_id, title, video_url, file_url, file_name, size_mb, duration_seconds, format, resolution, sort_order, uploaded_by, upload_date';
+const TRAINING_FIELDS = 'id, materia_id, course_id, date, time, instructor, location, status';
 
 // Instâncias dos serviços base
 const materiasBase = new BaseService<MateriaInstrucao>('materias_instrucao', MATERIA_FIELDS);
@@ -191,7 +191,7 @@ export const InstructionService = {
             ]);
 
             await materiasBase.update(materiaId, {
-                total_apresentacoes: presCount,
+                total_presentations: presCount,
                 total_videos: vidCount,
                 updated_at: new Date().toISOString(),
             } as Partial<MateriaInstrucao>);
@@ -210,8 +210,8 @@ export const InstructionService = {
         try {
             // Query com join precisa ser feita manualmente
             const { data, error } = await supabase
-                .from('cronograma_instrucao')
-                .select('*, materia:materias_instrucao(*)')
+                .from('training_schedule')
+                .select('*')
                 .order('date', { ascending: true });
 
             if (error) {

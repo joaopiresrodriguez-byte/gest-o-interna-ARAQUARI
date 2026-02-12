@@ -59,6 +59,7 @@ export const SupabaseService = {
     },
 
     // Instruction overrides/proxies
+    getDailyChecklists: async () => FleetService.getDailyChecklists(),
     getCourses: async () => InstructionService.getMateriasInstrucao(),
     addCourse: async (materia: any) => InstructionService.addMateriaInstrucao({
         name: materia.name,

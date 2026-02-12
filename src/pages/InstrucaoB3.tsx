@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { SupabaseService, MateriaInstrucao, Training, MateriaApresentacao, MateriaVideo } from '../services/SupabaseService';
 
@@ -7,7 +7,7 @@ const InstrucaoB3: React.FC = () => {
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+
   const { profile } = useAuth();
 
   // Form State - Materia
@@ -73,6 +73,10 @@ const InstrucaoB3: React.FC = () => {
 
       const savedMateria = await SupabaseService.addMateriaInstrucao(newMateria);
       const materiaId = savedMateria.id;
+
+      if (!materiaId) {
+        throw new Error("Falha ao obter ID da matéria criada.");
+      }
 
       // 2. Upload PDFs
       for (const file of pendingPDFs) {
@@ -228,6 +232,15 @@ const InstrucaoB3: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {loading && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <div className="size-10 border-4 border-rustic-brown/30 border-t-rustic-brown rounded-full animate-spin"></div>
+            <p className="text-sm font-bold text-rustic-brown animate-pulse">Carregando dados...</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 p-8">
         <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-8 xl:grid-cols-12">
