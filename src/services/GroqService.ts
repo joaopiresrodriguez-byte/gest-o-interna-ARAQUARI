@@ -52,25 +52,17 @@ export const GroqService = {
 
             if (dados.incluir_web) {
                 try {
-                    // Fallback check
-                    const apiKey = env.VITE_GOOGLE_SEARCH_API_KEY;
-                    const searchEngineId = env.VITE_SEARCH_ENGINE_ID;
+                    // Extract keywords from PDF text (first 200 chars as robust guess)
+                    const searchHub = textoExtraido.substring(0, 200).replace(/\n/g, " ");
+                    const busca = await SearchService.searchCBMSCWebsite(searchHub);
 
-                    if (apiKey && searchEngineId) {
-                        // Extract keywords from PDF text (first 200 chars as robust guess)
-                        const searchHub = textoExtraido.substring(0, 200).replace(/\n/g, " ");
-                        const busca = await SearchService.searchCBMSCWebsite(searchHub);
-
-                        if (busca && busca.length > 0) {
-                            console.log(`[GroqService] ${busca.length} resultados encontrados na web.`);
-                            contextoWeb = busca.map(r => `FONTE: ${r.title}\nLINK: ${r.url}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
-                            webResults = busca;
-                        } else {
-                            console.log('[GroqService] Nenhum resultado relevante encontrado na web.');
-                        }
+                    if (busca && busca.length > 0) {
+                        console.log(`[GroqService] ${busca.length} resultados encontrados na web.`);
+                        contextoWeb = busca.map(r => `FONTE: ${r.title}\nLINK: ${r.url}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
+                        webResults = busca;
                     } else {
-                        console.warn('[GroqService] Chaves do Google Search não configuradas. Pulando busca web.');
-                        contextoWeb = "Busca web não disponível (API Key não configurada).";
+                        console.log('[GroqService] Nenhum resultado relevante encontrado na web (ou chaves não configuradas).');
+                        contextoWeb = "Busca web realizada, mas nenhum resultado encontrado.";
                     }
 
                 } catch (searchError) {
@@ -181,18 +173,11 @@ Forneça a análise no formato especificado, citando artigos, incisos e parágra
             let informacoesWeb = null;
             if (incluirWeb) {
                 try {
-                    const apiKey = env.VITE_GOOGLE_SEARCH_API_KEY;
-                    const searchEngineId = env.VITE_SEARCH_ENGINE_ID;
-
-                    if (apiKey && searchEngineId) {
-                        informacoesWeb = await SearchService.searchCBMSCWebsite(mensagemUsuario);
-                        if (informacoesWeb && informacoesWeb.length > 0) {
-                            console.log(`[GroqService Chat] ${informacoesWeb.length} resultados encontrados na web.`);
-                        } else {
-                            console.log('[GroqService Chat] Nenhum resultado web encontrado.');
-                        }
+                    informacoesWeb = await SearchService.searchCBMSCWebsite(mensagemUsuario);
+                    if (informacoesWeb && informacoesWeb.length > 0) {
+                        console.log(`[GroqService Chat] ${informacoesWeb.length} resultados encontrados na web.`);
                     } else {
-                        console.warn('[GroqService Chat] Chaves Google Search ausentes. Pulando busca.');
+                        console.log('[GroqService Chat] Nenhum resultado web encontrado (ou chaves ausentes).');
                     }
                 } catch (e) {
                     console.warn('[GroqService] Busca web no chat falhou (não bloqueante):', e);

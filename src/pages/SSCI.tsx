@@ -269,8 +269,8 @@ const SSCI: React.FC = () => {
                     <div className="flex items-center gap-2 bg-[#2d2f31] p-1.5 rounded-lg border border-[#3d3f41]">
                         <input
                             type="password"
-                            placeholder="API Key (Groq)..."
-                            className="bg-transparent text-white text-xs px-2 outline-none w-48"
+                            placeholder="Groq API Key..."
+                            className="bg-transparent text-white text-xs px-2 outline-none w-24 border-r border-gray-600"
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                     localStorage.setItem("MANUAL_GROQ_KEY", e.currentTarget.value);
@@ -278,11 +278,38 @@ const SSCI: React.FC = () => {
                                 }
                             }}
                         />
+                        <input
+                            type="password"
+                            placeholder="Google Search Key..."
+                            className="bg-transparent text-white text-xs px-2 outline-none w-24 border-r border-gray-600"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    localStorage.setItem("MANUAL_GOOGLE_KEY", e.currentTarget.value);
+                                    window.location.reload();
+                                }
+                            }}
+                        />
+                        <input
+                            type="text"
+                            placeholder="Engine ID..."
+                            className="bg-transparent text-white text-xs px-2 outline-none w-20"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    localStorage.setItem("MANUAL_SEARCH_ENGINE_ID", e.currentTarget.value);
+                                    window.location.reload();
+                                }
+                            }}
+                        />
                         <button
                             onClick={(e) => {
-                                const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                                localStorage.setItem("MANUAL_GROQ_KEY", input.value);
-                                window.location.reload();
+                                const container = e.currentTarget.parentElement;
+                                const inputs = container?.querySelectorAll('input');
+                                if (inputs) {
+                                    if (inputs[0].value) localStorage.setItem("MANUAL_GROQ_KEY", inputs[0].value);
+                                    if (inputs[1].value) localStorage.setItem("MANUAL_GOOGLE_KEY", inputs[1].value);
+                                    if (inputs[2].value) localStorage.setItem("MANUAL_SEARCH_ENGINE_ID", inputs[2].value);
+                                    window.location.reload();
+                                }
                             }}
                             className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded"
                         >

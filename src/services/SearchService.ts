@@ -7,20 +7,28 @@ export interface SearchResult {
 export const SearchService = {
     searchCBMSCWebsite: async (searchTerm: string): Promise<SearchResult[] | null> => {
         try {
-            const apiKey = import.meta.env.VITE_GOOGLE_SEARCH_API_KEY;
-            const searchEngineId = import.meta.env.VITE_SEARCH_ENGINE_ID;
+            // Priority: LocalStorage > Environment Variables
+            const apiKey = localStorage.getItem("MANUAL_GOOGLE_KEY") || import.meta.env.VITE_GOOGLE_SEARCH_API_KEY;
+            const searchEngineId = localStorage.getItem("MANUAL_SEARCH_ENGINE_ID") || import.meta.env.VITE_SEARCH_ENGINE_ID;
 
             if (!apiKey || !searchEngineId) {
-                console.error('[SearchService] Google Search API Key or Search Engine ID not configured.');
+                console.warn('[SearchService] Google Search Keys missing. Please configure VITE_GOOGLE_SEARCH_API_KEY and VITE_SEARCH_ENGINE_ID or use the UI to set them.');
                 return null;
             }
 
-            console.log(`[SearchService] Searching for: "${searchTerm}" using Engine ID: ${searchEngineId}`);
+            console.log(`[SearchService] Searching for: "${searchTerm}"...`);
 
             const searchQuery = `site:cbm.sc.gov.br ${searchTerm}`;
             const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}`;
 
             const response = await fetch(url);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('[SearchService] API Request Failed:', response.status, errorData);
+                return null;
+            }
+
             const data = await response.json();
 
             if (data.error) {
