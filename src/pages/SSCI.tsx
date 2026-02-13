@@ -99,7 +99,8 @@ const SSCI: React.FC = () => {
                 protocolo: protocol,
                 descricao: description,
                 incluir_web: includeWebAnalysis,
-                arquivos: processedFiles
+                arquivos: processedFiles,
+                arquivoPDF: analysisFiles.find(f => f.type === 'application/pdf')
             }, docs);
 
             const uploadedUrls: string[] = [];

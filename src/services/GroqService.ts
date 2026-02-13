@@ -1,6 +1,7 @@
 
 import Groq from "groq-sdk";
 import { SearchService } from "./SearchService";
+import { extrairTextoDoPDF } from "../utils/pdfExtractor";
 
 const env = (import.meta as any).env || {};
 
@@ -10,6 +11,7 @@ export interface AnalysisInput {
     descricao: string;
     incluir_web?: boolean;
     arquivos?: { mimeType: string, data: string }[];
+    arquivoPDF?: File;
 }
 
 export interface ChatMessage {
@@ -47,6 +49,19 @@ export const GroqService = {
                     }
                 } catch (searchError) {
                     console.warn('[GroqService] Busca no site do CBMSC falhou (não bloqueante):', searchError);
+                }
+            }
+
+
+            let textoPDF = "";
+            if (dados.arquivoPDF) {
+                try {
+                    console.log("[GroqService] Extraindo texto do PDF...");
+                    textoPDF = await extrairTextoDoPDF(dados.arquivoPDF);
+                    console.log(`[GroqService] Texto extraído (${textoPDF.length} chars).`);
+                } catch (pdfError) {
+                    console.error("[GroqService] Erro ao extrair PDF:", pdfError);
+                    textoPDF = "Erro ao ler o conteúdo do arquivo PDF anexado. Análise baseada apenas nos metadados.";
                 }
             }
 
@@ -95,6 +110,9 @@ export const GroqService = {
             Tipo: ${dados.tipo.toUpperCase()}
             Protocolo: ${dados.protocolo}
             Descrição: ${dados.descricao}
+
+            CONTEÚDO DO DOCUMENTO ANEXADO (PDF):
+            ${textoPDF || "Nenhum conteúdo de arquivo extraído. Baseie-se nos dados acima."}
             `;
 
             const completion = await groq.chat.completions.create({
