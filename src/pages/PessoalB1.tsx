@@ -143,10 +143,20 @@ const PessoalB1: React.FC = () => {
 
     setLoading(true);
     try {
-      await SupabaseService.addPersonnel({
+      // Clean empty strings to null to avoid Supabase 400 errors on date/optional columns
+      const cleanedData: Record<string, any> = {
         ...formData,
         rank: formData.type === 'BM' ? 'Sd.' : 'BC',
-      } as Personnel);
+      };
+
+      // Remove empty strings and undefined values for optional fields
+      Object.keys(cleanedData).forEach(key => {
+        if (cleanedData[key] === '' || cleanedData[key] === undefined) {
+          delete cleanedData[key];
+        }
+      });
+
+      await SupabaseService.addPersonnel(cleanedData as Personnel);
 
       toast.success("Militar cadastrado com sucesso!");
       setFormData({

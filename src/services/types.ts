@@ -217,6 +217,7 @@ export interface DailyMission {
     end_time?: string;
     responsible_id?: string;
     responsible_name?: string;
+    priority?: 'urgente' | 'alta' | 'media' | 'baixa';
     status: 'agendada' | 'em_andamento' | 'concluida' | 'cancelada';
     notes?: string;
     created_by?: string;

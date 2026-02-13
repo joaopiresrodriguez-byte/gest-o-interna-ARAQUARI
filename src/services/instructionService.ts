@@ -12,7 +12,7 @@ const TRAINING_FIELDS = 'id, materia_id, course_id, date, time, instructor, loca
 const materiasBase = new BaseService<MateriaInstrucao>('materias_instrucao', MATERIA_FIELDS);
 const apresentacoesBase = new BaseService<MateriaApresentacao>('materias_apresentacoes', APRESENTACAO_FIELDS);
 const videosBase = new BaseService<MateriaVideo>('materias_videos', VIDEO_FIELDS);
-const trainingsBase = new BaseService<Training>('cronograma_instrucao', TRAINING_FIELDS);
+const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
 
 export const InstructionService = {
     // ==================== MATÉRIAS DE INSTRUÇÃO ====================

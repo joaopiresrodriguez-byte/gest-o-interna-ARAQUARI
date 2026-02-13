@@ -291,7 +291,13 @@ const DashboardAvisos: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                {fleet.length === 0 ? <p className="text-gray-400 text-sm">Carregando frota...</p> : fleet.map(v => (
+                {loading ? <p className="text-gray-400 text-sm animate-pulse">Carregando frota...</p> : fleet.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-4 text-gray-400">
+                    <span className="material-symbols-outlined text-3xl mb-1">directions_car</span>
+                    <p className="text-sm font-medium">Nenhuma viatura cadastrada.</p>
+                    <p className="text-xs">Cadastre viaturas no módulo B4.</p>
+                  </div>
+                ) : fleet.map(v => (
                   <div key={v.id} className="flex items-center justify-between p-3 rounded-lg bg-background-light border border-rustic-border/50">
                     <div className="flex items-center gap-3">
                       <div className={`w-2 h-2 rounded-full ${v.status === 'active' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>

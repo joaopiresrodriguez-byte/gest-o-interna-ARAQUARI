@@ -28,5 +28,16 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "gest-o-interna-ARAQUARI",
+    "scripts",
+    "src/scripts",
+    "src/test"
+  ]
 }

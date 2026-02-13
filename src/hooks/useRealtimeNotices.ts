@@ -24,7 +24,7 @@ export const useRealtimeNotices = (initialNotices: PendingNotice[] = []) => {
                     const newNotice = payload.new as PendingNotice;
                     setNotices((prev) => [newNotice, ...prev]);
                     toast.info('Nova pendência reportada!', {
-                        description: newNotice.descricao,
+                        description: newNotice.description,
                     });
                 }
             )

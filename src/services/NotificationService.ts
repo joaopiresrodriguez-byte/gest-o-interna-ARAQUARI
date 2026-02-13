@@ -1,5 +1,5 @@
 
-import { ProductReceipt, ChecklistItem } from './SupabaseService';
+import { ChecklistItem } from './SupabaseService';
 
 const CONTACTS = {
     whatsapp: '554734817549',
@@ -75,7 +75,7 @@ export const NotificationService = {
             message += `⚠️ *PENDÊNCIAS ENCONTRADAS:*\n`;
             pendingItems.forEach(item => {
                 const obs = data.statuses[item.id].obs;
-                message += `\n🔴 *${item.nome_item}*`;
+                message += `\n🔴 *${item.item_name}*`;
                 if (obs) message += `\n   Obs: ${obs}`;
             });
             message += `\n\n✅ *Demais itens conferidos e OK.*`;

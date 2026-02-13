@@ -54,11 +54,29 @@ export const GroqService = {
             Você é um Auditor Técnico do SSCI (Serviço de Segurança Contra Incêndio) do CBMSC.
             Sua missão é realizar uma análise técnica PROFUNDA e EXAUSTIVA da solicitação.
 
-            DIRETRIZES DE ANÁLISE:
-            1. EXTRAÇÃO DE DADOS: Extraia todos os nomes, datas, endereços, valores técnicos e fatos relevantes.
-            2. FUNDAMENTAÇÃO LEGAL: Baseie-se ESTRITAMENTE nas Instruções Normativas (INs) e leis de SCI do CBMSC.
-            3. ESTRUTURA DA RESPOSTA: A resposta deve ser uma manifestação técnica estruturada em artigos, incisos e parágrafos (Art./Inc./§).
-            4. REFERÊNCIAS: Finalize com uma seção clara de "REFERÊNCIAS NORMATIVAS".
+            FORMATO OBRIGATÓRIO DA RESPOSTA (siga EXATAMENTE esta estrutura):
+
+            I. RELATO DA SOLICITAÇÃO
+            [Resumo objetivo e detalhado do que está sendo solicitado no documento. Extraia todos os nomes, datas, endereços, valores técnicos e fatos relevantes.]
+
+            II. FUNDAMENTAÇÃO NORMATIVA
+            [Explicação técnico-jurídica com citação OBRIGATÓRIA de artigos, incisos e parágrafos das normativas do CBMSC. Referencie Instruções Normativas (INs), Leis, Decretos e Portarias pertinentes. Use o formato: Art. X, Inc. Y, § Z da IN nº XXX/CBMSC.]
+
+            III. ANÁLISE DA SOLICITAÇÃO ESPECÍFICA
+            [O que a normativa diz ESPECIFICAMENTE sobre o pedido do solicitante. Correlacione os fatos relatados com os dispositivos normativos. Identifique conformidades e desconformidades.]
+
+            IV. PARECER TÉCNICO
+            [Decisão fundamentada: DEFERIDO, INDEFERIDO ou DEFERIDO COM RESSALVAS]
+            [Explicação detalhada do parecer, justificando a decisão com base na fundamentação normativa apresentada.]
+
+            V. RESPONSABILIDADES DO RESPONSÁVEL TÉCNICO
+            [Artigos, incisos e parágrafos das normativas que definem as responsabilidades técnicas aplicáveis. Liste obrigações, prazos e penalidades previstas.]
+
+            REGRAS:
+            - Siga RIGOROSAMENTE o formato acima, mantendo os 5 títulos em numeral romano.
+            - Baseie-se ESTRITAMENTE nas Instruções Normativas (INs) e leis de SCI do CBMSC.
+            - Toda afirmação deve ter fundamentação legal.
+            - NÃO omita nenhuma das 5 seções.
 
             CONTEXTO LOCAL (Documentos do Banco de Conhecimento):
             ${documentosLocais.length > 0
@@ -83,7 +101,7 @@ export const GroqService = {
                 messages: [
                     {
                         role: "system",
-                        content: "Você é um especialista em análise jurídica e normativas do Corpo de Bombeiros Militar de Santa Catarina."
+                        content: "Você é um Auditor Técnico especializado em análise jurídica e normativas do Corpo de Bombeiros Militar de Santa Catarina (CBMSC). Você SEMPRE responde no formato estruturado de 5 seções com numeração romana (I a V). Nunca omita nenhuma seção."
                     },
                     {
                         role: "user",
@@ -92,7 +110,7 @@ export const GroqService = {
                 ],
                 model: "llama-3.3-70b-versatile",
                 temperature: 0.7,
-                max_tokens: 2048
+                max_tokens: 4096
             });
 
             return {

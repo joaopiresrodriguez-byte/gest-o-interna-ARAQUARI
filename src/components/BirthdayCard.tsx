@@ -21,10 +21,10 @@ export const BirthdayCard = React.memo<BirthdayCardProps>(({ selectedDate }) => 
     const birthdays = useMemo(() => {
         if (personnel.length === 0) return [];
 
-        const [year, month, day] = selectedDate.split('-');
+        const [, month, day] = selectedDate.split('-');
         return personnel.filter(p => {
-            if (!p.data_nascimento) return false;
-            const [pYear, pMonth, pDay] = p.data_nascimento.split('-');
+            if (!p.birth_date) return false;
+            const [, pMonth, pDay] = p.birth_date.split('-');
             return pMonth === month && pDay === day;
         });
     }, [selectedDate, personnel]);
@@ -53,7 +53,7 @@ export const BirthdayCard = React.memo<BirthdayCardProps>(({ selectedDate }) => 
                             </div>
                         </div>
                         <div>
-                            <p className="text-xs font-bold text-[#2c1810]">{p.rank} {p.nome_guerra || p.name}</p>
+                            <p className="text-xs font-bold text-[#2c1810]">{p.rank} {p.war_name || p.name}</p>
                             <p className="text-[10px] text-rustic-brown/60">Parabéns!</p>
                         </div>
                     </div>
