@@ -10,12 +10,10 @@ const SSCI: React.FC = () => {
 
     // --- SECTION 1: ANALYSIS ---
     const [analyses, setAnalyses] = useState<SSCIAnalysis[]>([]);
-    const [requestType, setRequestType] = useState<'requerimento' | 'recurso'>('requerimento');
-    const [protocol, setProtocol] = useState("");
-    const [description, setDescription] = useState("");
     const [analysisFiles, setAnalysisFiles] = useState<File[]>([]);
     const [currentAnalysis, setCurrentAnalysis] = useState<SSCIAnalysis | null>(null);
     const [includeWebAnalysis, setIncludeWebAnalysis] = useState(true);
+    const [analysisError, setAnalysisError] = useState('');
 
     // --- SECTION 2: CHAT ---
     const [chatSessions, setChatSessions] = useState<SSCIChatSession[]>([]);
@@ -73,50 +71,43 @@ const SSCI: React.FC = () => {
 
     // --- ANALYSIS HANDLERS ---
     const handleSubmitAnalysis = async () => {
-        if (!protocol || !description) return alert("Protocolo e descrição são obrigatórios.");
+        const pdfFile = analysisFiles.find(f => f.type === 'application/pdf');
+
+        if (!pdfFile) {
+            setAnalysisError("Por favor, anexe um arquivo PDF para análise.");
+            return;
+        }
+
         setLoading(true);
+        setAnalysisError('');
+
         try {
             // 1. Fetch relevant normative docs for context
             const docs = await SupabaseService.getSSCINormativeDocuments();
-            // Filter or just send titles/ementas for context (GroqService handles formatting)
 
-            // 2. Prepare files for Groq (Multimodal)
-            const processedFiles = await Promise.all(analysisFiles.map(async (file) => {
-                return new Promise<{ mimeType: string, data: string }>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        const base64 = (reader.result as string).split(',')[1];
-                        resolve({ mimeType: file.type, data: base64 });
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-            }));
-
-            // 3. Call Groq for deep analysis
+            // 2. Call Groq for deep analysis using PDF extraction
             const groqResult = await GroqService.analisarRequerimentoComGroq({
-                tipo: requestType,
-                protocolo: protocol,
-                descricao: description,
+                arquivoPDF: pdfFile,
                 incluir_web: includeWebAnalysis,
-                arquivos: processedFiles,
-                arquivoPDF: analysisFiles.find(f => f.type === 'application/pdf')
+                // Legacy placeholders
+                tipo: 'REQUERIMENTO',
+                protocolo: 'AUTO',
+                descricao: 'Análise automática de PDF'
             }, docs);
 
-            const uploadedUrls: string[] = [];
-            for (const file of analysisFiles) {
-                const fileName = `${Date.now()}_${file.name}`;
-                await SupabaseService.uploadFile('ssci-documentos-normativos', fileName, file);
-                uploadedUrls.push(SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName));
-            }
+            // 3. Upload File
+            const fileName = `${Date.now()}_${pdfFile.name}`;
+            await SupabaseService.uploadFile('ssci-documentos-normativos', fileName, pdfFile);
+            const fileUrl = SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName);
 
+            // 4. Save Analysis
             const analysisData: SSCIAnalysis = {
-                request_type: requestType,
-                protocol_number: protocol,
-                request_description: description,
+                request_type: 'requerimento', // Default
+                protocol_number: `AUTO-${Date.now().toString().slice(-6)}`, // Generated ID
+                request_description: `Análise do arquivo: ${pdfFile.name}`,
                 ai_response: groqResult.ai_response,
-                attached_documents: uploadedUrls,
-                responsible_user: "Capitão Técnico",
+                attached_documents: [fileUrl],
+                responsible_user: profile?.id || "Usuário SSCI",
                 web_source: groqResult.web_source,
                 cbmsc_links: groqResult.cbmsc_links,
                 ai_model: groqResult.ai_model,
@@ -125,13 +116,11 @@ const SSCI: React.FC = () => {
 
             const result = await SupabaseService.addSSCIAnalysis(analysisData);
             setCurrentAnalysis(result as any);
-            setProtocol("");
-            setDescription("");
             setAnalysisFiles([]);
             loadData();
         } catch (error: any) {
-            console.error("Erro na análise profunda do Gemini:", error);
-            alert(`Erro ao processar análise profunda: ${error.message || 'Erro desconhecido'}`);
+            console.error("Erro na análise profunda:", error);
+            setAnalysisError(`Erro ao processar análise: ${error.message || 'Erro desconhecido'}`);
         } finally {
             setLoading(false);
         }
@@ -143,6 +132,7 @@ const SSCI: React.FC = () => {
             await SupabaseService.deleteSSCIAnalysis(id);
             // Storage cleanup logic could be added here if desired.
             loadData();
+            if (currentAnalysis?.id === id) setCurrentAnalysis(null);
         } catch (error) {
             alert("Erro ao excluir análise.");
         }
@@ -182,10 +172,10 @@ const SSCI: React.FC = () => {
         if (!userInput.trim() || !currentSession) return;
         const msgText = userInput;
 
-        // CHECK API KEY
+        // CHECK API KEY for Web Search fallback
         if (includeWebChat && !import.meta.env.VITE_GOOGLE_SEARCH_API_KEY) {
-            alert("AVISO: A chave de API do Google Search não foi detectada. \n\nSe você acabou de configurar o .env, por favor REINICIE o terminal (npm run dev) para que as alterações surtam efeito.");
-            // Prossiga, mas sabendo que a busca falhará (o serviço já trata, mas o alerta ajuda)
+            // Just log/warn, don't alert blocking
+            console.warn("Google Search API Key missing. Web search will be skipped.");
         }
 
         setUserInput("");
@@ -271,7 +261,7 @@ const SSCI: React.FC = () => {
                 <div className="flex flex-col">
                     <div className="flex items-center gap-3">
                         <h1 className="text-3xl font-black tracking-tight text-white">Módulo SSCI</h1>
-                        <span className="px-3 py-1 bg-primary/20 text-primary text-[11px] font-black rounded-full shadow-lg border border-primary/30">v1.7.0 AI HYBRID</span>
+                        <span className="px-3 py-1 bg-primary/20 text-primary text-[11px] font-black rounded-full shadow-lg border border-primary/30">v2.0.0 PDF ANALYSIS</span>
                     </div>
                     <p className="text-sm text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
                 </div>
@@ -307,7 +297,7 @@ const SSCI: React.FC = () => {
                                 onClick={() => setActiveTab(tab)}
                                 className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                             >
-                                {tab === 'ANALISE' ? 'Análise' : tab === 'PESQUISA' ? 'Chat IA' : 'Documentos'}
+                                {tab === 'ANALISE' ? 'Análise Documental' : tab === 'PESQUISA' ? 'Chat Normativo' : 'Base de Conhecimento'}
                             </button>
                         ))}
                     </div>
@@ -323,52 +313,42 @@ const SSCI: React.FC = () => {
                             {/* Input Form */}
                             <div className="xl:col-span-5 flex flex-col gap-6">
                                 <div className="bg-white p-8 rounded-2xl border border-rustic-border shadow-sm space-y-6">
-                                    <h3 className="font-black text-xl flex items-center gap-2"><span className="material-symbols-outlined text-primary">gavel</span> Nova Solicitação</h3>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black uppercase text-gray-400 px-1">Tipo</label>
-                                            <select
-                                                value={requestType}
-                                                onChange={e => setRequestType(e.target.value as any)}
-                                                className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 font-bold text-sm"
-                                            >
-                                                <option value="requerimento">Requerimento Técnico</option>
-                                                <option value="recurso">Recurso Técnico</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black uppercase text-gray-400 px-1">Nº Protocolo</label>
-                                            <input
-                                                type="text"
-                                                value={protocol}
-                                                onChange={e => setProtocol(e.target.value)}
-                                                placeholder="Ex: 2024/001"
-                                                className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-white font-bold text-sm"
-                                            />
-                                        </div>
-                                    </div>
+                                    <h3 className="font-black text-xl flex items-center gap-2"><span className="material-symbols-outlined text-primary">upload_file</span> Análise de Documento</h3>
+                                    <p className="text-sm text-gray-500">Faça upload de um requerimento ou consulta técnica (PDF) para análise automática pela IA.</p>
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-black uppercase text-gray-400 px-1">Descrição</label>
-                                        <textarea
-                                            value={description}
-                                            onChange={e => setDescription(e.target.value)}
-                                            placeholder="Descreva detalhadamente a demanda..."
-                                            className="w-full h-40 p-4 rounded-xl border border-rustic-border bg-stone-50 text-sm resize-none"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black uppercase text-gray-400 px-1">Anexos (Opcional)</label>
-                                        <label className="block w-full h-24 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center cursor-pointer hover:bg-stone-50 transition-colors">
-                                            <div className="flex flex-col items-center">
-                                                <span className="material-symbols-outlined text-gray-300">upload_file</span>
-                                                <span className="text-xs text-gray-400 font-bold mt-1">{analysisFiles.length > 0 ? `${analysisFiles.length} arquivos` : 'Selecionar Documentos'}</span>
+                                        <label className="text-[10px] font-black uppercase text-gray-400 px-1">Arquivo do Requerimento (PDF)</label>
+                                        <label className={`block w-full h-32 border-2 border-dashed rounded-xl flex items-center justify-center cursor-pointer hover:bg-stone-50 transition-colors ${analysisFiles.length > 0 ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
+                                            <div className="flex flex-col items-center p-4 text-center">
+                                                <span className="material-symbols-outlined text-gray-300 text-4xl mb-2">picture_as_pdf</span>
+                                                <span className="text-sm font-bold text-gray-600">{analysisFiles.length > 0 ? analysisFiles[0].name : 'Clique para selecionar o PDF'}</span>
+                                                <span className="text-[10px] text-gray-400 mt-1">Máximo 10MB</span>
                                             </div>
-                                            <input type="file" multiple accept=".pdf,image/*" className="hidden" onChange={e => e.target.files && setAnalysisFiles(Array.from(e.target.files))} />
+                                            <input
+                                                type="file"
+                                                accept=".pdf"
+                                                className="hidden"
+                                                onChange={e => {
+                                                    if (e.target.files && e.target.files.length > 0) {
+                                                        const file = e.target.files[0];
+                                                        if (file.type !== 'application/pdf') {
+                                                            alert("Apenas arquivos PDF são permitidos.");
+                                                            return;
+                                                        }
+                                                        setAnalysisFiles([file]);
+                                                        setAnalysisError('');
+                                                    }
+                                                }}
+                                            />
                                         </label>
                                     </div>
+
+                                    {analysisError && (
+                                        <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100 flex items-start gap-2">
+                                            <span className="material-symbols-outlined text-sm">error</span>
+                                            {analysisError}
+                                        </div>
+                                    )}
 
                                     <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-rustic-border select-none cursor-pointer hover:bg-stone-100 transition-all" onClick={() => setIncludeWebAnalysis(!includeWebAnalysis)}>
                                         <input
@@ -379,24 +359,21 @@ const SSCI: React.FC = () => {
                                         />
                                         <div className="flex flex-col">
                                             <span className="text-xs font-black text-[#181111]">Buscar também no site do CBMSC</span>
-                                            <span className="text-[10px] text-gray-400 font-bold">Consulta normas atualizadas na web</span>
+                                            <span className="text-[10px] text-gray-400 font-bold">Consulta normas atualizadas na web se necessário</span>
                                         </div>
                                     </div>
 
                                     <button
                                         onClick={handleSubmitAnalysis}
-                                        disabled={loading || profile?.p_ssci !== 'editor'}
-                                        className={`w-full py-4 ${loading || profile?.p_ssci !== 'editor' ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary'} text-white font-black text-sm rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex flex-col items-center justify-center gap-1`}
+                                        disabled={loading || profile?.p_ssci !== 'editor' || analysisFiles.length === 0}
+                                        className={`w-full py-4 ${loading || profile?.p_ssci !== 'editor' || analysisFiles.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary'} text-white font-black text-sm rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex flex-col items-center justify-center gap-1`}
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>{loading ? 'sync' : 'smart_toy'}</span>
-                                            {loading ? 'PROCESSANDO ANÁLISE...' : profile?.p_ssci === 'editor' ? 'SUBMETER PARA ANÁLISE DA IA' : 'SOMENTE LEITURA'}
+                                            {loading ? 'ANALISANDO DOCUMENTO...' : 'ANALISAR DOCUMENTO'}
                                         </div>
-                                        {loading && includeWebAnalysis && (
-                                            <span className="text-[9px] font-bold opacity-80 uppercase tracking-widest animate-pulse">Consultando cbm.sc.gov.br...</span>
-                                        )}
-                                        {profile?.p_ssci !== 'editor' && (
-                                            <span className="text-[9px] font-bold opacity-80 uppercase tracking-widest text-amber-200">Você só tem permissão de LEITURA</span>
+                                        {loading && (
+                                            <span className="text-[9px] font-bold opacity-80 uppercase tracking-widest animate-pulse">Lendo PDF e consultando normativas...</span>
                                         )}
                                     </button>
                                 </div>
@@ -407,13 +384,11 @@ const SSCI: React.FC = () => {
                                 {currentAnalysis ? (
                                     <div className="bg-white rounded-2xl border border-rustic-border shadow-md overflow-hidden flex flex-col h-full max-h-[700px]">
                                         <div className="bg-stone-50 border-b border-rustic-border p-6 flex justify-between items-center">
-                                            <h3 className="font-black text-lg text-[#181111]">Manifestação Jurídica Estruturada</h3>
+                                            <h3 className="font-black text-lg text-[#181111]">Parecer Técnico da IA</h3>
                                             <div className="flex gap-2">
                                                 {profile?.p_ssci === 'editor' && (
                                                     <button onClick={() => handleDeleteAnalysis(currentAnalysis.id!)} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-400"><span className="material-symbols-outlined text-[20px]">delete</span></button>
                                                 )}
-                                                <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">print</span></button>
-                                                <button className="p-2 bg-white border rounded-lg hover:bg-gray-50"><span className="material-symbols-outlined text-[20px]">content_copy</span></button>
                                                 <button onClick={() => setCurrentAnalysis(null)} className="p-2 bg-primary text-white rounded-lg hover:brightness-110"><span className="material-symbols-outlined text-[20px]">close</span></button>
                                             </div>
                                         </div>
@@ -425,7 +400,7 @@ const SSCI: React.FC = () => {
                                             {currentAnalysis.web_source && currentAnalysis.web_source.length > 0 && (
                                                 <div className="max-w-3xl mx-auto w-full bg-blue-50/30 border border-blue-100 p-6 rounded-xl">
                                                     <h4 className="text-xs font-black uppercase text-blue-600 mb-4 flex items-center gap-2">
-                                                        <span className="material-symbols-outlined text-[16px]">language</span> Fontes Consultadas no Site CBMSC
+                                                        <span className="material-symbols-outlined text-[16px]">language</span> Fontes Consultadas
                                                     </h4>
                                                     <div className="space-y-3">
                                                         {currentAnalysis.web_source.map((fonte: any, idx: number) => (
@@ -442,8 +417,8 @@ const SSCI: React.FC = () => {
                                 ) : (
                                     <div className="bg-stone-100/50 border-2 border-dashed border-gray-200 rounded-2xl h-full flex flex-col items-center justify-center text-center p-12 opacity-50">
                                         <span className="material-symbols-outlined text-[80px] text-gray-200 mb-4">description</span>
-                                        <h4 className="font-black text-gray-400 text-xl tracking-wide">ÁREA DE MANIFESTAÇÃO TÉCNICA</h4>
-                                        <p className="text-gray-300 max-w-sm mt-2 font-bold">As respostas formatadas serão exibidas aqui após o processamento da IA.</p>
+                                        <h4 className="font-black text-gray-400 text-xl tracking-wide">ÁREA DE PARECER TÉCNICO</h4>
+                                        <p className="text-gray-300 max-w-sm mt-2 font-bold">Faça upload de um PDF para visualizar a análise estruturada aqui.</p>
                                     </div>
                                 )}
                             </div>
@@ -518,7 +493,7 @@ const SSCI: React.FC = () => {
                                             <div className="flex justify-start">
                                                 <div className="bg-gray-100 text-[#181111] p-4 rounded-2xl rounded-tl-none max-w-[80%] border border-gray-200 shadow-sm relative overflow-hidden">
                                                     <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                                                    <p className="text-sm leading-relaxed">{msg.ai_response}</p>
+                                                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.ai_response}</p>
                                                     <div className="flex justify-between items-center mt-2 border-t border-gray-200 pt-2">
                                                         <span className="text-[9px] font-black text-gray-400">ASSISTENTE SSCI • {msg.response_timestamp ? new Date(msg.response_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                                                         {msg.referenced_normatives && msg.referenced_normatives.length > 0 && (

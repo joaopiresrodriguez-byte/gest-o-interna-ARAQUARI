@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { PersonnelService } from '../services/personnelService';
+import { SupabaseService } from '../services/SupabaseService';
 import { Personnel } from '../services/types';
 
 interface BirthdayCardProps {
@@ -11,7 +11,7 @@ export const BirthdayCard = React.memo<BirthdayCardProps>(({ selectedDate }) => 
 
     useEffect(() => {
         const fetchPersonnel = async () => {
-            const data = await PersonnelService.getPersonnel();
+            const data = await SupabaseService.getPersonnel();
             setPersonnel(data);
         };
         fetchPersonnel();

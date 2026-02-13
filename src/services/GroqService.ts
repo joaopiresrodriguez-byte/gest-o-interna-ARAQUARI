@@ -1,17 +1,18 @@
 
 import Groq from "groq-sdk";
 import { SearchService } from "./SearchService";
-import { extrairTextoDoPDF } from "../utils/pdfExtractor";
+import { extrairTextoPDF, validarPDF } from "./pdfExtractor";
 
 const env = (import.meta as any).env || {};
 
 export interface AnalysisInput {
-    tipo: string;
-    protocolo: string;
-    descricao: string;
+    arquivoPDF: File;
     incluir_web?: boolean;
-    arquivos?: { mimeType: string, data: string }[];
-    arquivoPDF?: File;
+    // Legacy fields kept optional to avoid breaking other calls if any
+    tipo?: string;
+    protocolo?: string;
+    descricao?: string;
+    arquivos?: any[];
 }
 
 export interface ChatMessage {
@@ -26,113 +27,140 @@ const getApiKey = () => {
 
 const groq = new Groq({
     apiKey: getApiKey(),
-    dangerouslyAllowBrowser: true // Required for client-side usage
+    dangerouslyAllowBrowser: true
 });
 
 export const GroqService = {
     analisarRequerimentoComGroq: async (dados: AnalysisInput, documentosLocais: any[]) => {
         try {
-            console.log(`[GroqService] Iniciando análise para protocolo: ${dados.protocolo}`);
+            // 1. VALIDAR ARQUIVO
+            console.log('[GroqService] Validando arquivo PDF...');
+            await validarPDF(dados.arquivoPDF);
 
+            // 2. EXTRAIR TEXTO DO PDF
+            console.log('[GroqService] Extraindo texto do PDF...');
+            const textoExtraido = await extrairTextoPDF(dados.arquivoPDF);
+
+            if (!textoExtraido || textoExtraido.trim().length === 0) {
+                throw new Error('O PDF está vazio ou não contém texto extraível.');
+            }
+            console.log('[GroqService] Texto extraído com sucesso. Tamanho:', textoExtraido.length);
+
+            // 3. BUSCA WEB (OPCIONAL/FALLBACK)
             let contextoWeb = "";
             let webResults: any[] = [];
 
             if (dados.incluir_web) {
                 try {
-                    const busca = await SearchService.searchCBMSCWebsite(dados.descricao);
-                    if (busca && busca.length > 0) {
-                        console.log(`[GroqService] ${busca.length} resultados encontrados na web.`);
-                        contextoWeb = busca.map(r => `FONTE: ${r.title}\nLINK: ${r.url}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
-                        webResults = busca;
+                    // Fallback check
+                    const apiKey = env.VITE_GOOGLE_SEARCH_API_KEY;
+                    const searchEngineId = env.VITE_SEARCH_ENGINE_ID;
+
+                    if (apiKey && searchEngineId) {
+                        // Extract keywords from PDF text (first 200 chars as robust guess)
+                        const searchHub = textoExtraido.substring(0, 200).replace(/\n/g, " ");
+                        const busca = await SearchService.searchCBMSCWebsite(searchHub);
+
+                        if (busca && busca.length > 0) {
+                            console.log(`[GroqService] ${busca.length} resultados encontrados na web.`);
+                            contextoWeb = busca.map(r => `FONTE: ${r.title}\nLINK: ${r.url}\nCONTEÚDO: ${r.snippet}`).join("\n\n");
+                            webResults = busca;
+                        } else {
+                            console.log('[GroqService] Nenhum resultado relevante encontrado na web.');
+                        }
                     } else {
-                        console.log('[GroqService] Nenhum resultado relevante encontrado na web.');
+                        console.warn('[GroqService] Chaves do Google Search não configuradas. Pulando busca web.');
+                        contextoWeb = "Busca web não disponível (API Key não configurada).";
                     }
+
                 } catch (searchError) {
                     console.warn('[GroqService] Busca no site do CBMSC falhou (não bloqueante):', searchError);
                 }
             }
 
 
-            let textoPDF = "";
-            if (dados.arquivoPDF) {
-                try {
-                    console.log("[GroqService] Extraindo texto do PDF...");
-                    textoPDF = await extrairTextoDoPDF(dados.arquivoPDF);
-                    console.log(`[GroqService] Texto extraído (${textoPDF.length} chars).`);
-                } catch (pdfError) {
-                    console.error("[GroqService] Erro ao extrair PDF:", pdfError);
-                    textoPDF = "Erro ao ler o conteúdo do arquivo PDF anexado. Análise baseada apenas nos metadados.";
-                }
-            }
+            // 4. PREPARAR PROMPT PARA A IA
+            const promptSistema = `Você é um Analista Técnico-Jurídico do Corpo de Bombeiros Militar de Santa Catarina (CBMSC).
 
-            const promptSistema = `
-            Você é um Auditor Técnico do SSCI (Serviço de Segurança Contra Incêndio) do CBMSC.
-            Sua missão é realizar uma análise técnica PROFUNDA e EXAUSTIVA da solicitação.
+Sua função é analisar requerimentos, consultas técnicas e solicitações à luz das normativas do CBMSC, especialmente a IN nº 001/CBMSC.
 
-            FORMATO OBRIGATÓRIO DA RESPOSTA (siga EXATAMENTE esta estrutura):
+IMPORTANTE: Você receberá o texto completo de um documento PDF. Analise EXCLUSIVAMENTE o conteúdo deste documento.
 
-            I. RELATO DA SOLICITAÇÃO
-            [Resumo objetivo e detalhado do que está sendo solicitado no documento. Extraia todos os nomes, datas, endereços, valores técnicos e fatos relevantes.]
+FORMATO OBRIGATÓRIO DA RESPOSTA:
 
-            II. FUNDAMENTAÇÃO NORMATIVA
-            [Explicação técnico-jurídica com citação OBRIGATÓRIA de artigos, incisos e parágrafos das normativas do CBMSC. Referencie Instruções Normativas (INs), Leis, Decretos e Portarias pertinentes. Use o formato: Art. X, Inc. Y, § Z da IN nº XXX/CBMSC.]
+I. RELATO DA SOLICITAÇÃO
+[Resumo objetivo do que está sendo solicitado no documento, citando partes específicas do texto]
 
-            III. ANÁLISE DA SOLICITAÇÃO ESPECÍFICA
-            [O que a normativa diz ESPECIFICAMENTE sobre o pedido do solicitante. Correlacione os fatos relatados com os dispositivos normativos. Identifique conformidades e desconformidades.]
+II. FUNDAMENTAÇÃO NORMATIVA
+[Explicação técnico-jurídica com citação de:
+- Artigos (Art. X)
+- Incisos (I, II, III)
+- Parágrafos (§1º, §2º)
+- Alíneas (a, b, c)
+Das normativas do CBMSC aplicáveis ao caso]
 
-            IV. PARECER TÉCNICO
-            [Decisão fundamentada: DEFERIDO, INDEFERIDO ou DEFERIDO COM RESSALVAS]
-            [Explicação detalhada do parecer, justificando a decisão com base na fundamentação normativa apresentada.]
+III. ANÁLISE DA SOLICITAÇÃO ESPECÍFICA
+[O que as normativas dizem especificamente sobre o pedido do solicitante. Cite artigos e incisos relevantes]
 
-            V. RESPONSABILIDADES DO RESPONSÁVEL TÉCNICO
-            [Artigos, incisos e parágrafos das normativas que definem as responsabilidades técnicas aplicáveis. Liste obrigações, prazos e penalidades previstas.]
+IV. PARECER TÉCNICO
+Decisão: [DEFERIDO / INDEFERIDO / DEFERIDO COM RESSALVAS]
 
-            REGRAS:
-            - Siga RIGOROSAMENTE o formato acima, mantendo os 5 títulos em numeral romano.
-            - Baseie-se ESTRITAMENTE nas Instruções Normativas (INs) e leis de SCI do CBMSC.
-            - Toda afirmação deve ter fundamentação legal.
-            - NÃO omita nenhuma das 5 seções.
+Fundamentação do Parecer:
+[Explicação detalhada da decisão, baseada nas normativas citadas]
 
-            CONTEXTO LOCAL (Documentos do Banco de Conhecimento):
-            ${documentosLocais.length > 0
+V. RESPONSABILIDADES DO RESPONSÁVEL TÉCNICO
+[Liste as responsabilidades jurídicas e normativas do responsável técnico, citando:
+- Artigos específicos
+- Incisos
+- Parágrafos
+Das normativas do CBMSC]
+
+REFERÊNCIAS NORMATIVAS:
+[Liste todas as normativas citadas no formato: IN nº XXX/CBMSC, Portaria nº XXX, etc.]
+
+CONTEXTO LOCAL (Documentos do Banco de Conhecimento):
+${documentosLocais.length > 0
                     ? JSON.stringify(documentosLocais.map(d => ({
                         document_name: d.document_name,
-                        document_type: d.document_type,
                         code_number: d.code_number,
                         summary: d.summary
                     })))
                     : '[]'}
 
-            CONTEXTO WEB (Pesquisa em cbm.sc.gov.br):
-            ${contextoWeb || "Nenhum resultado de pesquisa na web."}
+CONTEXTO WEB:
+${contextoWeb}
+`;
 
-            DADOS DA SOLICITAÇÃO:
-            Tipo: ${dados.tipo.toUpperCase()}
-            Protocolo: ${dados.protocolo}
-            Descrição: ${dados.descricao}
+            const promptUsuario = `Analise o seguinte documento e forneça um parecer técnico-jurídico completo:
 
-            CONTEÚDO DO DOCUMENTO ANEXADO (PDF):
-            ${textoPDF || "Nenhum conteúdo de arquivo extraído. Baseie-se nos dados acima."}
-            `;
+===== INÍCIO DO DOCUMENTO =====
+${textoExtraido}
+===== FIM DO DOCUMENTO =====
 
+Forneça a análise no formato especificado, citando artigos, incisos e parágrafos das normativas aplicáveis.`;
+
+            // 5. ENVIAR PARA A IA
+            console.log('[GroqService] Enviando para análise da IA...');
             const completion = await groq.chat.completions.create({
                 messages: [
                     {
                         role: "system",
-                        content: "Você é um Auditor Técnico especializado em análise jurídica e normativas do Corpo de Bombeiros Militar de Santa Catarina (CBMSC). Você SEMPRE responde no formato estruturado de 5 seções com numeração romana (I a V). Nunca omita nenhuma seção."
+                        content: promptSistema
                     },
                     {
                         role: "user",
-                        content: promptSistema
+                        content: promptUsuario
                     }
                 ],
                 model: "llama-3.3-70b-versatile",
-                temperature: 0.7,
+                temperature: 0.3,
                 max_tokens: 4096
             });
 
+            const respostaIA = completion.choices[0].message.content || "Sem resposta da IA.";
+
             return {
-                ai_response: completion.choices[0].message.content || "Sem resposta da IA.",
+                ai_response: respostaIA,
                 used_documents: documentosLocais.map(d => d.id),
                 web_source: webResults,
                 cbmsc_links: webResults.map(r => r.url),
@@ -149,15 +177,22 @@ export const GroqService = {
         try {
             console.log('[GroqService] Iniciando chat normativo');
 
-            // 1. Buscar no CBMSC (opcional dependendo de incluirWeb)
+            // 1. Buscar no CBMSC (Fallback safe)
             let informacoesWeb = null;
             if (incluirWeb) {
                 try {
-                    informacoesWeb = await SearchService.searchCBMSCWebsite(mensagemUsuario);
-                    if (informacoesWeb && informacoesWeb.length > 0) {
-                        console.log(`[GroqService Chat] ${informacoesWeb.length} resultados encontrados na web.`);
+                    const apiKey = env.VITE_GOOGLE_SEARCH_API_KEY;
+                    const searchEngineId = env.VITE_SEARCH_ENGINE_ID;
+
+                    if (apiKey && searchEngineId) {
+                        informacoesWeb = await SearchService.searchCBMSCWebsite(mensagemUsuario);
+                        if (informacoesWeb && informacoesWeb.length > 0) {
+                            console.log(`[GroqService Chat] ${informacoesWeb.length} resultados encontrados na web.`);
+                        } else {
+                            console.log('[GroqService Chat] Nenhum resultado web encontrado.');
+                        }
                     } else {
-                        console.log('[GroqService Chat] Nenhum resultado web encontrado.');
+                        console.warn('[GroqService Chat] Chaves Google Search ausentes. Pulando busca.');
                     }
                 } catch (e) {
                     console.warn('[GroqService] Busca web no chat falhou (não bloqueante):', e);
@@ -181,26 +216,23 @@ export const GroqService = {
             `;
 
             const systemMessage = {
-                role: "system" as const, // Type assertion for role
+                role: "system" as const,
                 content: `
                 Você é um assistente especializado em normativas do Corpo de Bombeiros Militar de Santa Catarina (CBMSC).
 
                 INSTRUÇÕES CRITICAS:
-                1. O usuário FORNECEU contexto externo no campo "FONTES WEB (CBMSC)".
-                2. Você DEVE usar essas informações como se fosse seu próprio conhecimento.
-                3. NUNCA diga "não posso pesquisar na internet" ou "meu conhecimento é limitado", pois a pesquisa JÁ FOI FEITA e os resultados estão abaixo.
-                4. Se a informação estiver em "FONTES WEB", cite a fonte e use a tag [WEB].
-                5. Se a informação NÃO estiver nem nos documentos locais nem na web, diga apenas: "Não encontrei informações sobre isso nas normativas ou no site do CBMSC consultados."
+                1. O usuário FORNECEU contexto externo no campo "FONTES WEB (CBMSC)" e "DOCUMENTOS LOCAIS".
+                2. Use essas informações como base principal.
+                3. Se a informação estiver em "FONTES WEB", cite a fonte.
+                4. Se a informação NÃO estiver nos contextos, diga: "Não encontrei informações sobre isso nas normativas consultadas."
 
                 REGRAS DE RESPOSTA:
                 - Seja direto e técnico.
-                - Priorize Documentos Locais.
-                - Use Fontes Web para complementar.
             `};
 
             const userMessage = { role: "user" as const, content: `PERGUNTA DO USUÁRIO: ${mensagemUsuario}\n\nCONTEXTO:\n${contexto}` };
 
-            // Converter histórico (Groq usa 'user', 'assistant', 'system')
+            // Converter histórico
             const messages = [
                 systemMessage,
                 ...historicoConversa.map(msg => ({
@@ -213,7 +245,7 @@ export const GroqService = {
             const completion = await groq.chat.completions.create({
                 messages: messages,
                 model: "llama-3.3-70b-versatile",
-                temperature: 0.7,
+                temperature: 0.5,
                 max_tokens: 2048
             });
 
