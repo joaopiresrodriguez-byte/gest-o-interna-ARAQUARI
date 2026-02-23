@@ -1,8 +1,17 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    const missing = [];
+    if (!supabaseUrl) missing.push('VITE_SUPABASE_URL');
+    if (!supabaseKey) missing.push('VITE_SUPABASE_ANON_KEY');
+    throw new Error(
+        `[Supabase] Variáveis de ambiente ausentes: ${missing.join(', ')}. ` +
+        `Verifique o arquivo .env.local na raiz do projeto.`
+    );
+}
 
 // Safe storage adapter to prevent "SecurityError" in restricted browsers
 const safeStorage = {
@@ -18,7 +27,6 @@ const safeStorage = {
         try {
             localStorage.setItem(key, value);
         } catch (e) {
-            // QuotaExceededError or SecurityError
             console.warn('LocalStorage unavailable', e);
         }
     },
@@ -39,4 +47,3 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
         detectSessionInUrl: true
     }
 });
-

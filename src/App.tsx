@@ -70,12 +70,11 @@ const SidebarLink = React.memo<{
 SidebarLink.displayName = 'SidebarLink';
 
 const AppLayout: React.FC = () => {
-  const { signOut, user, profile } = useAuth();
+  const { signOut, user, profile, profileError } = useAuth();
   const userName = user?.email?.split('@')[0] || 'Usuário';
 
   // Prevent infinite redirect loop if profile fails to load
   if (!profile) {
-    const { profileError } = useAuth();
 
     return (
       <div className="flex h-screen w-screen bg-gray-100 items-center justify-center p-4">
