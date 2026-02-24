@@ -1,12 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { SupabaseService, SSCIAnalysis, SSCIChatSession, SSCIChatMessage, SSCINormativeDocument } from '../services/SupabaseService';
+import { SSCIService } from '../services/ssciService';
+import { SSCIAnalysis, SSCIChatSession, SSCIChatMessage, SSCINormativeDocument } from '../services/types';
 import { GroqService } from '../services/GroqService';
+import { supabase } from '../services/supabase';
 
 const SSCI: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'ANALISE' | 'PESQUISA' | 'CONHECIMENTO'>('ANALISE');
     const [loading, setLoading] = useState(false);
     const { profile } = useAuth();
+
+    // Toast & Settings
+    const [toastMsg, setToastMsg] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error'>('success');
+    const [showSettings, setShowSettings] = useState(false);
+    const [settingsGroq, setSettingsGroq] = useState(localStorage.getItem('MANUAL_GROQ_KEY') || '');
+    const [settingsGoogle, setSettingsGoogle] = useState(localStorage.getItem('MANUAL_GOOGLE_KEY') || '');
+    const [settingsEngine, setSettingsEngine] = useState(localStorage.getItem('MANUAL_SEARCH_ENGINE_ID') || '');
+
+    const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+        setToastMsg(msg);
+        setToastType(type);
+        setTimeout(() => setToastMsg(''), 3500);
+    }, []);
 
     // --- SECTION 1: ANALYSIS ---
     const [analyses, setAnalyses] = useState<SSCIAnalysis[]>([]);
@@ -50,16 +66,16 @@ const SSCI: React.FC = () => {
         setLoading(true);
         try {
             if (activeTab === 'ANALISE') {
-                const data = await SupabaseService.getSSCIAnalyses();
+                const data = await SSCIService.getSSCIAnalyses();
                 setAnalyses(data);
             } else if (activeTab === 'PESQUISA') {
-                const sessions = await SupabaseService.getSSCIChatSessions();
+                const sessions = await SSCIService.getSSCIChatSessions();
                 setChatSessions(sessions);
                 if (sessions.length > 0 && !currentSession) {
                     handleSelectSession(sessions[0]);
                 }
             } else if (activeTab === 'CONHECIMENTO') {
-                const docs = await SupabaseService.getSSCINormativeDocuments();
+                const docs = await SSCIService.getSSCINormativeDocuments();
                 setNormativeDocs(docs);
             }
         } catch (error) {
@@ -83,7 +99,7 @@ const SSCI: React.FC = () => {
 
         try {
             // 1. Fetch relevant normative docs for context
-            const docs = await SupabaseService.getSSCINormativeDocuments();
+            const docs = await SSCIService.getSSCINormativeDocuments();
 
             // 2. Call Groq for deep analysis using PDF extraction
             const groqResult = await GroqService.analisarRequerimentoComGroq({
@@ -97,8 +113,10 @@ const SSCI: React.FC = () => {
 
             // 3. Upload File
             const fileName = `${Date.now()}_${pdfFile.name}`;
-            await SupabaseService.uploadFile('ssci-documentos-normativos', fileName, pdfFile);
-            const fileUrl = SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName);
+            const { error: uploadErr } = await supabase.storage.from('ssci-documentos-normativos').upload(fileName, pdfFile, { upsert: true });
+            if (uploadErr) throw uploadErr;
+            const { data: urlData } = supabase.storage.from('ssci-documentos-normativos').getPublicUrl(fileName);
+            const fileUrl = urlData.publicUrl;
 
             // 4. Save Analysis
             const analysisData: SSCIAnalysis = {
@@ -114,7 +132,7 @@ const SSCI: React.FC = () => {
                 cited_normatives: GroqService.extrairNormativas(groqResult.ai_response)
             };
 
-            const result = await SupabaseService.addSSCIAnalysis(analysisData);
+            const result = await SSCIService.addSSCIAnalysis(analysisData);
             setCurrentAnalysis(result as any);
             setAnalysisFiles([]);
             loadData();
@@ -129,7 +147,7 @@ const SSCI: React.FC = () => {
     const handleDeleteAnalysis = async (id: string) => {
         if (!confirm("Excluir esta análise permanentemente? Os arquivos anexados também serão removidos.")) return;
         try {
-            await SupabaseService.deleteSSCIAnalysis(id);
+            await SSCIService.deleteSSCIAnalysis(id);
             // Storage cleanup logic could be added here if desired.
             loadData();
             if (currentAnalysis?.id === id) setCurrentAnalysis(null);
@@ -141,7 +159,7 @@ const SSCI: React.FC = () => {
     const handleDeleteChatSession = async (id: string) => {
         if (!confirm("Excluir esta sessão de chat e todas as mensagens?")) return;
         try {
-            await SupabaseService.deleteSSCIChatSession(id);
+            await SSCIService.deleteSSCIChatSession(id);
             if (currentSession?.id === id) {
                 setCurrentSession(null);
                 setMessages([]);
@@ -155,14 +173,14 @@ const SSCI: React.FC = () => {
     // --- CHAT HANDLERS ---
     const handleSelectSession = async (session: SSCIChatSession) => {
         setCurrentSession(session);
-        const msgs = await SupabaseService.getSSCIChatMessages(session.id!);
+        const msgs = await SSCIService.getSSCIChatMessages(session.id!);
         setMessages(msgs);
     };
 
     const handleNewChat = async () => {
-        const newSession = await SupabaseService.createSSCIChatSession({
+        const newSession = await SSCIService.createSSCIChatSession({
             session_title: `Consulta ${new Date().toLocaleTimeString()}`,
-            user: "Usuário Logado"
+            user: profile?.email || 'Usuário SSCI'
         });
         setChatSessions([newSession, ...chatSessions]);
         handleSelectSession(newSession);
@@ -189,7 +207,7 @@ const SSCI: React.FC = () => {
 
         try {
             // 1. Get normativa context
-            const docs = await SupabaseService.getSSCINormativeDocuments();
+            const docs = await SSCIService.getSSCINormativeDocuments();
 
             // 2. Map history
             const history = messages.map(m => ([
@@ -200,7 +218,7 @@ const SSCI: React.FC = () => {
             // 3. Call Groq Chat
             const groqResult = await GroqService.chatNormativoGroq(msgText, history, docs, includeWebChat);
 
-            const finalMsg = await SupabaseService.addSSCIChatMessage({
+            const finalMsg = await SSCIService.addSSCIChatMessage({
                 ...userMsg,
                 ai_response: groqResult.ai_response,
                 referenced_documents: groqResult.referenced_documents,
@@ -209,7 +227,7 @@ const SSCI: React.FC = () => {
             setMessages(prev => [...prev, finalMsg]);
         } catch (error: any) {
             console.error('[SSCI Chat] Error:', error);
-            alert(`Erro ao obter resposta da IA: ${error.message || 'Erro desconhecido'}`);
+            showToast(`Erro ao obter resposta da IA: ${error.message || 'Erro desconhecido'}`, 'error');
         } finally {
             setIsTyping(false);
         }
@@ -217,14 +235,16 @@ const SSCI: React.FC = () => {
 
     // --- KNOWLEDGE BASE HANDLERS ---
     const handleAddDocument = async () => {
-        if (!documentFile || !documentName) return alert("Arquivo e Nome são obrigatórios.");
+        if (!documentFile || !documentName) { showToast('Arquivo e Nome são obrigatórios.', 'error'); return; }
         setLoading(true);
         try {
             const fileName = `${Date.now()}_${documentFile.name}`;
-            await SupabaseService.uploadFile('ssci-documentos-normativos', fileName, documentFile);
-            const url = SupabaseService.getPublicUrl('ssci-documentos-normativos', fileName);
+            const { error: uploadErr } = await supabase.storage.from('ssci-documentos-normativos').upload(fileName, documentFile, { upsert: true });
+            if (uploadErr) throw uploadErr;
+            const { data: urlData } = supabase.storage.from('ssci-documentos-normativos').getPublicUrl(fileName);
+            const url = urlData.publicUrl;
 
-            await SupabaseService.addSSCINormativeDocument({
+            await SSCIService.addSSCINormativeDocument({
                 document_name: documentName,
                 document_type: documentType,
                 code_number: documentCode,
@@ -235,13 +255,13 @@ const SSCI: React.FC = () => {
                 status: 'Active'
             });
 
-            alert("Documento adicionado ao Banco de Conhecimento!");
+            showToast('Documento adicionado ao Banco de Conhecimento!');
             setIsAddingDoc(false);
             setDocumentFile(null);
             setDocumentName("");
             loadData();
         } catch (error) {
-            alert("Erro ao salvar documento.");
+            showToast('Erro ao salvar documento.', 'error');
         } finally {
             setLoading(false);
         }
@@ -256,75 +276,71 @@ const SSCI: React.FC = () => {
 
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-background-light text-rustic-brown font-display">
+            {/* Toast */}
+            {toastMsg && (
+                <div className={`fixed top-6 right-6 z-[200] px-5 py-3 rounded-xl shadow-2xl text-sm font-bold text-white animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-2 ${toastType === 'error' ? 'bg-red-600' : 'bg-secondary-green'}`}>
+                    <span className="material-symbols-outlined text-[18px]">{toastType === 'error' ? 'error' : 'check_circle'}</span>
+                    {toastMsg}
+                </div>
+            )}
+
+            {/* Settings Modal */}
+            {showSettings && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="p-5 bg-stone-50 border-b flex justify-between items-center">
+                            <h3 className="font-black text-lg flex items-center gap-2"><span className="material-symbols-outlined text-primary">settings</span> Configurações de API</h3>
+                            <button onClick={() => setShowSettings(false)} className="size-8 rounded-full bg-white border flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all font-bold">×</button>
+                        </div>
+                        <div className="p-6 space-y-5">
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Groq API Key</label>
+                                <input type="password" value={settingsGroq} onChange={e => setSettingsGroq(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="gsk_..." />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Google Search API Key</label>
+                                <input type="password" value={settingsGoogle} onChange={e => setSettingsGoogle(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="AIza..." />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Search Engine ID</label>
+                                <input type="text" value={settingsEngine} onChange={e => setSettingsEngine(e.target.value)} className="w-full h-11 border rounded-xl px-4 bg-stone-50 text-sm" placeholder="Ex: abc123..." />
+                            </div>
+                            <button onClick={() => {
+                                if (settingsGroq) localStorage.setItem('MANUAL_GROQ_KEY', settingsGroq);
+                                if (settingsGoogle) localStorage.setItem('MANUAL_GOOGLE_KEY', settingsGoogle);
+                                if (settingsEngine) localStorage.setItem('MANUAL_SEARCH_ENGINE_ID', settingsEngine);
+                                setShowSettings(false);
+                                showToast('Chaves salvas! Recarregando...');
+                                setTimeout(() => window.location.reload(), 1000);
+                            }} className="w-full py-3 bg-primary text-white font-black text-sm rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">
+                                SALVAR CONFIGURAÇÕES
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
-            <header className="px-8 py-6 bg-[#1a1c1e] border-b border-[#2d2f31] shadow-xl flex flex-wrap justify-between items-center gap-4">
+            <header className="px-6 py-4 bg-[#1a1c1e] border-b border-[#2d2f31] shadow-xl flex flex-wrap justify-between items-center gap-3">
                 <div className="flex flex-col">
                     <div className="flex items-center gap-3">
-                        <h1 className="text-3xl font-black tracking-tight text-white">Módulo SSCI</h1>
-                        <span className="px-3 py-1 bg-primary/20 text-primary text-[11px] font-black rounded-full shadow-lg border border-primary/30">v2.0.0 PDF ANALYSIS</span>
+                        <h1 className="text-2xl font-black tracking-tight text-white">Módulo SSCI</h1>
+                        <span className="px-2.5 py-0.5 bg-primary/20 text-primary text-[10px] font-black rounded-full border border-primary/30">v2.1</span>
                     </div>
-                    <p className="text-sm text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
+                    <p className="text-xs text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 bg-[#2d2f31] p-1.5 rounded-lg border border-[#3d3f41]">
-                        <input
-                            type="password"
-                            placeholder="Groq API Key..."
-                            className="bg-transparent text-white text-xs px-2 outline-none w-24 border-r border-gray-600"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    localStorage.setItem("MANUAL_GROQ_KEY", e.currentTarget.value);
-                                    window.location.reload();
-                                }
-                            }}
-                        />
-                        <input
-                            type="password"
-                            placeholder="Google Search Key..."
-                            className="bg-transparent text-white text-xs px-2 outline-none w-24 border-r border-gray-600"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    localStorage.setItem("MANUAL_GOOGLE_KEY", e.currentTarget.value);
-                                    window.location.reload();
-                                }
-                            }}
-                        />
-                        <input
-                            type="text"
-                            placeholder="Engine ID..."
-                            className="bg-transparent text-white text-xs px-2 outline-none w-20"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    localStorage.setItem("MANUAL_SEARCH_ENGINE_ID", e.currentTarget.value);
-                                    window.location.reload();
-                                }
-                            }}
-                        />
-                        <button
-                            onClick={(e) => {
-                                const container = e.currentTarget.parentElement;
-                                const inputs = container?.querySelectorAll('input');
-                                if (inputs) {
-                                    if (inputs[0].value) localStorage.setItem("MANUAL_GROQ_KEY", inputs[0].value);
-                                    if (inputs[1].value) localStorage.setItem("MANUAL_GOOGLE_KEY", inputs[1].value);
-                                    if (inputs[2].value) localStorage.setItem("MANUAL_SEARCH_ENGINE_ID", inputs[2].value);
-                                    window.location.reload();
-                                }
-                            }}
-                            className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded"
-                        >
-                            SALVAR
-                        </button>
-                    </div>
-
+                <div className="flex items-center gap-3 flex-wrap">
+                    <button onClick={() => setShowSettings(true)} className="p-2 bg-[#2d2f31] border border-[#3d3f41] rounded-lg text-gray-400 hover:text-white hover:bg-[#3d3f41] transition-all" title="Configurações de API">
+                        <span className="material-symbols-outlined text-[20px]">settings</span>
+                    </button>
                     <div className="flex bg-[#2d2f31] p-1 rounded-xl border border-[#3d3f41]">
                         {(['ANALISE', 'PESQUISA', 'CONHECIMENTO'] as const).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
                             >
-                                {tab === 'ANALISE' ? 'Análise Documental' : tab === 'PESQUISA' ? 'Chat Normativo' : 'Base de Conhecimento'}
+                                {tab === 'ANALISE' ? '📄 Análise' : tab === 'PESQUISA' ? '💬 Chat' : '📚 Base'}
                             </button>
                         ))}
                     </div>
@@ -359,7 +375,7 @@ const SSCI: React.FC = () => {
                                                     if (e.target.files && e.target.files.length > 0) {
                                                         const file = e.target.files[0];
                                                         if (file.type !== 'application/pdf') {
-                                                            alert("Apenas arquivos PDF são permitidos.");
+                                                            showToast('Apenas arquivos PDF são permitidos.', 'error');
                                                             return;
                                                         }
                                                         setAnalysisFiles([file]);
@@ -442,10 +458,30 @@ const SSCI: React.FC = () => {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="bg-stone-100/50 border-2 border-dashed border-gray-200 rounded-2xl h-full flex flex-col items-center justify-center text-center p-12 opacity-50">
-                                        <span className="material-symbols-outlined text-[80px] text-gray-200 mb-4">description</span>
-                                        <h4 className="font-black text-gray-400 text-xl tracking-wide">ÁREA DE PARECER TÉCNICO</h4>
-                                        <p className="text-gray-300 max-w-sm mt-2 font-bold">Faça upload de um PDF para visualizar a análise estruturada aqui.</p>
+                                    <div className="flex flex-col gap-6 h-full">
+                                        <div className="bg-stone-100/50 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-center p-8 opacity-50">
+                                            <span className="material-symbols-outlined text-[60px] text-gray-200 mb-3">description</span>
+                                            <h4 className="font-black text-gray-400 text-lg tracking-wide">ÁREA DE PARECER TÉCNICO</h4>
+                                            <p className="text-gray-300 max-w-sm mt-1 font-bold text-sm">Faça upload de um PDF para visualizar a análise aqui.</p>
+                                        </div>
+                                        {analyses.length > 0 && (
+                                            <div className="bg-white rounded-2xl border border-rustic-border shadow-sm p-5 overflow-y-auto">
+                                                <h3 className="font-black text-xs mb-3 uppercase text-gray-400 flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-[16px]">history</span> Análises Recentes ({analyses.length})
+                                                </h3>
+                                                <div className="grid grid-cols-1 gap-3">
+                                                    {analyses.map(an => (
+                                                        <div key={an.id} onClick={() => setCurrentAnalysis(an)} className="p-3 border rounded-xl hover:bg-stone-50 cursor-pointer transition-all group">
+                                                            <div className="flex justify-between items-start">
+                                                                <p className="font-bold text-sm">{an.protocol_number}</p>
+                                                                <span className="text-[9px] text-gray-300 font-bold">{an.analysis_date ? new Date(an.analysis_date).toLocaleDateString('pt-BR') : ''}</span>
+                                                            </div>
+                                                            <p className="text-[10px] text-gray-500 line-clamp-1 mt-1">{an.request_description}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -550,19 +586,6 @@ const SSCI: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {!currentAnalysis && analyses.length > 0 && (
-                                        <div className="bg-white rounded-2xl border border-rustic-border shadow-sm p-6">
-                                            <h3 className="font-black text-sm mb-4 uppercase text-gray-400">Análises Recentes</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {analyses.map(an => (
-                                                    <div key={an.id} onClick={() => setCurrentAnalysis(an)} className="p-4 border rounded-xl hover:bg-stone-50 cursor-pointer transition-all">
-                                                        <p className="font-bold text-sm">{an.protocol_number}</p>
-                                                        <p className="text-[10px] text-gray-500 line-clamp-2">{an.request_description}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                     <div ref={chatEndRef} />
                                 </div>
 
@@ -572,7 +595,7 @@ const SSCI: React.FC = () => {
                                             type="text"
                                             value={userInput}
                                             onChange={e => setUserInput(e.target.value)}
-                                            onKeyPress={e => e.key === 'Enter' && handleSendMessage()}
+                                            onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                                             placeholder="Digite sua dúvida sobre Instruções Normativas (Ex: sinalização, hidrantes...)"
                                             className="flex-1 h-12 px-5 rounded-xl border border-rustic-border shadow-inner text-sm outline-none focus:ring-2 focus:ring-primary/20"
                                         />
@@ -636,7 +659,7 @@ const SSCI: React.FC = () => {
                                                 <button onClick={async () => {
                                                     if (confirm("Excluir normativa?")) {
                                                         const fileName = doc.file_url.split('/').pop()!;
-                                                        await SupabaseService.deleteSSCINormativeDocument(doc.id!, fileName);
+                                                        await SSCIService.deleteSSCINormativeDocument(doc.id!, fileName);
                                                         loadData();
                                                     }
                                                 }} className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600" disabled={profile?.p_ssci !== 'editor'}>
