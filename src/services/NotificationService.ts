@@ -8,7 +8,7 @@ const CONTACTS = {
 
 export const NotificationService = {
     /**
-     * Generates a deep link to open WhatsApp Web/App with a message
+     * Opens WhatsApp Web/App with the given message
      */
     openWhatsApp: (text: string) => {
         const encoded = encodeURIComponent(text);
@@ -16,7 +16,7 @@ export const NotificationService = {
     },
 
     /**
-     * Generates a mailto link to open default email client
+     * Opens default email client with the given subject and body
      */
     openEmail: (subject: string, body: string) => {
         const encodedSubject = encodeURIComponent(subject);
@@ -25,17 +25,16 @@ export const NotificationService = {
     },
 
     /**
-     * Formats the message for a new product receipt
+     * Returns formatted data for a receipt notification.
+     * Does NOT auto-open anything — caller decides the channel.
      */
-    sendReceiptNotification: (receipt: { nf: string, obs: string, photoUrl: string, user: string }) => {
-        // WhatsApp Message
+    getReceiptNotificationData: (receipt: { nf: string, obs: string, photoUrl: string, user: string }) => {
         const waText = `🚨 *Novo Recebimento Registrado*\n\n` +
             `📝 *NF:* ${receipt.nf}\n` +
             `👤 *Responsável:* ${receipt.user}\n` +
             `💬 *Obs:* ${receipt.obs || 'Sem observações'}\n\n` +
             `📷 *Foto:* ${receipt.photoUrl}`;
 
-        // Email Body
         const emailSubject = `[CBMSC] Novo Recebimento - NF ${receipt.nf}`;
         const emailBody = `Novo recebimento registrado no sistema.\n\n` +
             `Nota Fiscal: ${receipt.nf}\n` +
@@ -43,15 +42,23 @@ export const NotificationService = {
             `Observações: ${receipt.obs || 'N/A'}\n\n` +
             `Acesse a foto aqui: ${receipt.photoUrl}`;
 
-        // Trigger both
-        NotificationService.openWhatsApp(waText);
-        setTimeout(() => NotificationService.openEmail(emailSubject, emailBody), 1000); // Small delay to prevent browser block
+        return { waText, emailSubject, emailBody };
     },
 
     /**
-     * Formats the message for a daily conference
+     * Backward-compat: auto-opens WhatsApp + Email (kept for any external callers)
      */
-    sendConferenceNotification: (data: {
+    sendReceiptNotification: (receipt: { nf: string, obs: string, photoUrl: string, user: string }) => {
+        const { waText, emailSubject, emailBody } = NotificationService.getReceiptNotificationData(receipt);
+        NotificationService.openWhatsApp(waText);
+        setTimeout(() => NotificationService.openEmail(emailSubject, emailBody), 1000);
+    },
+
+    /**
+     * Returns formatted data for a conference notification.
+     * Does NOT auto-open anything — caller decides the channel.
+     */
+    getConferenceNotificationData: (data: {
         responsible: string,
         viatura?: string,
         items: ChecklistItem[],
@@ -62,13 +69,11 @@ export const NotificationService = {
 
         const pendingItems = data.items.filter(item => data.statuses[item.id]?.status === 'faltante');
 
-        // Header
         let message = `🚒 *Conferência Diária Finalizada*\n` +
             `📅 ${date} às ${time}\n` +
             `👤 *Resp:* ${data.responsible}\n` +
             `🚔 *Viatura:* ${data.viatura || 'Geral/Todas'}\n\n`;
 
-        // Body
         if (pendingItems.length === 0) {
             message += `✅ *STATUS: TUDO QAP (OK)*\nTodos os itens conferidos e operacionais.`;
         } else {
@@ -81,13 +86,23 @@ export const NotificationService = {
             message += `\n\n✅ *Demais itens conferidos e OK.*`;
         }
 
-        // WhatsApp
-        NotificationService.openWhatsApp(message);
-
-        // Email
         const emailSubject = `[CBMSC] Relatório de Conferência - ${date}`;
-        const emailBody = message.replace(/\*/g, '').replace(/⚠️/g, '[!]').replace(/✅/g, '[OK]'); // Simple clean up for email
+        const emailBody = message.replace(/\*/g, '').replace(/⚠️/g, '[!]').replace(/✅/g, '[OK]');
 
+        return { waText: message, emailSubject, emailBody };
+    },
+
+    /**
+     * Backward-compat: auto-opens WhatsApp + Email (kept for any external callers)
+     */
+    sendConferenceNotification: (data: {
+        responsible: string,
+        viatura?: string,
+        items: ChecklistItem[],
+        statuses: Record<string, { status: 'ok' | 'faltante', obs: string }>
+    }) => {
+        const { waText, emailSubject, emailBody } = NotificationService.getConferenceNotificationData(data);
+        NotificationService.openWhatsApp(waText);
         setTimeout(() => NotificationService.openEmail(emailSubject, emailBody), 1000);
     }
 };
