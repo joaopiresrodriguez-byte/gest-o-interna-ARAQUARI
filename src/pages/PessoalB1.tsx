@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseService, Personnel, DocumentB1, Vacation } from '../services/SupabaseService';
+import { GoogleSheetsService } from '../services/googleSheetsService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 
@@ -157,6 +158,11 @@ const PessoalB1: React.FC = () => {
       });
 
       await SupabaseService.addPersonnel(cleanedData as Personnel);
+
+      // Sync to Google Sheets (fire-and-forget)
+      GoogleSheetsService.syncPersonnel(cleanedData as Personnel).then(ok => {
+        if (ok) toast.info('📊 Dados sincronizados com o Google Sheets.');
+      });
 
       toast.success("Militar cadastrado com sucesso!");
       setFormData({

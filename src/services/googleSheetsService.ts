@@ -1,0 +1,81 @@
+import { Personnel, Vehicle } from './types';
+
+const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
+
+/**
+ * Sends data to Google Sheets via Apps Script webhook.
+ * Fails silently — Sheets sync should never block Supabase operations.
+ */
+async function sendToSheets(sheet: string, data: (string | number | boolean)[]): Promise<boolean> {
+    if (!WEBHOOK_URL) {
+        console.warn('[GoogleSheets] VITE_GOOGLE_SHEETS_WEBHOOK_URL not configured. Skipping sync.');
+        return false;
+    }
+
+    try {
+        const response = await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sheet, data }),
+            mode: 'no-cors', // Apps Script requires no-cors from browser
+        });
+
+        // In no-cors mode, response is opaque so we can't read it
+        // But if fetch didn't throw, the request was sent successfully
+        console.log(`[GoogleSheets] Data sent to "${sheet}" sheet.`);
+        return true;
+    } catch (error) {
+        console.error('[GoogleSheets] Sync failed (non-blocking):', error);
+        return false;
+    }
+}
+
+const formatDate = (dateStr?: string): string => {
+    if (!dateStr) return '';
+    try {
+        return new Date(dateStr).toLocaleDateString('pt-BR');
+    } catch {
+        return dateStr;
+    }
+};
+
+export const GoogleSheetsService = {
+    /**
+     * Sync new personnel to the "Efetivo" sheet
+     */
+    syncPersonnel: async (person: Partial<Personnel>): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),  // Data Registro
+            person.name || '',                         // Nome
+            person.war_name || '',                     // Nome Guerra
+            person.rank || '',                         // Posto/Grad
+            person.type || '',                         // Tipo (BM/BC)
+            person.status || '',                       // Status
+            person.role || '',                         // Função
+            person.email || '',                        // Email
+            person.phone || '',                        // Telefone
+            formatDate(person.birth_date),             // Nascimento
+            person.blood_type || '',                   // Tipo Sanguíneo
+            person.cnh || '',                          // CNH
+            person.weapon_permit ? 'Sim' : 'Não',     // Porte Arma
+            person.address || '',                      // Endereço
+        ];
+        return sendToSheets('Efetivo', row);
+    },
+
+    /**
+     * Sync new vehicle/equipment to the "Patrimônio" sheet
+     */
+    syncVehicle: async (vehicle: Partial<Vehicle>): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),   // Data Registro
+            vehicle.name || '',                        // Nome
+            vehicle.type || '',                        // Tipo
+            vehicle.status === 'active' ? 'QAP' : vehicle.status === 'maintenance' ? 'Manutenção' : 'Baixada',
+            vehicle.details || '',                     // Detalhes
+            vehicle.plate || '',                       // Placa
+            vehicle.current_km?.toString() || '',      // KM Atual
+        ];
+        return sendToSheets('Patrimônio', row);
+    },
+};

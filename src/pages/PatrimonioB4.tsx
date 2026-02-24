@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist } from '../services/SupabaseService';
+import { GoogleSheetsService } from '../services/googleSheetsService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 import { useAuth } from '../context/AuthContext';
@@ -137,6 +138,11 @@ const PatrimonioB4: React.FC = () => {
 
     try {
       await SupabaseService.addVehicle(newItem);
+
+      // Sync to Google Sheets (fire-and-forget)
+      GoogleSheetsService.syncVehicle(newItem).then(ok => {
+        if (ok) toast.info('📊 Dados sincronizados com o Google Sheets.');
+      });
 
       // 2. If it's an Equipment, Viatura or Material, also add to Daily Conference (itens_conferencia)
       // This links it to the Operational module
