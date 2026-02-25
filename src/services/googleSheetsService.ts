@@ -59,6 +59,13 @@ export const GoogleSheetsService = {
             person.cnh || '',                          // CNH
             person.weapon_permit ? 'Sim' : 'Não',     // Porte Arma
             person.address || '',                      // Endereço
+            // New columns (append at end)
+            person.education_level || '',               // Grau de Instrução
+            person.cnh_category || '',                  // Categoria CNH
+            person.cnh_number || '',                    // Número da CNH
+            person.cpf || '',                           // CPF
+            person.emergency_phone || '',               // Contato de Emergência
+            person.emergency_contact_name || '',        // Nome do Contato de Emergência
         ];
         return sendToSheets('Efetivo', row);
     },
@@ -75,6 +82,14 @@ export const GoogleSheetsService = {
             vehicle.details || '',                     // Detalhes
             vehicle.plate || '',                       // Placa
             vehicle.current_km?.toString() || '',      // KM Atual
+            // New columns (append at end)
+            vehicle.brand || '',                        // Marca
+            vehicle.renavam || '',                      // RENAVAM
+            vehicle.chassis || '',                      // Chassi
+            vehicle.year || '',                         // Ano
+            vehicle.oil_type || '',                     // Tipo de Óleo
+            vehicle.location || '',                     // Localização Atual
+            vehicle.nf_number || '',                    // Nº NF de Compra
         ];
         return sendToSheets('Patrimônio', row);
     },

@@ -29,6 +29,21 @@ const PatrimonioB4: React.FC = () => {
   const [newItemStatus] = useState<Vehicle['status']>('active');
   const [newItemDetails, setNewItemDetails] = useState("");
   const [newItemViaturaId, setNewItemViaturaId] = useState("");
+  // Viatura-specific fields
+  const [newItemBrand, setNewItemBrand] = useState("");
+  const [newItemPlate, setNewItemPlate] = useState("");
+  const [newItemRenavam, setNewItemRenavam] = useState("");
+  const [newItemChassis, setNewItemChassis] = useState("");
+  const [newItemYear, setNewItemYear] = useState("");
+  const [newItemOilType, setNewItemOilType] = useState("");
+  const [newItemLocation, setNewItemLocation] = useState("");
+  // Equipamento-specific fields
+  const [newItemNfNumber, setNewItemNfNumber] = useState("");
+
+  // Plate mask (AAA-0A00 Mercosul format)
+  const applyPlateMask = (value: string) => {
+    return value.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^([A-Z]{3})(\d.*)$/, '$1-$2').slice(0, 8);
+  };
 
   // Mission Form State
   const [missionTitle, setMissionTitle] = useState("");
@@ -133,7 +148,15 @@ const PatrimonioB4: React.FC = () => {
       name: newItemName,
       type: newItemType,
       status: newItemStatus,
-      details: newItemDetails || "Sem detalhes adicionais"
+      details: newItemDetails || "Sem detalhes adicionais",
+      brand: newItemBrand || undefined,
+      plate: newItemPlate || undefined,
+      renavam: newItemRenavam || undefined,
+      chassis: newItemChassis || undefined,
+      year: newItemYear || undefined,
+      oil_type: newItemOilType || undefined,
+      location: newItemLocation || undefined,
+      nf_number: newItemNfNumber || undefined,
     };
 
     try {
@@ -164,6 +187,14 @@ const PatrimonioB4: React.FC = () => {
       setNewItemName("");
       setNewItemDetails("");
       setNewItemViaturaId("");
+      setNewItemBrand("");
+      setNewItemPlate("");
+      setNewItemRenavam("");
+      setNewItemChassis("");
+      setNewItemYear("");
+      setNewItemOilType("");
+      setNewItemLocation("");
+      setNewItemNfNumber("");
       setActiveTab('listagem');
       loadData();
     } catch (error: any) {
@@ -465,7 +496,14 @@ const PatrimonioB4: React.FC = () => {
                             </div>
                           </div>
                           <h3 className="text-lg font-bold mb-1">{item.name}</h3>
-                          <p className="text-xs text-rustic-brown/60 mb-4 line-clamp-2">{item.details}</p>
+                          <p className="text-xs text-rustic-brown/60 mb-2 line-clamp-2">{item.details}</p>
+                          {/* Extra info for items */}
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            {item.plate && <span className="text-[9px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{item.plate}</span>}
+                            {item.brand && <span className="text-[9px] font-bold bg-stone-100 text-gray-600 px-2 py-0.5 rounded">{item.brand}</span>}
+                            {item.location && <span className="text-[9px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">location_on</span>{item.location}</span>}
+                            {item.year && <span className="text-[9px] font-bold bg-stone-100 text-gray-500 px-2 py-0.5 rounded">{item.year}</span>}
+                          </div>
 
                           {/* Alerts Section */}
                           {itemNotices.length > 0 && (
@@ -510,6 +548,68 @@ const PatrimonioB4: React.FC = () => {
                       <option value="Material">Material (Conserto/Consumo)</option>
                       <option value="Viatura">Viatura</option>
                     </select>
+
+                    {/* Viatura-specific fields */}
+                    {newItemType === 'Viatura' && (
+                      <div className="space-y-4 p-4 bg-white border border-rustic-border/50 rounded-xl shadow-sm">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2">Dados da Viatura</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Marca</label>
+                            <input value={newItemBrand} onChange={e => setNewItemBrand(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Iveco, Ford" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Placa</label>
+                            <input value={newItemPlate} onChange={e => setNewItemPlate(applyPlateMask(e.target.value))} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="ABC-1D23" maxLength={8} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">RENAVAM</label>
+                            <input value={newItemRenavam} onChange={e => setNewItemRenavam(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Número RENAVAM" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Chassi</label>
+                            <input value={newItemChassis} onChange={e => setNewItemChassis(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Número do Chassi" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Ano</label>
+                            <input value={newItemYear} onChange={e => setNewItemYear(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: 2023" maxLength={4} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo de Óleo</label>
+                            <input value={newItemOilType} onChange={e => setNewItemOilType(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: 15W40" />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização Atual da Viatura</label>
+                          <input value={newItemLocation} onChange={e => setNewItemLocation(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Quartel Araquari, Oficina, Manutenção" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Equipamento-specific fields */}
+                    {newItemType === 'Equipamento' && (
+                      <div className="space-y-4 p-4 bg-white border border-rustic-border/50 rounded-xl shadow-sm">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2">Dados do Equipamento</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Marca</label>
+                            <input value={newItemBrand} onChange={e => setNewItemBrand(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Marca do equipamento" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nº NF de Compra</label>
+                            <input value={newItemNfNumber} onChange={e => setNewItemNfNumber(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Número da Nota Fiscal" />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização Atual do Equipamento</label>
+                          <input value={newItemLocation} onChange={e => setNewItemLocation(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Viatura ABT-01, Quartel, Empréstimo" />
+                        </div>
+                      </div>
+                    )}
 
                     {(newItemType === 'Equipamento' || newItemType === 'Material') && (
                       <div className="space-y-1 p-3 bg-white border border-rustic-border/50 rounded-xl shadow-sm">

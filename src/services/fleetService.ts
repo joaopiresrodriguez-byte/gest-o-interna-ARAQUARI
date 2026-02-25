@@ -3,7 +3,7 @@ import { Vehicle, ChecklistItem, DailyChecklist, PendingNotice } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const VEHICLE_FIELDS = 'id, name, type, plate, status, details, current_km, last_revision';
+const VEHICLE_FIELDS = 'id, name, type, plate, status, details, current_km, last_revision, brand, renavam, chassis, year, oil_type, location, nf_number';
 const CHECKLIST_ITEM_FIELDS = 'id, category, item_name, viatura_id, description, is_active, sort_order';
 const DAILY_CHECKLIST_FIELDS = 'id, item_id, viatura_id, inspection_date, status, notes, responsible, created_at';
 

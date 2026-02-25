@@ -17,6 +17,13 @@ export interface Vehicle {
     plate?: string;
     current_km?: number;
     last_revision?: string;
+    brand?: string;
+    renavam?: string;
+    chassis?: string;
+    year?: string;
+    oil_type?: string;
+    location?: string;
+    nf_number?: string;
 }
 
 export interface Personnel {
@@ -35,6 +42,12 @@ export interface Personnel {
     cnh?: string;
     weapon_permit?: boolean;
     image?: string;
+    education_level?: string;
+    cnh_category?: string;
+    cnh_number?: string;
+    cpf?: string;
+    emergency_phone?: string;
+    emergency_contact_name?: string;
 }
 
 export interface GuReport {

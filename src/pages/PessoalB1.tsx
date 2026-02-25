@@ -15,6 +15,30 @@ const PessoalB1: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
 
+  // CPF mask helper
+  const applyCpfMask = (value: string) => {
+    return value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').slice(0, 14);
+  };
+  const applyPhoneMask = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+  const validateCpf = (cpf: string) => {
+    const digits = cpf.replace(/\D/g, '');
+    if (digits.length !== 11) return false;
+    if (/^(\d)\1+$/.test(digits)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(digits[i]) * (10 - i);
+    let rest = (sum * 10) % 11; if (rest === 10) rest = 0;
+    if (rest !== parseInt(digits[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(digits[i]) * (11 - i);
+    rest = (sum * 10) % 11; if (rest === 10) rest = 0;
+    return rest === parseInt(digits[10]);
+  };
+
   // Form State Personnel
   const [formData, setFormData] = useState<Partial<Personnel>>({
     name: '',
@@ -28,7 +52,13 @@ const PessoalB1: React.FC = () => {
     blood_type: '',
     cnh: '',
     weapon_permit: false,
-    role: 'Serviço Ativo'
+    role: 'Serviço Ativo',
+    education_level: '',
+    cnh_category: '',
+    cnh_number: '',
+    cpf: '',
+    emergency_phone: '',
+    emergency_contact_name: '',
   });
 
   // Form State Documents
@@ -141,6 +171,7 @@ const PessoalB1: React.FC = () => {
 
   const handleSavePersonnel = async () => {
     if (!formData.name) return toast.error("Nome é obrigatório!");
+    if (formData.cpf && !validateCpf(formData.cpf)) return toast.error("CPF inválido! Verifique os dígitos.");
 
     setLoading(true);
     try {
@@ -182,7 +213,13 @@ const PessoalB1: React.FC = () => {
         blood_type: '',
         cnh: '',
         weapon_permit: false,
-        role: 'Serviço Ativo'
+        role: 'Serviço Ativo',
+        education_level: '',
+        cnh_category: '',
+        cnh_number: '',
+        cpf: '',
+        emergency_phone: '',
+        emergency_contact_name: '',
       });
       setActiveTab('LISTAGEM');
       loadData();
@@ -444,6 +481,69 @@ const PessoalB1: React.FC = () => {
                   <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-rustic-border/50">
                     <input type="checkbox" checked={formData.weapon_permit} onChange={e => setFormData({ ...formData, weapon_permit: e.target.checked })} className="w-4 h-4 text-primary rounded" />
                     <label className="text-xs font-bold text-gray-600">Possui Porte de Arma / Acautelamento</label>
+                  </div>
+                </div>
+              </div>
+
+              {/* New Section: Documentação & Emergência */}
+              <div className="col-span-1 md:col-span-2 mt-4">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2 mb-6">Documentação & Contato de Emergência</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Grau de Instrução</label>
+                      <select value={formData.education_level} onChange={e => setFormData({ ...formData, education_level: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                        <option value="">Selecione...</option>
+                        <option value="Fundamental Incompleto">Fundamental Incompleto</option>
+                        <option value="Fundamental Completo">Fundamental Completo</option>
+                        <option value="Médio Incompleto">Médio Incompleto</option>
+                        <option value="Médio Completo">Médio Completo</option>
+                        <option value="Superior Incompleto">Superior Incompleto</option>
+                        <option value="Superior Completo">Superior Completo</option>
+                        <option value="Pós-Graduação">Pós-Graduação</option>
+                        <option value="Mestrado">Mestrado</option>
+                        <option value="Doutorado">Doutorado</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Categoria CNH</label>
+                        <select value={formData.cnh_category} onChange={e => setFormData({ ...formData, cnh_category: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                          <option value="">Selecione...</option>
+                          <option value="A">A</option>
+                          <option value="B">B</option>
+                          <option value="C">C</option>
+                          <option value="D">D</option>
+                          <option value="E">E</option>
+                          <option value="AB">AB</option>
+                          <option value="AC">AC</option>
+                          <option value="AD">AD</option>
+                          <option value="AE">AE</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Número da CNH</label>
+                        <input value={formData.cnh_number} onChange={e => setFormData({ ...formData, cnh_number: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nº do Registro" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">CPF</label>
+                      <input value={formData.cpf} onChange={e => setFormData({ ...formData, cpf: applyCpfMask(e.target.value) })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="000.000.000-00" maxLength={14} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome do Contato de Emergência</label>
+                      <input value={formData.emergency_contact_name} onChange={e => setFormData({ ...formData, emergency_contact_name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo do contato" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Telefone de Emergência</label>
+                      <input value={formData.emergency_phone} onChange={e => setFormData({ ...formData, emergency_phone: applyPhoneMask(e.target.value) })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="(47) 99999-9999" maxLength={15} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -827,6 +927,41 @@ const PessoalB1: React.FC = () => {
                         <p className={`text-[10px] font-black uppercase ${selectedPerson.weapon_permit ? 'text-green-600' : 'text-gray-400'}`}>
                           {selectedPerson.weapon_permit ? 'AUTORIZADO / ACAUTELADO' : 'NÃO POSSUI'}
                         </p>
+                      </div>
+                    </div>
+
+                    {/* New detail fields */}
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-primary/40 text-[20px]">school</span>
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Grau de Instrução</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.education_level || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-primary/40 text-[20px]">id_card</span>
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">CPF</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cpf || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-primary/40 text-[20px]">credit_card</span>
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Cat. CNH / Nº</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cnh_category || 'N/A'} {selectedPerson.cnh_number ? `• ${selectedPerson.cnh_number}` : ''}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-primary/40 text-[20px]">emergency</span>
+                        <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Contato Emergência</p>
+                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.emergency_contact_name || 'N/A'}</p>
+                          <p className="text-[10px] text-gray-500">{selectedPerson.emergency_phone || ''}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
