@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { SupabaseService, MateriaInstrucao, Training, MateriaApresentacao, MateriaVideo } from '../services/SupabaseService';
+import { toast } from 'sonner';
 
 const InstrucaoB3: React.FC = () => {
   const [materias, setMaterias] = useState<MateriaInstrucao[]>([]);
@@ -41,18 +42,29 @@ const InstrucaoB3: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const [m, t] = await Promise.all([
-      SupabaseService.getMateriasInstrucao(),
-      SupabaseService.getTrainings()
-    ]);
-    setMaterias(m);
-    setTrainings(t);
-    setLoading(false);
+    try {
+      const [m, t] = await Promise.all([
+        SupabaseService.getMateriasInstrucao(),
+        SupabaseService.getTrainings()
+      ]);
+      setMaterias(m);
+      setTrainings(t);
+    } catch (error) {
+      console.error('Error loading B3 data:', error);
+      toast.error('Erro ao carregar dados de instrução.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveMateria = async () => {
     if (!nome || !cargaHoraria) {
-      alert("Nome e Carga Horária são obrigatórios.");
+      toast.error("Nome e Carga Horária são obrigatórios.");
+      return;
+    }
+
+    if (parseInt(cargaHoraria) <= 0) {
+      toast.error("Carga horária deve ser um valor positivo.");
       return;
     }
 
@@ -110,12 +122,12 @@ const InstrucaoB3: React.FC = () => {
         });
       }
 
-      alert("Matéria e materiais cadastrados com sucesso!");
+      toast.success("Matéria e materiais cadastrados com sucesso!");
       resetForm();
       loadData();
     } catch (error) {
       console.error("Erro ao salvar matéria:", error);
-      alert("Erro ao realizar o cadastro.");
+      toast.error("Erro ao realizar o cadastro.");
     } finally {
       setUploading(false);
     }
@@ -125,9 +137,10 @@ const InstrucaoB3: React.FC = () => {
     if (!confirm("Excluir esta matéria e TODOS os seus materiais vinculados?")) return;
     try {
       await SupabaseService.deleteMateriaInstrucao(id);
+      toast.success('Matéria excluída com sucesso.');
       loadData();
     } catch (error) {
-      alert("Erro ao excluir matéria.");
+      toast.error("Erro ao excluir matéria.");
     }
   };
 
@@ -135,9 +148,10 @@ const InstrucaoB3: React.FC = () => {
     if (!confirm("Remover treinamento do cronograma?")) return;
     try {
       await SupabaseService.deleteTraining(id);
+      toast.success('Treinamento removido.');
       loadData();
     } catch (error) {
-      alert("Erro ao remover treinamento.");
+      toast.error("Erro ao remover treinamento.");
     }
   };
 
@@ -151,7 +165,7 @@ const InstrucaoB3: React.FC = () => {
       }
       loadData();
     } catch (error) {
-      alert("Erro ao excluir apresentação.");
+      toast.error("Erro ao excluir apresentação.");
     }
   };
 
@@ -165,7 +179,7 @@ const InstrucaoB3: React.FC = () => {
       }
       loadData();
     } catch (error) {
-      alert("Erro ao excluir vídeo.");
+      toast.error("Erro ao excluir vídeo.");
     }
   };
 
@@ -198,23 +212,33 @@ const InstrucaoB3: React.FC = () => {
 
   const handleSchedule = async () => {
     if (!trainingDate || !trainingTime || !selectedMateriaId || !trainingInstructor) {
-      alert("Preencha todos os campos do agendamento.");
+      toast.error("Preencha todos os campos do agendamento.");
       return;
     }
 
-    const newTraining: Training = {
-      materia_id: selectedMateriaId,
-      date: trainingDate,
-      time: trainingTime,
-      instructor: trainingInstructor,
-      status: 'Scheduled'
-    };
+    setLoading(true);
+    try {
+      const newTraining: Training = {
+        materia_id: selectedMateriaId,
+        date: trainingDate,
+        time: trainingTime,
+        instructor: trainingInstructor,
+        status: 'Scheduled'
+      };
 
-    await SupabaseService.addTraining(newTraining);
-    alert("Treinamento agendado com sucesso!");
-    setTrainingDate("");
-    setTrainingTime("");
-    loadData();
+      await SupabaseService.addTraining(newTraining);
+      toast.success("Treinamento agendado com sucesso!");
+      setTrainingDate("");
+      setTrainingTime("");
+      setTrainingInstructor("");
+      setSelectedMateriaId("");
+      loadData();
+    } catch (error) {
+      console.error('Error scheduling training:', error);
+      toast.error("Erro ao agendar treinamento.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -281,6 +305,7 @@ const InstrucaoB3: React.FC = () => {
                         value={categoria} onChange={e => setCategoria(e.target.value)}
                         className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] focus:border-[#C62828] outline-none"
                       >
+                        <option>Geral</option>
                         <option>APH</option>
                         <option>Combate a Incêndio</option>
                         <option>Salvamento</option>

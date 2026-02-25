@@ -150,9 +150,14 @@ const PessoalB1: React.FC = () => {
         rank: formData.type === 'BM' ? 'Sd.' : 'BC',
       };
 
-      // Remove empty strings and undefined values for optional fields
+      // Only remove truly empty/undefined fields that would cause DB errors for date columns
+      const dateFields = ['birth_date'];
       Object.keys(cleanedData).forEach(key => {
-        if (cleanedData[key] === '' || cleanedData[key] === undefined) {
+        if (cleanedData[key] === undefined) {
+          delete cleanedData[key];
+        }
+        // Only strip empty strings for date fields (DB rejects empty dates)
+        if (dateFields.includes(key) && cleanedData[key] === '') {
           delete cleanedData[key];
         }
       });
@@ -190,7 +195,7 @@ const PessoalB1: React.FC = () => {
   };
 
   const handleUploadDocument = async () => {
-    if (!docFile) return alert("Selecione um arquivo PDF.");
+    if (!docFile) return toast.error("Selecione um arquivo PDF.");
     setLoading(true);
     try {
       const fileName = `${Date.now()}_${docFile.name}`;
@@ -223,13 +228,13 @@ const PessoalB1: React.FC = () => {
   };
 
   const handleSaveVacation = async () => {
-    if (!vacaPersonId || !vacaStart || !vacaEnd) return alert("Preencha todos os campos.");
+    if (!vacaPersonId || !vacaStart || !vacaEnd) return toast.error("Preencha todos os campos de férias.");
 
     const start = new Date(vacaStart);
     const end = new Date(vacaEnd);
     const days = Math.round((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
 
-    if (days <= 0) return alert("Data de fim deve ser após o início.");
+    if (days <= 0) return toast.error("Data de fim deve ser após o início.");
 
     const person = personnelList.find(p => p.id === vacaPersonId);
 
@@ -243,17 +248,29 @@ const PessoalB1: React.FC = () => {
       if (!confirm(`Atenção: Já existe um período de férias agendado entre ${conflict.start_date} e ${conflict.end_date} (${conflict.full_name}). Deseja continuar?`)) return;
     }
 
-    await SupabaseService.addVacation({
-      personnel_id: vacaPersonId,
-      full_name: person?.name || "Desconhecido",
-      start_date: vacaStart,
-      end_date: vacaEnd,
-      day_count: days,
-      status: 'planejado',
-      notes: vacaObs
-    });
-    alert("Férias programadas com sucesso!");
-    setVacaStart(""); setVacaEnd(""); loadData();
+    setLoading(true);
+    try {
+      await SupabaseService.addVacation({
+        personnel_id: vacaPersonId,
+        full_name: person?.name || "Desconhecido",
+        start_date: vacaStart,
+        end_date: vacaEnd,
+        day_count: days,
+        status: 'planejado',
+        notes: vacaObs
+      });
+      toast.success("Férias programadas com sucesso!");
+      setVacaPersonId('');
+      setVacaStart("");
+      setVacaEnd("");
+      setVacaObs("");
+      loadData();
+    } catch (error) {
+      console.error('Error saving vacation:', error);
+      toast.error("Erro ao programar férias.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeletePersonnel = async (id: number) => {
@@ -306,25 +323,39 @@ const PessoalB1: React.FC = () => {
 
           {/* TAB: LISTAGEM */}
           {activeTab === 'LISTAGEM' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {personnelList.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.war_name?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group">
-                  <div className="w-20 h-20 rounded-full bg-cover bg-center mb-4 border-2 border-primary/20" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
-                  <h4 className="font-bold text-lg leading-tight">{p.rank} {p.war_name || p.name.split(' ')[0]}</h4>
-                  <p className="text-xs text-gray-400 mb-2 truncate w-full px-4">{p.name}</p>
-                  <div className="flex flex-wrap justify-center gap-1.5 mb-4">
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${p.type === 'BM' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>{p.type}</span>
-                    <span className="text-[9px] font-black px-2 py-0.5 rounded bg-stone-100 text-gray-600 uppercase">{p.status}</span>
-                  </div>
-                  <div className={`grid ${profile?.p_pessoal === 'editor' ? 'grid-cols-2' : 'grid-cols-1'} w-full gap-2 border-t border-stone-50 pt-4 mt-auto opacity-0 group-hover:opacity-100 transition-opacity`}>
-                    <button onClick={() => setSelectedPerson(p)} className="text-[10px] font-bold text-primary hover:bg-red-50 py-1.5 rounded-lg transition-colors">DETALHES</button>
-                    {profile?.p_pessoal === 'editor' && (
-                      <button onClick={() => handleDeletePersonnel(p.id!)} className="text-[10px] font-bold text-red-600 hover:bg-red-50 py-1.5 rounded-lg transition-colors">EXCLUIR</button>
-                    )}
-                  </div>
+            <>
+              {/* Search Bar */}
+              <div className="mb-6">
+                <div className="relative max-w-md">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 text-[20px]">search</span>
+                  <input
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-rustic-border bg-white text-sm focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                    placeholder="Buscar por nome ou nome de guerra..."
+                  />
                 </div>
-              ))}
-            </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {personnelList.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.war_name?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                  <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group">
+                    <div className="w-20 h-20 rounded-full bg-cover bg-center mb-4 border-2 border-primary/20" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
+                    <h4 className="font-bold text-lg leading-tight">{p.war_name || `${p.rank} ${p.name.split(' ')[0]}`}</h4>
+                    <p className="text-xs text-gray-400 mb-2 truncate w-full px-4">{p.name}</p>
+                    <div className="flex flex-wrap justify-center gap-1.5 mb-4">
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${p.type === 'BM' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>{p.type}</span>
+                      <span className="text-[9px] font-black px-2 py-0.5 rounded bg-stone-100 text-gray-600 uppercase">{p.status}</span>
+                    </div>
+                    <div className={`grid ${profile?.p_pessoal === 'editor' ? 'grid-cols-2' : 'grid-cols-1'} w-full gap-2 border-t border-stone-50 pt-4 mt-auto opacity-0 group-hover:opacity-100 transition-opacity`}>
+                      <button onClick={() => setSelectedPerson(p)} className="text-[10px] font-bold text-primary hover:bg-red-50 py-1.5 rounded-lg transition-colors">DETALHES</button>
+                      {profile?.p_pessoal === 'editor' && (
+                        <button onClick={() => handleDeletePersonnel(p.id!)} className="text-[10px] font-bold text-red-600 hover:bg-red-50 py-1.5 rounded-lg transition-colors">EXCLUIR</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
 
           {activeTab === 'CADASTRO' && (
@@ -341,13 +372,7 @@ const PessoalB1: React.FC = () => {
 
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome Completo *</label>
-                    <div className="flex gap-2">
-                      <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="flex-1 h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo" />
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rustic-brown/40 material-symbols-outlined text-sm">search</span>
-                        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-32 h-11 pl-8 pr-2 rounded-xl border border-rustic-border bg-stone-50 text-[10px] focus:ring-2 focus:ring-primary/20 transition-all font-bold" placeholder="Filtrar..." />
-                      </div>
-                    </div>
+                    <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo do militar" />
                   </div>
 
                   <div className="space-y-1">
@@ -510,7 +535,7 @@ const PessoalB1: React.FC = () => {
               {/* Vacations Timeline/List */}
               <div className="xl:col-span-8 bg-white rounded-2xl border border-rustic-border shadow-sm p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-black text-lg">Cronograma de Férias 2023/2024</h3>
+                  <h3 className="font-black text-lg">Cronograma de Férias {new Date().getFullYear()}</h3>
                   <div className="flex gap-2">
                     <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded-full"></div><span className="text-[10px] font-bold">Planejado</span></div>
                   </div>

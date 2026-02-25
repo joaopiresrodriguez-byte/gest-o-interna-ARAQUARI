@@ -76,10 +76,10 @@ const PatrimonioB4: React.FC = () => {
   const handleResolveNotice = async (id: string) => {
     try {
       await SupabaseService.resolveNotice(id);
-      alert("Pendência marcada como resolvida!");
+      toast.success("Pendência marcada como resolvida!");
       loadData();
     } catch (error) {
-      alert("Erro ao resolver pendência.");
+      toast.error("Erro ao resolver pendência.");
     }
   };
 
@@ -93,11 +93,11 @@ const PatrimonioB4: React.FC = () => {
         requester: 'Sistema Automático (B4)'
       });
       await SupabaseService.resolveNotice(notice.id!);
-      alert("Solicitação de compra criada!");
+      toast.success("Solicitação de compra criada!");
       setActiveTab('compras');
       loadData();
     } catch (error) {
-      alert("Erro ao criar solicitação.");
+      toast.error("Erro ao criar solicitação.");
     }
   };
 
@@ -173,7 +173,7 @@ const PatrimonioB4: React.FC = () => {
   };
 
   const handleCreateMission = async () => {
-    if (!missionTitle || !missionDate) return alert("Título e Data são obrigatórios!");
+    if (!missionTitle || !missionDate) return toast.error("Título e Data são obrigatórios!");
 
     const resp = personnel.find(p => p.id?.toString() === missionRespId);
 
@@ -191,24 +191,32 @@ const PatrimonioB4: React.FC = () => {
       created_by: "Administrador B4"
     };
 
+    setLoading(true);
     try {
       await SupabaseService.addDailyMission(newMission);
-      alert("Missão cadastrada com sucesso!");
+      toast.success("Missão cadastrada com sucesso!");
       setMissionTitle("");
       setMissionDesc("");
       setMissionObs("");
+      setMissionStart("");
+      setMissionEnd("");
+      setMissionRespId("");
       loadData();
     } catch (error) {
-      alert("Erro ao cadastrar missão.");
+      console.error('Error creating mission:', error);
+      toast.error("Erro ao cadastrar missão.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleUpdateMissionStatus = async (id: string, status: DailyMission['status']) => {
     try {
       await SupabaseService.updateDailyMission(id, { status });
+      toast.success(`Status atualizado para ${status.replace('_', ' ')}.`);
       loadData();
     } catch (error) {
-      alert("Erro ao atualizar status.");
+      toast.error("Erro ao atualizar status.");
     }
   };
 
@@ -216,9 +224,10 @@ const PatrimonioB4: React.FC = () => {
     if (!confirm("Excluir esta missão?")) return;
     try {
       await SupabaseService.deleteDailyMission(id);
+      toast.success('Missão excluída.');
       loadData();
     } catch (error) {
-      alert("Erro ao excluir missão.");
+      toast.error("Erro ao excluir missão.");
     }
   };
 
@@ -226,9 +235,10 @@ const PatrimonioB4: React.FC = () => {
     if (!confirm(`Remover item ${id} permanentemente?`)) return;
     try {
       await SupabaseService.deleteVehicle(id);
+      toast.success('Item removido do patrimônio.');
       loadData();
     } catch (error) {
-      alert("Erro ao remover item.");
+      toast.error("Erro ao remover item.");
     }
   };
 
@@ -236,9 +246,10 @@ const PatrimonioB4: React.FC = () => {
     if (!confirm("Excluir registro de compra?")) return;
     try {
       await SupabaseService.deletePurchase(id);
+      toast.success('Registro de compra excluído.');
       loadData();
     } catch (error) {
-      alert("Erro ao excluir compra.");
+      toast.error("Erro ao excluir compra.");
     }
   };
 
