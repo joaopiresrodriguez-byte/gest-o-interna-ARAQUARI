@@ -135,6 +135,22 @@ export interface SocialPost {
     likes: number;
     image_url: string;
     created_at?: string;
+    title?: string;
+    category?: string;
+    event_date?: string;
+}
+
+export interface Occurrence {
+    id?: string;
+    created_at?: string;
+    occurrence_type: string;
+    occurrence_date: string;
+    location: string;
+    units_involved?: string;
+    description: string;
+    outcome?: string;
+    visibility: 'public' | 'internal';
+    status: 'registered' | 'closed';
 }
 
 export interface ProductReceipt {

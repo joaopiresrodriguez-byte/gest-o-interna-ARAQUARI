@@ -1,4 +1,4 @@
-import { Personnel, Vehicle } from './types';
+import { Personnel, Vehicle, Occurrence } from './types';
 
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 
@@ -92,5 +92,23 @@ export const GoogleSheetsService = {
             vehicle.nf_number || '',                    // Nº NF de Compra
         ];
         return sendToSheets('Patrimônio', row);
+    },
+
+    /**
+     * Sync new occurrence to the "Ocorrências" sheet
+     */
+    syncOccurrence: async (occ: Partial<Occurrence>): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),    // Data Registro
+            occ.occurrence_type || '',                  // Tipo
+            occ.occurrence_date ? new Date(occ.occurrence_date).toLocaleString('pt-BR') : '', // Data/Hora
+            occ.location || '',                         // Localização
+            occ.units_involved || '',                   // Unidades Envolvidas
+            occ.description || '',                      // Descrição
+            occ.outcome || '',                          // Desfecho
+            occ.visibility === 'public' ? 'Público' : 'Interno', // Visibilidade
+            occ.status || 'registered',                 // Status
+        ];
+        return sendToSheets('Ocorrências', row);
     },
 };

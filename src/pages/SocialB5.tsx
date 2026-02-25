@@ -1,71 +1,219 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { SupabaseService, SocialPost, Personnel } from '../services/SupabaseService';
+import { SupabaseService, SocialPost, Personnel, Occurrence } from '../services/SupabaseService';
+import { GoogleSheetsService } from '../services/googleSheetsService';
 import { toast } from 'sonner';
 
+type TabKey = 'DIVULGAÇÃO' | 'OCORRÊNCIAS' | 'ANIVERSARIANTES';
+
+const OCCURRENCE_TYPES = ['Incêndio', 'Resgate', 'Salvamento', 'APH', 'Busca', 'Materiais Perigosos', 'Prevenção', 'Outros'];
+const POST_CATEGORIES = ['Institucional', 'Campanha', 'Operação', 'Evento', 'Treinamento', 'Comunicado'];
+
 const SocialB5: React.FC = () => {
-  const [prompt, setPrompt] = useState("");
   const { profile } = useAuth();
-  const [generatedContent, setGeneratedContent] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('DIVULGAÇÃO');
+  const [loading, setLoading] = useState(false);
+
+  // Posts state
   const [posts, setPosts] = useState<SocialPost[]>([]);
+  const [postTitle, setPostTitle] = useState('');
+  const [postCategory, setPostCategory] = useState('Institucional');
+  const [postContent, setPostContent] = useState('');
+  const [postImageUrl, setPostImageUrl] = useState('');
+  const [postFilter, setPostFilter] = useState('');
+  const [postCategoryFilter, setPostCategoryFilter] = useState('');
+
+  // Occurrences state
+  const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
+  const [occType, setOccType] = useState('');
+  const [occDate, setOccDate] = useState('');
+  const [occLocation, setOccLocation] = useState('');
+  const [occUnits, setOccUnits] = useState('');
+  const [occDescription, setOccDescription] = useState('');
+  const [occOutcome, setOccOutcome] = useState('');
+  const [occVisibility, setOccVisibility] = useState<'public' | 'internal'>('internal');
+  const [occFilterType, setOccFilterType] = useState('');
+  const [occFilterVisibility, setOccFilterVisibility] = useState('');
+
+  // Birthday state
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth() + 1);
-  const [filterDay, setFilterDay] = useState<number | "">("");
+  const [filterDay, setFilterDay] = useState<number | ''>('');
 
-  useEffect(() => {
-    loadPosts();
-  }, []);
+  const isEditor = profile?.p_social === 'editor';
 
-  const loadPosts = async () => {
-    const [postsData, personnelData] = await Promise.all([
-      SupabaseService.getSocialPosts(),
-      SupabaseService.getPersonnel()
-    ]);
-    setPosts(postsData);
-    setPersonnel(personnelData);
-  };
+  useEffect(() => { loadData(); }, []);
 
-  const handleAlert = (msg: string) => alert(msg);
-
-  const handleGenerate = () => {
-    if (!prompt) {
-      alert("Por favor, digite um tópico para gerar o post.");
-      return;
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [postsData, occData, pData] = await Promise.all([
+        SupabaseService.getSocialPosts(),
+        SupabaseService.getOccurrences(),
+        SupabaseService.getPersonnel(),
+      ]);
+      setPosts(postsData);
+      setOccurrences(occData);
+      setPersonnel(pData);
+    } catch (e) {
+      console.error('Error loading B5 data:', e);
+      toast.error('Erro ao carregar dados.');
+    } finally {
+      setLoading(false);
     }
-    setIsGenerating(true);
-    // Mock AI generation delay
-    setTimeout(() => {
-      setGeneratedContent(`🔥 **CONFIRA ESTA DICA DE SEGURANÇA!** 🔥\n\n${prompt}\n\nPrevenir é sempre a melhor opção! Fique atento e proteja sua família. Em caso de emergência, ligue 193 🚒🚨 #Bombeiros #Segurança #Prevenção`);
-      setIsGenerating(false);
-    }, 1500);
   };
 
-  const handlePublish = async () => {
-    if (!generatedContent) return;
+  // === POST HANDLERS ===
+  const resetPostForm = () => {
+    setPostTitle(''); setPostCategory('Institucional'); setPostContent(''); setPostImageUrl('');
+  };
 
-    const newPost: SocialPost = {
-      content: generatedContent,
-      platform: 'Instagram', // Default
-      likes: 0,
-      image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAmaXU709rv8FwOkDCS-1ouwrNX8OQEtiyXWLttdNXzaW0sPec3BXmb486h9QwqBO7VQvOskKRODIzGwHNJUYG0FtULOsceI46W4RBbeXf6z-mnQgMpXRNpJiHBgn8KNMHBRepdqyoOOt9N5iFOv9trtpW2k2LwrEyJrDZHQWrxcCNiiwrymaY7qRpULS2dL9FRiPwcU3UCUSnXzjO2znUbqqki3FlOzK5ZCl5uyHF7t_uJ1-uj6gkhI5baUhD_5O9eCGtB8bwJu7w' // Placeholder image
-    };
+  const handlePublishPost = async () => {
+    if (!postContent.trim()) return toast.error('O conteúdo é obrigatório.');
 
-    await SupabaseService.addSocialPost(newPost);
-    alert("Post publicado no feed interno!");
-    setGeneratedContent("");
-    setPrompt("");
-    loadPosts();
+    setLoading(true);
+    try {
+      const newPost: Omit<SocialPost, 'id'> = {
+        title: postTitle || undefined,
+        content: postContent,
+        category: postCategory,
+        platform: 'Instagram',
+        likes: 0,
+        image_url: postImageUrl || '',
+      };
+      await SupabaseService.addSocialPost(newPost);
+      toast.success('Publicação criada com sucesso!');
+      resetPostForm();
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao criar publicação.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeletePost = async (id: string) => {
-    if (!confirm("Deseja excluir este post permanentemente?")) return;
+    if (!confirm('Deseja excluir esta publicação?')) return;
     try {
       await SupabaseService.deleteSocialPost(id);
-      loadPosts();
-    } catch (error) {
-      alert("Erro ao excluir post.");
+      toast.success('Publicação excluída.');
+      loadData();
+    } catch {
+      toast.error('Erro ao excluir.');
     }
+  };
+
+  // === OCCURRENCE HANDLERS ===
+  const resetOccForm = () => {
+    setOccType(''); setOccDate(''); setOccLocation(''); setOccUnits('');
+    setOccDescription(''); setOccOutcome(''); setOccVisibility('internal');
+  };
+
+  const handleSaveOccurrence = async () => {
+    if (!occType) return toast.error('Tipo de ocorrência é obrigatório.');
+    if (!occDate) return toast.error('Data/hora é obrigatória.');
+    if (!occLocation) return toast.error('Localização é obrigatória.');
+    if (!occDescription) return toast.error('Descrição é obrigatória.');
+
+    setLoading(true);
+    try {
+      const newOcc: Omit<Occurrence, 'id'> = {
+        occurrence_type: occType,
+        occurrence_date: occDate,
+        location: occLocation,
+        units_involved: occUnits || undefined,
+        description: occDescription,
+        outcome: occOutcome || undefined,
+        visibility: occVisibility,
+        status: 'registered',
+      };
+      await SupabaseService.addOccurrence(newOcc);
+
+      // Google Sheets sync
+      GoogleSheetsService.syncOccurrence(newOcc).then(ok => {
+        if (ok) toast.info('📊 Ocorrência sincronizada com Google Sheets.');
+      });
+
+      toast.success('Ocorrência registrada com sucesso!');
+      resetOccForm();
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao registrar ocorrência.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOccurrence = async (id: string) => {
+    if (!confirm('Deseja excluir esta ocorrência?')) return;
+    try {
+      await SupabaseService.deleteOccurrence(id);
+      toast.success('Ocorrência excluída.');
+      loadData();
+    } catch {
+      toast.error('Erro ao excluir.');
+    }
+  };
+
+  // Filtered data
+  const filteredPosts = posts.filter(p => {
+    const matchSearch = !postFilter || p.content?.toLowerCase().includes(postFilter.toLowerCase()) || p.title?.toLowerCase().includes(postFilter.toLowerCase());
+    const matchCat = !postCategoryFilter || p.category === postCategoryFilter;
+    return matchSearch && matchCat;
+  });
+
+  const filteredOccurrences = occurrences.filter(o => {
+    const matchType = !occFilterType || o.occurrence_type === occFilterType;
+    const matchVis = !occFilterVisibility || o.visibility === occFilterVisibility;
+    return matchType && matchVis;
+  });
+
+  const birthdayPersonnel = personnel
+    .filter(p => {
+      if (!p.birth_date) return false;
+      const [, month, day] = p.birth_date.split('-').map(Number);
+      return month === filterMonth && (filterDay === '' || day === filterDay);
+    })
+    .sort((a, b) => Number(a.birth_date!.split('-')[2]) - Number(b.birth_date!.split('-')[2]));
+
+  const formatDateTime = (dt: string) => {
+    try {
+      return new Date(dt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return dt; }
+  };
+
+  const TABS: { key: TabKey; icon: string; label: string }[] = [
+    { key: 'DIVULGAÇÃO', icon: 'campaign', label: 'Divulgação' },
+    { key: 'OCORRÊNCIAS', icon: 'local_fire_department', label: 'Ocorrências' },
+    { key: 'ANIVERSARIANTES', icon: 'cake', label: 'Aniversariantes' },
+  ];
+
+  const getCategoryColor = (cat: string) => {
+    const colors: Record<string, string> = {
+      'Institucional': 'bg-blue-50 text-blue-700',
+      'Campanha': 'bg-amber-50 text-amber-700',
+      'Operação': 'bg-red-50 text-red-700',
+      'Evento': 'bg-green-50 text-green-700',
+      'Treinamento': 'bg-indigo-50 text-indigo-700',
+      'Comunicado': 'bg-stone-100 text-stone-700',
+    };
+    return colors[cat] || 'bg-gray-100 text-gray-600';
+  };
+
+  const getOccTypeIcon = (type: string) => {
+    const icons: Record<string, string> = {
+      'Incêndio': 'local_fire_department',
+      'Resgate': 'health_and_safety',
+      'Salvamento': 'scuba_diving',
+      'APH': 'emergency',
+      'Busca': 'person_search',
+      'Materiais Perigosos': 'warning',
+      'Prevenção': 'shield',
+      'Outros': 'more_horiz',
+    };
+    return icons[type] || 'article';
   };
 
   return (
@@ -77,216 +225,352 @@ const SocialB5: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-rustic-border">
             <div>
               <h1 className="text-4xl font-black text-[#2c1810] tracking-tight">Comunicação Social</h1>
-              <p className="text-rustic-brown/70 mt-2 text-lg">Gerenciamento de Mídias, Eventos e Relações Públicas.</p>
+              <p className="text-rustic-brown/70 mt-2 text-lg">Divulgação Institucional, Ocorrências e Relações Públicas</p>
             </div>
             <div className="flex gap-3">
-              <button onClick={loadPosts} className="flex items-center gap-2 px-4 py-2 border border-rustic-border bg-white rounded-lg hover:bg-gray-50 bg-white shadow-sm transition-colors">
+              <button onClick={loadData} className="flex items-center gap-2 px-4 py-2 border border-rustic-border bg-white rounded-lg hover:bg-gray-50 shadow-sm transition-colors">
                 <span className="material-symbols-outlined">refresh</span>
                 Atualizar
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Tab Navigation */}
+          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl border border-rustic-border">
+            {TABS.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === tab.key
+                    ? 'bg-white text-primary shadow-sm border border-rustic-border/50'
+                    : 'text-rustic-brown/60 hover:text-rustic-brown hover:bg-white/50'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+                {tab.label}
+                {tab.key === 'OCORRÊNCIAS' && occurrences.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[9px] font-black rounded-full">{occurrences.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
 
-            {/* Left Column: AI Generator (2/3 width on large screens) */}
-            <div className="xl:col-span-2 space-y-8">
-              {/* Generator Card */}
-              <section className="bg-surface rounded-2xl border border-rustic-border shadow-sm overflow-hidden">
-                <div className="bg-gradient-to-r from-[#2c1810] to-[#4a2c20] p-6 text-white flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                      <span className="material-symbols-outlined text-2xl">auto_awesome</span>
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold">Gerador de Posts IA</h2>
-                      <p className="text-white/70 text-sm">Crie conteúdo engajador em segundos</p>
+          {/* ============ TAB: DIVULGAÇÃO ============ */}
+          {activeTab === 'DIVULGAÇÃO' && (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              {/* Form */}
+              <div className="xl:col-span-1">
+                <section className="bg-surface rounded-2xl border border-rustic-border shadow-sm overflow-hidden sticky top-0">
+                  <div className="bg-gradient-to-r from-[#2c1810] to-[#4a2c20] p-5 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                        <span className="material-symbols-outlined text-xl">edit_note</span>
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold">Nova Publicação</h2>
+                        <p className="text-white/70 text-xs">Crie conteúdo institucional</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="hidden sm:block text-xs font-mono bg-white/10 px-3 py-1 rounded-full border border-white/20">
-                    BETA v1.4
+                  <div className="p-5 space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Título</label>
+                      <input value={postTitle} onChange={e => setPostTitle(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="Título da publicação" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Categoria</label>
+                      <select value={postCategory} onChange={e => setPostCategory(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                        {POST_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Conteúdo</label>
+                      <textarea value={postContent} onChange={e => setPostContent(e.target.value)} className="w-full h-32 p-3 rounded-xl border border-rustic-border bg-stone-50 text-sm resize-none" placeholder="Escreva o conteúdo da publicação..." />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">URL da Imagem (opcional)</label>
+                      <input value={postImageUrl} onChange={e => setPostImageUrl(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="https://..." />
+                    </div>
+
+                    {isEditor ? (
+                      <button onClick={handlePublishPost} disabled={loading} className="w-full py-3 bg-primary text-white rounded-xl font-bold shadow-md hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                        <span className="material-symbols-outlined text-[18px]">send</span>
+                        Publicar
+                      </button>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                        <span className="material-symbols-outlined text-amber-500 text-sm">lock</span>
+                        <p className="text-[10px] font-black uppercase text-amber-700 mt-1">Apenas leitura</p>
+                      </div>
+                    )}
                   </div>
+                </section>
+              </div>
+
+              {/* Feed */}
+              <div className="xl:col-span-2 space-y-4">
+                {/* Filters */}
+                <div className="flex flex-wrap gap-3">
+                  <input value={postFilter} onChange={e => setPostFilter(e.target.value)} className="flex-1 min-w-[200px] h-10 px-4 rounded-xl border border-rustic-border bg-white text-sm" placeholder="🔍 Buscar publicações..." />
+                  <select value={postCategoryFilter} onChange={e => setPostCategoryFilter(e.target.value)} className="h-10 px-3 rounded-xl border border-rustic-border bg-white text-sm font-bold">
+                    <option value="">Todas categorias</option>
+                    {POST_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </div>
 
-                <div className="p-6">
-                  <label className="block mb-2 text-sm font-bold text-rustic-brown">Sobre o que vamos falar hoje?</label>
-                  <div className="relative">
-                    <textarea
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      className="w-full h-32 p-4 rounded-xl border border-rustic-border bg-background-light focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none text-[#2c1810] placeholder:text-rustic-brown/40"
-                      placeholder="Ex: Dicas para evitar acidentes domésticos com gás de cozinha..."
-                    ></textarea>
-                    <button
-                      onClick={handleGenerate}
-                      disabled={isGenerating || profile?.p_social !== 'editor'}
-                      className="absolute bottom-4 right-4 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isGenerating ? (
-                        <>
-                          <span className="animate-spin material-symbols-outlined text-[18px]">sync</span>
-                          Criando...
-                        </>
-                      ) : profile?.p_social === 'editor' ? (
-                        <>
-                          <span className="material-symbols-outlined text-[18px]">shutter_speed</span>
-                          Gerar Rascunho
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-[18px]">lock</span>
-                          Leitura
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Result Area */}
-                  {generatedContent && (
-                    <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      <div className="flex justify-between items-center mb-3">
-                        <label className="text-sm font-bold text-rustic-brown flex items-center gap-2">
-                          <span className="material-symbols-outlined text-primary text-[18px]">done_all</span>
-                          Resultado Gerado
-                        </label>
-                      </div>
-                      <div className="p-5 rounded-xl bg-[#fdfbf7] border border-orange-100 shadow-inner text-[#2c1810] leading-relaxed whitespace-pre-wrap font-sans">
-                        {generatedContent}
-                      </div>
-                      <div className="mt-4 flex gap-3">
-                        <button onClick={handlePublish} disabled={profile?.p_social !== 'editor'} className="flex-1 py-3 bg-secondary-green text-white rounded-xl font-bold shadow-md hover:bg-green-700 transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
-                          {profile?.p_social === 'editor' ? 'Salvar & Publicar no Feed' : 'Sem permissão para publicar'}
-                        </button>
-                        <button onClick={() => handleAlert("Modo de edição ativado.")} className="px-6 py-3 border border-rustic-border bg-white text-rustic-brown rounded-xl font-bold hover:bg-gray-50 transition-colors">
-                          Editar
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Feed Preview */}
-              <div className="flex flex-col gap-4">
-                <h3 className="text-lg font-bold text-[#2c1810] flex items-center gap-2">
-                  <span className="material-symbols-outlined">feed</span>
-                  Últimas Publicações (Internas)
-                </h3>
+                {/* Posts grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {posts.map(post => (
-                    <div key={post.id} className="group bg-surface border border-rustic-border rounded-xl p-4 hover:shadow-md transition-all cursor-pointer">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 bg-cover bg-center" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCUZNkodcOHH4UrQlQtGh_25jCttr3qR09LqM1ap07tQGS77H-zwADeaZq2WQpoy5MZXGtfQrKQEKwIlrc2lCPH76Pi8Gg1sUoiiLwBakYqHGHjHlW_mpvTQ36ivAQTz0YGnOrn7yCfFNy_Lb2FjMJHt2PzbA26Ddeb8diMbh2QlnSNepg2rDULcLqMr2a5fEhKOPJsJU5KiCE2tfj-NylUntS9bWUPRUu3Nu3a7WhIFBP3xLKf5bGE-Qy8HF75XVlaiHwqL8C6ZZY")' }}></div>
-                        <div>
-                          <h4 className="font-bold text-sm text-[#2c1810]">CBMSC Araquari</h4>
-                          <span className="text-xs text-rustic-brown/60">Recente • {post.platform}</span>
+                  {filteredPosts.map(post => (
+                    <div key={post.id} className="group bg-surface border border-rustic-border rounded-xl overflow-hidden hover:shadow-md transition-all">
+                      {post.image_url && (
+                        <div className="h-36 bg-gray-100 overflow-hidden">
+                          <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" loading="lazy" />
                         </div>
-                      </div>
-                      <p className="text-sm text-rustic-brown/80 mb-3 line-clamp-3">
-                        {post.content}
-                      </p>
-                      <div className="h-40 rounded-lg bg-gray-100 mb-3 overflow-hidden">
-                        <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Imagem do Post" loading="lazy" />
-                      </div>
-                      <div className="flex items-center justify-between text-xs font-medium text-rustic-brown/60 pt-2 border-t border-rustic-border/50">
-                        <span>{post.likes} Curtidas</span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id!); }}
-                          className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-md transition-colors disabled:opacity-0"
-                          title="Excluir Post"
-                          disabled={profile?.p_social !== 'editor'}
-                        >
-                          <span className="material-symbols-outlined text-[18px]">delete</span>
-                        </button>
+                      )}
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${getCategoryColor(post.category || 'Institucional')}`}>
+                            {post.category || 'Institucional'}
+                          </span>
+                          <span className="text-[10px] text-gray-400">{post.created_at ? new Date(post.created_at).toLocaleDateString('pt-BR') : ''}</span>
+                        </div>
+                        {post.title && <h3 className="font-bold text-sm text-[#2c1810] mb-1">{post.title}</h3>}
+                        <p className="text-xs text-rustic-brown/70 line-clamp-3 mb-3">{post.content}</p>
+                        <div className="flex items-center justify-between pt-2 border-t border-rustic-border/50">
+                          <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                            <span className="material-symbols-outlined text-[14px]">campaign</span>
+                            CBMSC Araquari
+                          </div>
+                          {isEditor && (
+                            <button onClick={() => handleDeletePost(post.id!)} className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-md transition-colors" title="Excluir">
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
-                  {posts.length === 0 && <p className="col-span-2 text-center text-gray-400">Nenhum post publicado.</p>}
+                  {filteredPosts.length === 0 && (
+                    <div className="col-span-2 py-16 text-center opacity-40">
+                      <span className="material-symbols-outlined text-5xl">article</span>
+                      <p className="text-xs font-black uppercase mt-2">Nenhuma publicação encontrada</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Right Column: Sidebar Widgets */}
-            <div className="space-y-6">
-              <div className="bg-surface rounded-xl border border-rustic-border p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-black text-[#2c1810] flex items-center gap-2">
-                    <span className="material-symbols-outlined text-amber-500">cake</span>
-                    Aniversariantes
-                  </h3>
-                  <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-black rounded uppercase">B1 Link</span>
+          {/* ============ TAB: OCORRÊNCIAS ============ */}
+          {activeTab === 'OCORRÊNCIAS' && (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              {/* Form */}
+              <div className="xl:col-span-1">
+                <section className="bg-surface rounded-2xl border border-rustic-border shadow-sm overflow-hidden sticky top-0">
+                  <div className="bg-gradient-to-r from-red-800 to-red-900 p-5 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                        <span className="material-symbols-outlined text-xl">local_fire_department</span>
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold">Registrar Ocorrência</h2>
+                        <p className="text-white/70 text-xs">Cadastre eventos operacionais</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo de Ocorrência *</label>
+                      <select value={occType} onChange={e => setOccType(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                        <option value="">Selecione...</option>
+                        {OCCURRENCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Data e Hora *</label>
+                      <input type="datetime-local" value={occDate} onChange={e => setOccDate(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização *</label>
+                      <input value={occLocation} onChange={e => setOccLocation(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="Endereço / referência" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Unidades Envolvidas</label>
+                      <input value={occUnits} onChange={e => setOccUnits(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: ABT-01, ASE-03" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Descrição *</label>
+                      <textarea value={occDescription} onChange={e => setOccDescription(e.target.value)} className="w-full h-24 p-3 rounded-xl border border-rustic-border bg-stone-50 text-sm resize-none" placeholder="Breve resumo da ocorrência..." />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Desfecho</label>
+                      <textarea value={occOutcome} onChange={e => setOccOutcome(e.target.value)} className="w-full h-16 p-3 rounded-xl border border-rustic-border bg-stone-50 text-sm resize-none" placeholder="Resultado / ações tomadas" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Visibilidade</label>
+                      <div className="flex gap-2">
+                        <button onClick={() => setOccVisibility('internal')} className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${occVisibility === 'internal' ? 'bg-stone-700 text-white border-stone-700' : 'bg-white text-gray-500 border-rustic-border hover:bg-gray-50'}`}>
+                          <span className="material-symbols-outlined text-[14px] mr-1 align-text-bottom">lock</span> Interno
+                        </button>
+                        <button onClick={() => setOccVisibility('public')} className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${occVisibility === 'public' ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-500 border-rustic-border hover:bg-gray-50'}`}>
+                          <span className="material-symbols-outlined text-[14px] mr-1 align-text-bottom">public</span> Público
+                        </button>
+                      </div>
+                    </div>
+
+                    {isEditor ? (
+                      <button onClick={handleSaveOccurrence} disabled={loading} className="w-full py-3 bg-red-700 text-white rounded-xl font-bold shadow-md hover:bg-red-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                        <span className="material-symbols-outlined text-[18px]">save</span>
+                        Registrar Ocorrência
+                      </button>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                        <span className="material-symbols-outlined text-amber-500 text-sm">lock</span>
+                        <p className="text-[10px] font-black uppercase text-amber-700 mt-1">Apenas leitura</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+
+              {/* Listing */}
+              <div className="xl:col-span-2 space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  <select value={occFilterType} onChange={e => setOccFilterType(e.target.value)} className="h-10 px-3 rounded-xl border border-rustic-border bg-white text-sm font-bold">
+                    <option value="">Todos os tipos</option>
+                    {OCCURRENCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <select value={occFilterVisibility} onChange={e => setOccFilterVisibility(e.target.value)} className="h-10 px-3 rounded-xl border border-rustic-border bg-white text-sm font-bold">
+                    <option value="">Todas visibilidades</option>
+                    <option value="public">Público</option>
+                    <option value="internal">Interno</option>
+                  </select>
+                  <span className="ml-auto flex items-center gap-1 text-xs text-gray-400">
+                    <span className="material-symbols-outlined text-[14px]">info</span>
+                    {filteredOccurrences.length} registro(s)
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mb-6">
-                  <select
-                    value={filterMonth}
-                    onChange={(e) => setFilterMonth(Number(e.target.value))}
-                    className="h-9 px-2 rounded-lg border border-rustic-border bg-background-light text-[11px] font-bold"
-                  >
-                    {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((m, i) => (
-                      <option key={m} value={i + 1}>{m}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={filterDay}
-                    onChange={(e) => setFilterDay(e.target.value === "" ? "" : Number(e.target.value))}
-                    className="h-9 px-2 rounded-lg border border-rustic-border bg-background-light text-[11px] font-bold"
-                  >
-                    <option value="">Todos os dias</option>
-                    {Array.from({ length: 31 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>{i + 1}</option>
-                    ))}
-                  </select>
-                </div>
+                <div className="space-y-3">
+                  {filteredOccurrences.map(occ => (
+                    <div key={occ.id} className="bg-surface border border-rustic-border rounded-xl p-5 hover:shadow-md transition-all">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${occ.occurrence_type === 'Incêndio' ? 'bg-red-100 text-red-600' : occ.occurrence_type === 'Resgate' || occ.occurrence_type === 'APH' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}`}>
+                            <span className="material-symbols-outlined text-xl">{getOccTypeIcon(occ.occurrence_type)}</span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <h3 className="font-bold text-sm text-[#2c1810]">{occ.occurrence_type}</h3>
+                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${occ.visibility === 'public' ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-600'}`}>
+                                {occ.visibility === 'public' ? 'PÚBLICO' : 'INTERNO'}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">schedule</span>
+                              {formatDateTime(occ.occurrence_date)}
+                              <span className="mx-1">•</span>
+                              <span className="material-symbols-outlined text-[12px]">location_on</span>
+                              {occ.location}
+                            </p>
+                          </div>
+                        </div>
+                        {isEditor && (
+                          <button onClick={() => handleDeleteOccurrence(occ.id!)} className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-md transition-colors" title="Excluir">
+                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                          </button>
+                        )}
+                      </div>
 
-                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  {personnel
-                    .filter(p => {
-                      if (!p.birth_date) return false;
-                      // Safe parsing of YYYY-MM-DD
-                      const [, month, day] = p.birth_date.split('-').map(Number);
-                      const monthMatch = month === filterMonth;
-                      const dayMatch = filterDay === "" || day === filterDay;
-                      return monthMatch && dayMatch;
-                    })
-                    .sort((a, b) => {
-                      const dayA = Number(a.birth_date!.split('-')[2]);
-                      const dayB = Number(b.birth_date!.split('-')[2]);
-                      return dayA - dayB;
-                    })
-                    .map(p => {
+                      <p className="text-sm text-rustic-brown/80 mt-3 leading-relaxed">{occ.description}</p>
+
+                      <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-rustic-border/50 text-[10px] text-gray-400">
+                        {occ.units_involved && (
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">fire_truck</span>
+                            {occ.units_involved}
+                          </span>
+                        )}
+                        {occ.outcome && (
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                            {occ.outcome}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {filteredOccurrences.length === 0 && (
+                    <div className="py-16 text-center opacity-40">
+                      <span className="material-symbols-outlined text-5xl">local_fire_department</span>
+                      <p className="text-xs font-black uppercase mt-2">Nenhuma ocorrência registrada</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============ TAB: ANIVERSARIANTES ============ */}
+          {activeTab === 'ANIVERSARIANTES' && (
+            <div className="max-w-2xl mx-auto">
+              <div className="bg-surface rounded-2xl border border-rustic-border shadow-sm overflow-hidden">
+                <div className="bg-gradient-to-r from-amber-600 to-amber-700 p-5 text-white">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                      <span className="material-symbols-outlined text-xl">cake</span>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold">Aniversariantes do Efetivo</h2>
+                      <p className="text-white/70 text-xs">Dados vinculados ao módulo B1</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-5">
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm font-bold">
+                      {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
+                        <option key={m} value={i + 1}>{m}</option>
+                      ))}
+                    </select>
+                    <select value={filterDay} onChange={e => setFilterDay(e.target.value === '' ? '' : Number(e.target.value))} className="h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm font-bold">
+                      <option value="">Todos os dias</option>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>{i + 1}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {birthdayPersonnel.map(p => {
                       const day = p.birth_date!.split('-')[2];
                       return (
-                        <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-stone-50 transition-colors border border-transparent hover:border-stone-100">
-                          <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center text-amber-600 font-black text-xs border border-amber-100">
+                        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-stone-50 transition-colors border border-transparent hover:border-stone-100">
+                          <div className="w-11 h-11 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 font-black text-sm border border-amber-100">
                             {day}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-bold text-xs text-[#2c1810] truncate uppercase">{p.war_name || p.name.split(' ')[0]}</p>
+                            <p className="font-bold text-sm text-[#2c1810] truncate uppercase">{p.war_name || p.name.split(' ')[0]}</p>
                             <p className="text-[10px] text-rustic-brown/60 uppercase font-black">{p.rank} • {p.type}</p>
                           </div>
-                          <button onClick={() => toast.success(`Mandar parabéns para ${p.war_name || p.name}!`)} className="p-1.5 text-rustic-brown/20 hover:text-amber-500 transition-colors">
-                            <span className="material-symbols-outlined text-[18px]">celebration</span>
+                          <button onClick={() => toast.success(`Parabéns para ${p.war_name || p.name}! 🎉`)} className="p-2 text-rustic-brown/20 hover:text-amber-500 transition-colors">
+                            <span className="material-symbols-outlined text-xl">celebration</span>
                           </button>
                         </div>
                       );
                     })}
-                  {personnel.filter(p => {
-                    if (!p.birth_date) return false;
-                    const month = Number(p.birth_date.split('-')[1]);
-                    const day = Number(p.birth_date.split('-')[2]);
-                    return month === filterMonth && (filterDay === "" || day === filterDay);
-                  }).length === 0 && (
-                      <div className="py-10 text-center space-y-2 opacity-40">
-                        <span className="material-symbols-outlined text-4xl">event_busy</span>
-                        <p className="text-[10px] font-black uppercase">Sem aniversariantes</p>
+                    {birthdayPersonnel.length === 0 && (
+                      <div className="py-16 text-center opacity-40">
+                        <span className="material-symbols-outlined text-5xl">event_busy</span>
+                        <p className="text-xs font-black uppercase mt-2">Sem aniversariantes neste período</p>
                       </div>
                     )}
+                  </div>
                 </div>
               </div>
             </div>
+          )}
 
-          </div>
         </div>
       </div>
     </div>
