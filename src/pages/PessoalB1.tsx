@@ -75,7 +75,7 @@ const PessoalB1: React.FC = () => {
   const [vacaObs, setVacaObs] = useState("");
 
   // Roster State
-  const [rosterStartDate, setRosterStartDate] = useState("2024-01-01");
+  const [rosterStartDate, setRosterStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [teamA, setTeamA] = useState<number[]>([]);
   const [teamB, setTeamB] = useState<number[]>([]);
   const [teamC, setTeamC] = useState<number[]>([]);
@@ -112,11 +112,26 @@ const PessoalB1: React.FC = () => {
     }
   }, [personnelList]);
 
-  const saveRosterConfig = () => {
-    localStorage.setItem('roster_config', JSON.stringify({
-      startDate: rosterStartDate, teamA, teamB, teamC, teamD
-    }));
-    toast.success("Configuração da escala salva!");
+  const saveRosterConfig = async () => {
+    const config = { startDate: rosterStartDate, teamA, teamB, teamC, teamD };
+    localStorage.setItem('roster_config', JSON.stringify(config));
+
+    // Also persist each team's current assignment to Supabase
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const allMembers = [...teamA, ...teamB, ...teamC, ...teamD];
+      if (allMembers.length > 0) {
+        await SupabaseService.saveEscala({
+          data: today,
+          equipe: 'Config',
+          militares: allMembers,
+        });
+      }
+      toast.success("Configuração da escala salva com sucesso!");
+    } catch (err) {
+      console.error('Error saving escala config to Supabase:', err);
+      toast.success("Configuração salva localmente (erro no servidor).");
+    }
   };
 
   const getTeamForDate = (date: Date) => {
@@ -712,7 +727,13 @@ const PessoalB1: React.FC = () => {
                       onClick={async () => {
                         const today = new Date();
                         const team = getTeamForDate(today);
-                        if (!confirm(`Publicar escala de hoje (${today.toLocaleDateString()}) para a Equipe ${team.name}?`)) return;
+
+                        if (team.members.length === 0) {
+                          toast.error("Equipe de hoje está vazia! Adicione militares antes de publicar.");
+                          return;
+                        }
+
+                        if (!confirm(`Publicar escala de hoje (${today.toLocaleDateString('pt-BR')}) para a Equipe ${team.name}?\n\nMilitares: ${team.members.length}`)) return;
 
                         try {
                           await SupabaseService.saveEscala({
@@ -720,9 +741,10 @@ const PessoalB1: React.FC = () => {
                             equipe: team.name,
                             militares: team.members
                           });
-                          toast.success("Escala publicada com sucesso!");
+                          toast.success(`Escala da Equipe ${team.name} publicada com sucesso!`);
                         } catch (err) {
-                          toast.error("Erro ao publicar escala.");
+                          console.error('Error publishing escala:', err);
+                          toast.error("Erro ao publicar escala. Verifique sua conexão.");
                         }
                       }}
                       className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110 flex items-center gap-2"
@@ -767,10 +789,11 @@ const PessoalB1: React.FC = () => {
                         {/* Available Members Selector */}
                         <select
                           className="w-full text-[10px] p-1 border rounded bg-stone-50"
+                          value=""
                           onChange={(e) => {
-                            if (e.target.value) {
-                              team.setter(prev => [...prev, Number(e.target.value)]);
-                              e.target.value = "";
+                            const val = e.target.value;
+                            if (val) {
+                              team.setter(prev => [...prev, Number(val)]);
                             }
                           }}
                         >
