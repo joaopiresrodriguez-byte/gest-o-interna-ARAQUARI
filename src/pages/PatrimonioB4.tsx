@@ -39,6 +39,9 @@ const PatrimonioB4: React.FC = () => {
   const [newItemLocation, setNewItemLocation] = useState("");
   // Equipamento-specific fields
   const [newItemNfNumber, setNewItemNfNumber] = useState("");
+  // Common patrimônio fields
+  const [newItemPatrimonioNumber, setNewItemPatrimonioNumber] = useState("");
+  const [newItemPatrimonioType, setNewItemPatrimonioType] = useState("");
 
   // Plate mask (AAA-0A00 Mercosul format)
   const applyPlateMask = (value: string) => {
@@ -157,6 +160,8 @@ const PatrimonioB4: React.FC = () => {
       oil_type: newItemOilType || undefined,
       location: newItemLocation || undefined,
       nf_number: newItemNfNumber || undefined,
+      patrimonio_number: newItemPatrimonioNumber || undefined,
+      patrimonio_type: newItemPatrimonioType || undefined,
     };
 
     try {
@@ -195,6 +200,8 @@ const PatrimonioB4: React.FC = () => {
       setNewItemOilType("");
       setNewItemLocation("");
       setNewItemNfNumber("");
+      setNewItemPatrimonioNumber("");
+      setNewItemPatrimonioType("");
       setActiveTab('listagem');
       loadData();
     } catch (error: any) {
@@ -215,7 +222,7 @@ const PatrimonioB4: React.FC = () => {
       start_time: missionStart || undefined,
       end_time: missionEnd || undefined,
       responsible_id: missionRespId || undefined,
-      responsible_name: resp ? `${resp.rank} ${resp.name}` : undefined,
+      responsible_name: resp ? `${resp.graduation || resp.rank || ''} ${resp.name}`.trim() : undefined,
       priority: missionPriority,
       status: missionStatus,
       notes: missionObs,
@@ -364,7 +371,7 @@ const PatrimonioB4: React.FC = () => {
                           </div>
                           <select value={missionRespId} onChange={e => setMissionRespId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
                             <option value="">Selecionar Responsável</option>
-                            {personnel.map(p => <option key={p.id} value={p.id}>{p.rank} {p.name}</option>)}
+                            {personnel.map(p => <option key={p.id} value={p.id}>{p.graduation || p.rank || ''} {p.name}</option>)}
                           </select>
                           <select value={missionStatus} onChange={e => setMissionStatus(e.target.value as any)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
                             <option value="agendada">Agendada</option>
@@ -587,6 +594,20 @@ const PatrimonioB4: React.FC = () => {
                           <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização Atual da Viatura</label>
                           <input value={newItemLocation} onChange={e => setNewItemLocation(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Quartel Araquari, Oficina, Manutenção" />
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Número de Patrimônio</label>
+                            <input value={newItemPatrimonioNumber} onChange={e => setNewItemPatrimonioNumber(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Nº de Patrimônio" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo de Patrimônio</label>
+                            <select value={newItemPatrimonioType} onChange={e => setNewItemPatrimonioType(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm">
+                              <option value="">Selecione...</option>
+                              <option value="Municipal">Municipal</option>
+                              <option value="Estadual">Estadual</option>
+                            </select>
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -607,6 +628,20 @@ const PatrimonioB4: React.FC = () => {
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização Atual do Equipamento</label>
                           <input value={newItemLocation} onChange={e => setNewItemLocation(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Viatura ABT-01, Quartel, Empréstimo" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Número de Patrimônio</label>
+                            <input value={newItemPatrimonioNumber} onChange={e => setNewItemPatrimonioNumber(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Nº de Patrimônio" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo de Patrimônio</label>
+                            <select value={newItemPatrimonioType} onChange={e => setNewItemPatrimonioType(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm">
+                              <option value="">Selecione...</option>
+                              <option value="Municipal">Municipal</option>
+                              <option value="Estadual">Estadual</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
                     )}

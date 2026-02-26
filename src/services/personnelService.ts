@@ -4,7 +4,7 @@ import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
 
 // Campos específicos para otimizar queries
-const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cpf, emergency_phone, emergency_contact_name';
+const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cpf, emergency_phone, emergency_contact_name, cve_active, graduation';
 const DOCUMENT_FIELDS = 'id, file_name, document_type, file_url, size_kb, uploaded_by, upload_date, notes, personnel_id';
 const VACATION_FIELDS = 'id, personnel_id, full_name, start_date, end_date, day_count, status, notes';
 

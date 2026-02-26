@@ -59,6 +59,8 @@ const PessoalB1: React.FC = () => {
     cpf: '',
     emergency_phone: '',
     emergency_contact_name: '',
+    cve_active: '',
+    graduation: '',
   });
 
   // Form State Documents
@@ -178,7 +180,7 @@ const PessoalB1: React.FC = () => {
       // Clean empty strings to null to avoid Supabase 400 errors on date/optional columns
       const cleanedData: Record<string, any> = {
         ...formData,
-        rank: formData.type === 'BM' ? 'Sd.' : 'BC',
+        rank: formData.graduation || '',
       };
 
       // Only remove truly empty/undefined fields that would cause DB errors for date columns
@@ -220,6 +222,8 @@ const PessoalB1: React.FC = () => {
         cpf: '',
         emergency_phone: '',
         emergency_contact_name: '',
+        cve_active: '',
+        graduation: '',
       });
       setActiveTab('LISTAGEM');
       loadData();
@@ -377,8 +381,8 @@ const PessoalB1: React.FC = () => {
                 {personnelList.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.war_name?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
                   <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group">
                     <div className="w-20 h-20 rounded-full bg-cover bg-center mb-4 border-2 border-primary/20" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
-                    <h4 className="font-bold text-lg leading-tight">{p.war_name || `${p.rank} ${p.name.split(' ')[0]}`}</h4>
-                    <p className="text-xs text-gray-400 mb-2 truncate w-full px-4">{p.name}</p>
+                    <h4 className="font-bold text-lg leading-tight">{p.war_name || p.name.split(' ')[0]}</h4>
+                    <p className="text-xs text-gray-400 mb-2 truncate w-full px-4">{p.graduation ? `${p.graduation} — ` : ''}{p.name}</p>
                     <div className="flex flex-wrap justify-center gap-1.5 mb-4">
                       <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${p.type === 'BM' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>{p.type}</span>
                       <span className="text-[9px] font-black px-2 py-0.5 rounded bg-stone-100 text-gray-600 uppercase">{p.status}</span>
@@ -414,7 +418,7 @@ const PessoalB1: React.FC = () => {
 
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome de Guerra</label>
-                    <input value={formData.war_name} onChange={e => setFormData({ ...formData, war_name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Ex: Sd. Pires" />
+                    <input value={formData.war_name} onChange={e => setFormData({ ...formData, war_name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Ex: Pires" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -433,6 +437,26 @@ const PessoalB1: React.FC = () => {
                         <option value="EM CURSO">Em Curso</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Posto ou Graduação</label>
+                    <select value={formData.graduation} onChange={e => setFormData({ ...formData, graduation: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                      <option value="">Selecione...</option>
+                      <option value="Soldado">Soldado</option>
+                      <option value="Cabo">Cabo</option>
+                      <option value="3° Sargento">3° Sargento</option>
+                      <option value="2° Sargento">2° Sargento</option>
+                      <option value="1° Sargento">1° Sargento</option>
+                      <option value="Subtenente">Subtenente</option>
+                      <option value="Aspirante">Aspirante</option>
+                      <option value="2° Tenente">2° Tenente</option>
+                      <option value="1° Tenente">1° Tenente</option>
+                      <option value="Capitão">Capitão</option>
+                      <option value="Major">Major</option>
+                      <option value="Tenente-Coronel">Tenente-Coronel</option>
+                      <option value="Coronel">Coronel</option>
+                    </select>
                   </div>
 
                   <div className="space-y-1">
@@ -468,8 +492,12 @@ const PessoalB1: React.FC = () => {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">CNH / Categoria</label>
-                      <input value={formData.cnh} onChange={e => setFormData({ ...formData, cnh: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: ABC - AD" />
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Possui CVE Ativo?</label>
+                      <select value={formData.cve_active} onChange={e => setFormData({ ...formData, cve_active: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
+                        <option value="">Selecione...</option>
+                        <option value="Sim">Sim</option>
+                        <option value="Não">Não</option>
+                      </select>
                     </div>
                   </div>
 
@@ -750,7 +778,7 @@ const PessoalB1: React.FC = () => {
                           {personnelList
                             .filter(p => !teamA.includes(p.id!) && !teamB.includes(p.id!) && !teamC.includes(p.id!) && !teamD.includes(p.id!) && p.status === 'ATIVO')
                             .map(p => (
-                              <option key={p.id} value={p.id}>{p.rank} {p.war_name}</option>
+                              <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name.split(' ')[0]}</option>
                             ))
                           }
                         </select>
@@ -836,7 +864,7 @@ const PessoalB1: React.FC = () => {
                 <div className="w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 bg-cover bg-center" style={{ backgroundImage: `url(${selectedPerson.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 bg-primary/20 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.rank}</span>
+                    <span className="px-2 py-0.5 bg-primary/20 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.graduation || selectedPerson.rank || selectedPerson.type}</span>
                     <span className="px-2 py-0.5 bg-white/10 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.type}</span>
                   </div>
                   <h3 className="text-3xl font-black tracking-tight">{selectedPerson.name}</h3>
@@ -883,6 +911,20 @@ const PessoalB1: React.FC = () => {
                       <div>
                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Função/Role</p>
                         <p className="text-sm font-bold text-rustic-brown">{selectedPerson.role || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary/40 text-[20px]">military_tech</span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Posto ou Graduação</p>
+                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.graduation || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary/40 text-[20px]">verified</span>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">CVE Ativo</p>
+                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cve_active || 'N/A'}</p>
                       </div>
                     </div>
                   </div>

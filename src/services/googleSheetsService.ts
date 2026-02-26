@@ -66,6 +66,8 @@ export const GoogleSheetsService = {
             person.cpf || '',                           // CPF
             person.emergency_phone || '',               // Contato de Emergência
             person.emergency_contact_name || '',        // Nome do Contato de Emergência
+            person.cve_active || '',                     // CVE Ativo
+            person.graduation || '',                     // Posto ou Graduação
         ];
         return sendToSheets('Efetivo', row);
     },
@@ -90,6 +92,8 @@ export const GoogleSheetsService = {
             vehicle.oil_type || '',                     // Tipo de Óleo
             vehicle.location || '',                     // Localização Atual
             vehicle.nf_number || '',                    // Nº NF de Compra
+            vehicle.patrimonio_number || '',             // Número de Patrimônio
+            vehicle.patrimonio_type || '',               // Tipo de Patrimônio
         ];
         return sendToSheets('Patrimônio', row);
     },

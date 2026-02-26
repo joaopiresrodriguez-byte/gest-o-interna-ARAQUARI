@@ -24,6 +24,8 @@ export interface Vehicle {
     oil_type?: string;
     location?: string;
     nf_number?: string;
+    patrimonio_number?: string;
+    patrimonio_type?: string;
 }
 
 export interface Personnel {
@@ -48,6 +50,8 @@ export interface Personnel {
     cpf?: string;
     emergency_phone?: string;
     emergency_contact_name?: string;
+    cve_active?: string;
+    graduation?: string;
 }
 
 export interface GuReport {
