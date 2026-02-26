@@ -13,6 +13,7 @@ const PessoalB1: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentB1[]>([]);
   const [vacations, setVacations] = useState<Vacation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingRoster, setSavingRoster] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
 
   // CPF mask helper
@@ -87,10 +88,7 @@ const PessoalB1: React.FC = () => {
     const saved = localStorage.getItem('roster_config');
     if (saved) {
       const config = JSON.parse(saved);
-      setRosterStartDate(config.startDate || "2024-01-01");
-
-      // Cleanup orphan IDs from localStorage if they don't exist in personnelList anymore
-      // We'll do this once personnelList is loaded below
+      setRosterStartDate(config.startDate || new Date().toISOString().split('T')[0]);
     }
   }, []);
 
@@ -113,24 +111,16 @@ const PessoalB1: React.FC = () => {
   }, [personnelList]);
 
   const saveRosterConfig = async () => {
-    const config = { startDate: rosterStartDate, teamA, teamB, teamC, teamD };
-    localStorage.setItem('roster_config', JSON.stringify(config));
-
-    // Also persist each team's current assignment to Supabase
+    setSavingRoster(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const allMembers = [...teamA, ...teamB, ...teamC, ...teamD];
-      if (allMembers.length > 0) {
-        await SupabaseService.saveEscala({
-          data: today,
-          equipe: 'Config',
-          militares: allMembers,
-        });
-      }
+      const config = { startDate: rosterStartDate, teamA, teamB, teamC, teamD };
+      localStorage.setItem('roster_config', JSON.stringify(config));
       toast.success("Configuração da escala salva com sucesso!");
     } catch (err) {
-      console.error('Error saving escala config to Supabase:', err);
-      toast.success("Configuração salva localmente (erro no servidor).");
+      console.error('Error saving roster config:', err);
+      toast.warning("Erro ao salvar configuração.");
+    } finally {
+      setSavingRoster(false);
     }
   };
 
@@ -724,6 +714,7 @@ const PessoalB1: React.FC = () => {
                   </h3>
                   <div className="flex items-center gap-4">
                     <button
+                      disabled={savingRoster}
                       onClick={async () => {
                         const today = new Date();
                         const team = getTeamForDate(today);
@@ -735,6 +726,7 @@ const PessoalB1: React.FC = () => {
 
                         if (!confirm(`Publicar escala de hoje (${today.toLocaleDateString('pt-BR')}) para a Equipe ${team.name}?\n\nMilitares: ${team.members.length}`)) return;
 
+                        setSavingRoster(true);
                         try {
                           await SupabaseService.saveEscala({
                             data: today.toISOString().split('T')[0],
@@ -745,18 +737,20 @@ const PessoalB1: React.FC = () => {
                         } catch (err) {
                           console.error('Error publishing escala:', err);
                           toast.error("Erro ao publicar escala. Verifique sua conexão.");
+                        } finally {
+                          setSavingRoster(false);
                         }
                       }}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110 flex items-center gap-2"
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110 flex items-center gap-2 disabled:opacity-50"
                     >
-                      <span className="material-symbols-outlined text-[16px]">publish</span>
-                      PUBLICAR HOJE
+                      <span className="material-symbols-outlined text-[16px]">{savingRoster ? 'sync' : 'publish'}</span>
+                      {savingRoster ? 'PUBLICANDO...' : 'PUBLICAR HOJE'}
                     </button>
                     <label className="text-xs font-bold text-gray-500">
                       Data Base (Equipe A):
                       <input type="date" value={rosterStartDate} onChange={e => setRosterStartDate(e.target.value)} className="ml-2 border rounded p-1 text-sm bg-stone-50" />
                     </label>
-                    <button onClick={saveRosterConfig} className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110">SALVAR CONFIG</button>
+                    <button onClick={saveRosterConfig} disabled={savingRoster} className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110 disabled:opacity-50">{savingRoster ? 'SALVANDO...' : 'SALVAR CONFIG'}</button>
                   </div>
                 </div>
 
