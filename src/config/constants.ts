@@ -18,7 +18,7 @@ export const PAGINATION = {
 // VERSÃO DA APLICAÇÃO
 // =====================================================
 export const APP_VERSION = '1.7.0';
-export const APP_NAME = 'Sistema Rural BM';
+export const APP_NAME = 'SISTEMA INTERNO DE GESTÃO CBMSC ARAQUARI';
 export const APP_SUBTITLE = 'AI HYBRID';
 
 // =====================================================
