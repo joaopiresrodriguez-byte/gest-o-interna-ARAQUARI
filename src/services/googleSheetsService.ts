@@ -2,26 +2,18 @@ import { Personnel, Vehicle, Occurrence } from './types';
 
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 
-/**
- * Sends data to Google Sheets via Apps Script webhook.
- * Fails silently — Sheets sync should never block Supabase operations.
- */
 async function sendToSheets(sheet: string, data: (string | number | boolean)[]): Promise<boolean> {
     if (!WEBHOOK_URL) {
         console.warn('[GoogleSheets] VITE_GOOGLE_SHEETS_WEBHOOK_URL not configured. Skipping sync.');
         return false;
     }
-
     try {
-        const response = await fetch(WEBHOOK_URL, {
+        await fetch(WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sheet, data }),
-            mode: 'no-cors', // Apps Script requires no-cors from browser
+            mode: 'no-cors',
         });
-
-        // In no-cors mode, response is opaque so we can't read it
-        // But if fetch didn't throw, the request was sent successfully
         console.log(`[GoogleSheets] Data sent to "${sheet}" sheet.`);
         return true;
     } catch (error) {
@@ -32,87 +24,93 @@ async function sendToSheets(sheet: string, data: (string | number | boolean)[]):
 
 const formatDate = (dateStr?: string): string => {
     if (!dateStr) return '';
-    try {
-        return new Date(dateStr).toLocaleDateString('pt-BR');
-    } catch {
-        return dateStr;
-    }
+    try { return new Date(dateStr).toLocaleDateString('pt-BR'); } catch { return dateStr; }
 };
 
 export const GoogleSheetsService = {
-    /**
-     * Sync new personnel to the "Efetivo" sheet
-     */
     syncPersonnel: async (person: Partial<Personnel>): Promise<boolean> => {
         const row = [
-            new Date().toLocaleDateString('pt-BR'),  // Data Registro
-            person.name || '',                         // Nome
-            person.war_name || '',                     // Nome Guerra
-            person.rank || '',                         // Posto/Grad
-            person.type || '',                         // Tipo (BM/BC)
-            person.status || '',                       // Status
-            person.role || '',                         // Função
-            person.email || '',                        // Email
-            person.phone || '',                        // Telefone
-            formatDate(person.birth_date),             // Nascimento
-            person.blood_type || '',                   // Tipo Sanguíneo
-            person.cnh || '',                          // CNH
-            person.weapon_permit ? 'Sim' : 'Não',     // Porte Arma
-            person.address || '',                      // Endereço
-            // New columns (append at end)
-            person.education_level || '',               // Grau de Instrução
-            person.cnh_category || '',                  // Categoria CNH
-            person.cnh_number || '',                    // Número da CNH
-            person.cpf || '',                           // CPF
-            person.emergency_phone || '',               // Contato de Emergência
-            person.emergency_contact_name || '',        // Nome do Contato de Emergência
-            person.cve_active || '',                     // CVE Ativo
-            person.graduation || '',                     // Posto ou Graduação
+            new Date().toLocaleDateString('pt-BR'),
+            person.name || '',
+            person.war_name || '',
+            person.rank || '',
+            person.type || '',
+            person.status || '',
+            person.role || '',
+            person.email || '',
+            person.phone || '',
+            formatDate(person.birth_date),
+            person.blood_type || '',
+            person.cnh || '',
+            person.weapon_permit ? 'Sim' : 'Não',
+            person.address || '',
+            person.education_level || '',
+            person.cnh_category || '',
+            person.cnh_number || '',
+            person.cpf || '',
+            person.emergency_phone || '',
+            person.emergency_contact_name || '',
+            person.cve_active || '',
+            person.graduation || '',
+            // New B1 fields
+            formatDate(person.cve_issue_date),
+            formatDate(person.cve_expiry_date),
+            formatDate(person.toxicological_date),
+            formatDate(person.toxicological_expiry_date),
+            formatDate(person.cnh_expiry_date),
         ];
         return sendToSheets('Efetivo', row);
     },
 
-    /**
-     * Sync new vehicle/equipment to the "Patrimônio" sheet
-     */
     syncVehicle: async (vehicle: Partial<Vehicle>): Promise<boolean> => {
         const row = [
-            new Date().toLocaleDateString('pt-BR'),   // Data Registro
-            vehicle.name || '',                        // Nome
-            vehicle.type || '',                        // Tipo
+            new Date().toLocaleDateString('pt-BR'),
+            vehicle.name || '',
+            vehicle.type || '',
             vehicle.status === 'active' ? 'QAP' : vehicle.status === 'maintenance' ? 'Manutenção' : 'Baixada',
-            vehicle.details || '',                     // Detalhes
-            vehicle.plate || '',                       // Placa
-            vehicle.current_km?.toString() || '',      // KM Atual
-            // New columns (append at end)
-            vehicle.brand || '',                        // Marca
-            vehicle.renavam || '',                      // RENAVAM
-            vehicle.chassis || '',                      // Chassi
-            vehicle.year || '',                         // Ano
-            vehicle.oil_type || '',                     // Tipo de Óleo
-            vehicle.location || '',                     // Localização Atual
-            vehicle.nf_number || '',                    // Nº NF de Compra
-            vehicle.patrimonio_number || '',             // Número de Patrimônio
-            vehicle.patrimonio_type || '',               // Tipo de Patrimônio
+            vehicle.details || '',
+            vehicle.plate || '',
+            vehicle.current_km?.toString() || '',
+            vehicle.brand || '',
+            vehicle.renavam || '',
+            vehicle.chassis || '',
+            vehicle.year || '',
+            vehicle.oil_type || '',
+            vehicle.location || '',
+            vehicle.nf_number || '',
+            vehicle.patrimonio_number || '',
+            vehicle.patrimonio_type || '',
         ];
         return sendToSheets('Patrimônio', row);
     },
 
-    /**
-     * Sync new occurrence to the "Ocorrências" sheet
-     */
     syncOccurrence: async (occ: Partial<Occurrence>): Promise<boolean> => {
         const row = [
-            new Date().toLocaleDateString('pt-BR'),    // Data Registro
-            occ.occurrence_type || '',                  // Tipo
-            occ.occurrence_date ? new Date(occ.occurrence_date).toLocaleString('pt-BR') : '', // Data/Hora
-            occ.location || '',                         // Localização
-            occ.units_involved || '',                   // Unidades Envolvidas
-            occ.description || '',                      // Descrição
-            occ.outcome || '',                          // Desfecho
-            occ.visibility === 'public' ? 'Público' : 'Interno', // Visibilidade
-            occ.status || 'registered',                 // Status
+            new Date().toLocaleDateString('pt-BR'),
+            occ.occurrence_type || '',
+            occ.occurrence_date ? new Date(occ.occurrence_date).toLocaleString('pt-BR') : '',
+            occ.location || '',
+            occ.units_involved || '',
+            occ.description || '',
+            occ.outcome || '',
+            occ.visibility === 'public' ? 'Público' : 'Interno',
+            occ.status || 'registered',
         ];
         return sendToSheets('Ocorrências', row);
+    },
+
+    syncAlerts: async (alerts: Array<{ name: string; type: string; date: string; severity: string; message: string }>): Promise<boolean> => {
+        // Send all alerts as rows to a dedicated "Alertas B1" sheet
+        for (const alert of alerts.slice(0, 50)) {
+            await sendToSheets('Alertas B1', [
+                new Date().toLocaleDateString('pt-BR'),
+                alert.name,
+                alert.type,
+                alert.date,
+                alert.severity,
+                alert.message,
+            ]);
+        }
+        return true;
     },
 };

@@ -1,1038 +1,582 @@
-import React, { useState, useEffect } from 'react';
-import { SupabaseService, Personnel, DocumentB1, Vacation } from '../services/SupabaseService';
-import { GoogleSheetsService } from '../services/googleSheetsService';
+import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { useAuth } from '../context/AuthContext';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, Escala } from '../services/types';
+import { PersonnelService } from '../services/personnelService';
+import { GoogleSheetsService } from '../services/googleSheetsService';
+import { supabase } from '../services/supabase';
+import AlertsDashboard from '../components/b1/AlertsDashboard';
+import DisciplinarySection from '../components/b1/DisciplinarySection';
+import BulletinSection from '../components/b1/BulletinSection';
+import ReadinessReport from '../components/b1/ReadinessReport';
+import PersonnelProfile from '../components/b1/PersonnelProfile';
+import ExportSection from '../components/b1/ExportSection';
+
+type Tab = 'ALERTAS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS';
+
+const tabIcons: Record<Tab, string> = { ALERTAS: 'notifications_active', EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', BOLETIM: 'article', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder' };
+
+const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
+const STATUS_OPTIONS = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
+const LEAVE_TYPES = [{ value: 'ferias', label: 'Férias' }, { value: 'licenca_medica', label: 'Licença Médica' }, { value: 'licenca_especial', label: 'Licença Especial' }, { value: 'afastamento', label: 'Afastamento' }, { value: 'cedido', label: 'Cedido' }, { value: 'outros', label: 'Outros' }];
+
+const validateCpf = (cpf: string): boolean => {
+  const cleaned = cpf.replace(/\D/g, '');
+  if (cleaned.length !== 11 || /^(\d)\1+$/.test(cleaned)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cleaned[i]) * (10 - i);
+  let d1 = 11 - (sum % 11);
+  if (d1 >= 10) d1 = 0;
+  if (parseInt(cleaned[9]) !== d1) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cleaned[i]) * (11 - i);
+  let d2 = 11 - (sum % 11);
+  if (d2 >= 10) d2 = 0;
+  return parseInt(cleaned[10]) === d2;
+};
+
+const calcExpiry = (issueDate: string, years: number): string => {
+  const d = new Date(issueDate);
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().split('T')[0];
+};
+
+const emptyForm = (): Partial<Personnel> => ({
+  name: '', war_name: '', rank: 'Sd', role: '', status: 'Ativo' as const, type: 'BM' as const,
+  address: '', email: '', birth_date: '', phone: '', blood_type: '', cnh: '', weapon_permit: false,
+  education_level: '', cnh_category: '', cnh_number: '', cnh_expiry_date: '', cpf: '',
+  emergency_phone: '', emergency_contact_name: '', cve_active: '', cve_issue_date: '', cve_expiry_date: '',
+  toxicological_date: '', toxicological_expiry_date: '', graduation: '',
+});
 
 const PessoalB1: React.FC = () => {
-  const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'LISTAGEM' | 'CADASTRO' | 'DOCUMENTOS' | 'FERIAS' | 'ESCALA' | 'REUNIAO'>('LISTAGEM');
-  const [searchTerm, setSearchTerm] = useState("");
-
+  const [tab, setTab] = useState<Tab>('ALERTAS');
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   const [documents, setDocuments] = useState<DocumentB1[]>([]);
   const [vacations, setVacations] = useState<Vacation[]>([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [savingRoster, setSavingRoster] = useState(false);
-  const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
+  const [search, setSearch] = useState('');
+  const [formData, setFormData] = useState<Partial<Personnel>>(emptyForm());
+  const [editId, setEditId] = useState<number | null>(null);
 
-  // CPF mask helper
-  const applyCpfMask = (value: string) => {
-    return value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').slice(0, 14);
-  };
-  const applyPhoneMask = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 11);
-    if (digits.length <= 2) return `(${digits}`;
-    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  };
-  const validateCpf = (cpf: string) => {
-    const digits = cpf.replace(/\D/g, '');
-    if (digits.length !== 11) return false;
-    if (/^(\d)\1+$/.test(digits)) return false;
-    let sum = 0;
-    for (let i = 0; i < 9; i++) sum += parseInt(digits[i]) * (10 - i);
-    let rest = (sum * 10) % 11; if (rest === 10) rest = 0;
-    if (rest !== parseInt(digits[9])) return false;
-    sum = 0;
-    for (let i = 0; i < 10; i++) sum += parseInt(digits[i]) * (11 - i);
-    rest = (sum * 10) % 11; if (rest === 10) rest = 0;
-    return rest === parseInt(digits[10]);
-  };
+  // Vacation form
+  const [vacPersonnelId, setVacPersonnelId] = useState<number | ''>('');
+  const [vacStart, setVacStart] = useState('');
+  const [vacEnd, setVacEnd] = useState('');
+  const [vacType, setVacType] = useState('ferias');
+  const [vacNotes, setVacNotes] = useState('');
 
-  // Form State Personnel
-  const [formData, setFormData] = useState<Partial<Personnel>>({
-    name: '',
-    war_name: '',
-    status: 'ATIVO',
-    type: 'BM',
-    address: '',
-    email: '',
-    birth_date: '',
-    phone: '',
-    blood_type: '',
-    cnh: '',
-    weapon_permit: false,
-    role: 'Serviço Ativo',
-    education_level: '',
-    cnh_category: '',
-    cnh_number: '',
-    cpf: '',
-    emergency_phone: '',
-    emergency_contact_name: '',
-    cve_active: '',
-    graduation: '',
+  // Scale state
+  const [scaleMonth, setScaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
+  const [scaleTeams, setScaleTeams] = useState<Record<string, number[]>>(() => {
+    try { return JSON.parse(localStorage.getItem('b1_scale_teams') || '{}'); } catch { return {}; }
   });
+  const [scaleShiftType, setScaleShiftType] = useState<'24x72' | '12x36' | 'administrative'>('24x72');
 
-  // Form State Documents
+  // Swap form
+  const [swapPersonId, setSwapPersonId] = useState<number | ''>('');
+  const [swapOrigDate, setSwapOrigDate] = useState('');
+  const [swapNewDate, setSwapNewDate] = useState('');
+  const [swapReason, setSwapReason] = useState('');
+  const [swapWithId, setSwapWithId] = useState<number | ''>('');
+
+  // Profile view
+  const [profilePerson, setProfilePerson] = useState<Personnel | null>(null);
+  const [profileRankHistory, setProfileRankHistory] = useState<RankHistory[]>([]);
+  const [profileSwaps, setProfileSwaps] = useState<ServiceSwap[]>([]);
+  const [profileDisciplinary, setProfileDisciplinary] = useState<DisciplinaryRecord[]>([]);
+  const [profileVacations, setProfileVacations] = useState<Vacation[]>([]);
+  const [profileDocs, setProfileDocs] = useState<DocumentB1[]>([]);
+
+  // Sub-section data
+  const [disciplinaryRecords, setDisciplinaryRecords] = useState<DisciplinaryRecord[]>([]);
+  const [bulletins, setBulletins] = useState<Bulletin[]>([]);
+  const [sigrhExports, setSigrhExports] = useState<SigrhExport[]>([]);
+
+  // Rank change
+  const [rankChangeNewRank, setRankChangeNewRank] = useState('');
+  const [rankChangeLegalBasis, setRankChangeLegalBasis] = useState('');
+
+  // Document upload
   const [docFile, setDocFile] = useState<File | null>(null);
-  const [docCategory, setDocCategory] = useState("Certidão");
-  const [docObs, setDocObs] = useState("");
+  const [docType, setDocType] = useState('');
+  const [docPersonId, setDocPersonId] = useState<number | ''>('');
+  const [docNotes, setDocNotes] = useState('');
 
-  // Form State Vacations
-  const [vacaPersonId, setVacaPersonId] = useState<number | ''>('');
-  const [vacaStart, setVacaStart] = useState("");
-  const [vacaEnd, setVacaEnd] = useState("");
-  const [vacaObs, setVacaObs] = useState("");
-
-  // Roster State
-  const [rosterStartDate, setRosterStartDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [teamA, setTeamA] = useState<number[]>([]);
-  const [teamB, setTeamB] = useState<number[]>([]);
-  const [teamC, setTeamC] = useState<number[]>([]);
-  const [teamD, setTeamD] = useState<number[]>([]);
-  const [rosterMonth, setRosterMonth] = useState(new Date().getMonth());
-  const [rosterYear] = useState(new Date().getFullYear());
-
-  useEffect(() => {
-    const saved = localStorage.getItem('roster_config');
-    if (saved) {
-      const config = JSON.parse(saved);
-      setRosterStartDate(config.startDate || new Date().toISOString().split('T')[0]);
-    }
-  }, []);
-
-  // New Effect to sync localStorage with current personnelList
-  useEffect(() => {
-    if (personnelList.length > 0) {
-      const saved = localStorage.getItem('roster_config');
-      if (saved) {
-        const config = JSON.parse(saved);
-        const validIds = new Set(personnelList.map(p => p.id));
-
-        const cleanTeam = (team: number[]) => (team || []).filter(id => validIds.has(id));
-
-        setTeamA(cleanTeam(config.teamA));
-        setTeamB(cleanTeam(config.teamB));
-        setTeamC(cleanTeam(config.teamC));
-        setTeamD(cleanTeam(config.teamD));
-      }
-    }
-  }, [personnelList]);
-
-  const saveRosterConfig = async () => {
-    setSavingRoster(true);
-    try {
-      const config = { startDate: rosterStartDate, teamA, teamB, teamC, teamD };
-      localStorage.setItem('roster_config', JSON.stringify(config));
-      toast.success("Configuração da escala salva com sucesso!");
-    } catch (err) {
-      console.error('Error saving roster config:', err);
-      toast.warning("Erro ao salvar configuração.");
-    } finally {
-      setSavingRoster(false);
-    }
-  };
-
-  const getTeamForDate = (date: Date) => {
-    const start = new Date(rosterStartDate);
-    start.setHours(0, 0, 0, 0); // normalize
-    const target = new Date(date);
-    target.setHours(0, 0, 0, 0);
-
-    const diffTime = target.getTime() - start.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    // Cycle: 0=A, 1=B, 2=C, 3=D
-    let cycle = diffDays % 4;
-    if (cycle < 0) cycle += 4; // handle past dates
-
-    if (cycle === 0) return { name: 'Alpha', color: 'bg-red-100 text-red-700', members: teamA };
-    if (cycle === 1) return { name: 'Bravo', color: 'bg-blue-100 text-blue-700', members: teamB };
-    if (cycle === 2) return { name: 'Charlie', color: 'bg-green-100 text-green-700', members: teamC };
-    return { name: 'Delta', color: 'bg-yellow-100 text-yellow-700', members: teamD };
-  };
-
-  const daysInMonth = new Date(rosterYear, rosterMonth + 1, 0).getDate();
-  const firstDayOfWeek = new Date(rosterYear, rosterMonth, 1).getDay();
-
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
-
-  // Ensure data is loaded on mount as well, to populate personnelList for Roster even if not on LISTAGEM
-  useEffect(() => {
-    if (personnelList.length === 0) {
-      loadData();
-    }
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [people, docs, vacas] = await Promise.all([
-        SupabaseService.getPersonnel(),
-        SupabaseService.getDocumentsB1(),
-        SupabaseService.getVacations()
+      const [pList, vList, dList] = await Promise.all([
+        PersonnelService.getPersonnel(),
+        PersonnelService.getVacations(),
+        PersonnelService.getDocumentsB1(),
       ]);
-      setPersonnelList(people);
-      setDocuments(docs);
-      setVacations(vacas);
-      console.log(`B1: Loaded ${people.length} personnel for roster selection.`);
-    } catch (error) {
-      console.error("Error loading B1 data:", error);
+      setPersonnelList(pList);
+      setVacations(vList);
+      setDocuments(dList);
+
+      // Generate alerts with swap counts
+      const swapCounts = new Map<number, number>();
+      const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+      for (const p of pList) {
+        if (p.id) {
+          const count = await PersonnelService.getSwapCountThisMonth(p.id, currentMonth);
+          if (count > 0) swapCounts.set(p.id, count);
+        }
+      }
+      setAlerts(PersonnelService.generateAlerts(pList, vList, swapCounts));
+    } catch (err: any) {
+      toast.error('Erro ao carregar dados: ' + (err.message || 'Desconhecido'));
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const loadDisciplinary = async () => {
+    try { setDisciplinaryRecords(await PersonnelService.getDisciplinaryRecords()); } catch { }
+  };
+  const loadBulletins = async () => {
+    try { setBulletins(await PersonnelService.getBulletins()); } catch { }
+  };
+  const loadExports = async () => {
+    try { setSigrhExports(await PersonnelService.getSigrhExports()); } catch { }
   };
 
+  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    if (tab === 'DISCIPLINA') loadDisciplinary();
+    if (tab === 'BOLETIM') loadBulletins();
+    if (tab === 'EXPORTAR') loadExports();
+  }, [tab]);
+
+  // ===== CRUD Handlers =====
   const handleSavePersonnel = async () => {
-    if (!formData.name) return toast.error("Nome é obrigatório!");
-    if (formData.cpf && !validateCpf(formData.cpf)) return toast.error("CPF inválido! Verifique os dígitos.");
+    if (!formData.name) return toast.error('Nome é obrigatório!');
+    if (formData.cpf && !validateCpf(formData.cpf)) return toast.error('CPF inválido!');
 
-    setLoading(true);
+    // Auto-calculate expiry dates
+    const cleanedData = { ...formData };
+    if (cleanedData.cve_issue_date) cleanedData.cve_expiry_date = calcExpiry(cleanedData.cve_issue_date, 5);
+    if (cleanedData.toxicological_date) cleanedData.toxicological_expiry_date = calcExpiry(cleanedData.toxicological_date, 2);
+    cleanedData.last_cadastro_review = new Date().toISOString().split('T')[0];
+
+    // Remove empty strings for DB
+    Object.keys(cleanedData).forEach(k => { if ((cleanedData as any)[k] === '') delete (cleanedData as any)[k]; });
+
     try {
-      // Clean empty strings to null to avoid Supabase 400 errors on date/optional columns
-      const cleanedData: Record<string, any> = {
-        ...formData,
-        rank: formData.graduation || '',
-      };
-
-      // Only remove truly empty/undefined fields that would cause DB errors for date columns
-      const dateFields = ['birth_date'];
-      Object.keys(cleanedData).forEach(key => {
-        if (cleanedData[key] === undefined) {
-          delete cleanedData[key];
-        }
-        // Only strip empty strings for date fields (DB rejects empty dates)
-        if (dateFields.includes(key) && cleanedData[key] === '') {
-          delete cleanedData[key];
-        }
-      });
-
-      await SupabaseService.addPersonnel(cleanedData as Personnel);
-
-      // Sync to Google Sheets (fire-and-forget)
-      GoogleSheetsService.syncPersonnel(cleanedData as Personnel).then(ok => {
-        if (ok) toast.info('📊 Dados sincronizados com o Google Sheets.');
-      });
-
-      toast.success("Militar cadastrado com sucesso!");
-      setFormData({
-        name: '',
-        war_name: '',
-        status: 'ATIVO',
-        type: 'BM',
-        address: '',
-        email: '',
-        birth_date: '',
-        phone: '',
-        blood_type: '',
-        cnh: '',
-        weapon_permit: false,
-        role: 'Serviço Ativo',
-        education_level: '',
-        cnh_category: '',
-        cnh_number: '',
-        cpf: '',
-        emergency_phone: '',
-        emergency_contact_name: '',
-        cve_active: '',
-        graduation: '',
-      });
-      setActiveTab('LISTAGEM');
+      if (editId) {
+        await PersonnelService.updatePersonnel(editId, cleanedData);
+        toast.success('Militar atualizado!');
+      } else {
+        await PersonnelService.addPersonnel(cleanedData as Personnel);
+        toast.success('Militar cadastrado!');
+      }
+      GoogleSheetsService.syncPersonnel(cleanedData).then(ok => { if (ok) toast.info('📊 Sincronizado com Google Sheets.'); });
+      setFormData(emptyForm());
+      setEditId(null);
       loadData();
-    } catch (error) {
-      console.error("Error saving personnel:", error);
-      toast.error("Erro ao cadastrar militar.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUploadDocument = async () => {
-    if (!docFile) return toast.error("Selecione um arquivo PDF.");
-    setLoading(true);
-    try {
-      const fileName = `${Date.now()}_${docFile.name}`;
-      await SupabaseService.uploadFile('documentos-b1', fileName, docFile);
-      const url = SupabaseService.getPublicUrl('documentos-b1', fileName);
-
-      await SupabaseService.addDocumentB1({
-        file_name: docFile.name,
-        document_type: docCategory,
-        file_url: url,
-        size_kb: Math.round(docFile.size / 1024),
-        upload_date: new Date().toISOString(),
-        notes: docObs
-      });
-      toast.success("Documento anexado!");
-      setDocFile(null);
-      loadData();
-    } catch (error) {
-      toast.error("Erro no upload.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteDocument = async (id: string, url: string) => {
-    if (!confirm("Excluir documento permanentemente?")) return;
-    const path = url.split('/').pop()!;
-    await SupabaseService.deleteDocumentB1(id, path);
-    loadData();
-  };
-
-  const handleSaveVacation = async () => {
-    if (!vacaPersonId || !vacaStart || !vacaEnd) return toast.error("Preencha todos os campos de férias.");
-
-    const start = new Date(vacaStart);
-    const end = new Date(vacaEnd);
-    const days = Math.round((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
-
-    if (days <= 0) return toast.error("Data de fim deve ser após o início.");
-
-    const person = personnelList.find(p => p.id === vacaPersonId);
-
-    // Conflict detection
-    const conflict = vacations.find(v => (
-      (start >= new Date(v.start_date) && start <= new Date(v.end_date)) ||
-      (end >= new Date(v.start_date) && end <= new Date(v.end_date))
-    ));
-
-    if (conflict) {
-      if (!confirm(`Atenção: Já existe um período de férias agendado entre ${conflict.start_date} e ${conflict.end_date} (${conflict.full_name}). Deseja continuar?`)) return;
-    }
-
-    setLoading(true);
-    try {
-      await SupabaseService.addVacation({
-        personnel_id: vacaPersonId,
-        full_name: person?.name || "Desconhecido",
-        start_date: vacaStart,
-        end_date: vacaEnd,
-        day_count: days,
-        status: 'planejado',
-        notes: vacaObs
-      });
-      toast.success("Férias programadas com sucesso!");
-      setVacaPersonId('');
-      setVacaStart("");
-      setVacaEnd("");
-      setVacaObs("");
-      loadData();
-    } catch (error) {
-      console.error('Error saving vacation:', error);
-      toast.error("Erro ao programar férias.");
-    } finally {
-      setLoading(false);
+      setTab('EFETIVO');
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err.message || ''));
     }
   };
 
   const handleDeletePersonnel = async (id: number) => {
-    if (!confirm("Excluir este militar da base de dados? Esta ação não pode ser desfeita.")) return;
-    try {
-      await SupabaseService.deletePersonnel(id);
-      toast.success("Militar removido com sucesso.");
-      loadData();
-    } catch (error) {
-      toast.error("Erro ao excluir militar. Verifique se existem dependências.");
-    }
+    if (!confirm('Remover militar?')) return;
+    try { await PersonnelService.deletePersonnel(id); toast.success('Removido!'); loadData(); } catch (err: any) { toast.error('Erro: ' + err.message); }
   };
 
-  const handleDeleteVacation = async (id: string) => {
-    if (!confirm("Cancelar esta programação de férias?")) return;
-    try {
-      await SupabaseService.deleteVacation(id);
-      toast.success("Férias canceladas.");
-      loadData();
-    } catch (error) {
-      toast.error("Erro ao cancelar férias.");
-    }
+  const handleEdit = (p: Personnel) => {
+    setFormData(p);
+    setEditId(p.id || null);
+    setTab('CADASTRO');
   };
+
+  const handleViewProfile = async (person: Personnel) => {
+    setProfilePerson(person);
+    if (person.id) {
+      const [rh, sw, dc, vc, docs] = await Promise.all([
+        PersonnelService.getRankHistory(person.id),
+        PersonnelService.getServiceSwaps(person.id),
+        PersonnelService.getDisciplinaryRecords(person.id),
+        PersonnelService.getVacations(person.id),
+        PersonnelService.getDocumentsB1(person.id),
+      ]);
+      setProfileRankHistory(rh);
+      setProfileSwaps(sw);
+      setProfileDisciplinary(dc);
+      setProfileVacations(vc);
+      setProfileDocs(docs);
+    }
+    setTab('PERFIL');
+  };
+
+  // Save Vacation
+  const handleSaveVacation = async () => {
+    if (!vacPersonnelId || !vacStart || !vacEnd) return toast.error('Preencha todos os campos!');
+    const person = personnelList.find(p => p.id === vacPersonnelId);
+    const dayCount = Math.ceil((new Date(vacEnd).getTime() - new Date(vacStart).getTime()) / 86400000) + 1;
+    try {
+      await PersonnelService.addVacation({ personnel_id: vacPersonnelId as number, full_name: person?.name || '', start_date: vacStart, end_date: vacEnd, day_count: dayCount, leave_type: vacType, status: 'planejado', notes: vacNotes });
+      toast.success('Período registrado!');
+      setVacPersonnelId(''); setVacStart(''); setVacEnd(''); setVacNotes('');
+      loadData();
+    } catch (err: any) { toast.error('Erro: ' + err.message); }
+  };
+
+  // Handle Swap
+  const handleSaveSwap = async () => {
+    if (!swapPersonId || !swapOrigDate || !swapNewDate || !swapReason) return toast.error('Preencha todos os campos!');
+    const monthRef = swapOrigDate.substring(0, 7);
+    const count = await PersonnelService.getSwapCountThisMonth(swapPersonId as number, monthRef);
+    if (count >= 2) return toast.error(`⛔ BLOQUEADO: Militar já possui ${count} trocas neste mês. Limite de 2 trocas/mês atingido.`);
+    try {
+      await PersonnelService.addServiceSwap({ personnel_id: swapPersonId as number, original_date: swapOrigDate, new_date: swapNewDate, swap_with_personnel_id: swapWithId ? swapWithId as number : undefined, reason: swapReason, swap_date: new Date().toISOString().split('T')[0], month_ref: monthRef });
+      toast.success('Troca de serviço registrada!');
+      setSwapPersonId(''); setSwapOrigDate(''); setSwapNewDate(''); setSwapReason(''); setSwapWithId('');
+      loadData();
+    } catch (err: any) { toast.error('Erro: ' + err.message); }
+  };
+
+  // Handle rank change
+  const handleRankChange = async (person: Personnel) => {
+    if (!rankChangeNewRank || !rankChangeLegalBasis) return toast.error('Informe a nova graduação e base legal!');
+    try {
+      await PersonnelService.addRankHistory({ personnel_id: person.id!, previous_rank: person.graduation || person.rank, new_rank: rankChangeNewRank, change_date: new Date().toISOString().split('T')[0], legal_basis: rankChangeLegalBasis });
+      await PersonnelService.updatePersonnel(person.id!, { graduation: rankChangeNewRank });
+      toast.success('Graduação atualizada e histórico registrado!');
+      setRankChangeNewRank(''); setRankChangeLegalBasis('');
+      loadData();
+    } catch (err: any) { toast.error('Erro: ' + err.message); }
+  };
+
+  // Handle document upload
+  const handleUploadDoc = async () => {
+    if (!docFile || !docType || !docPersonId) return toast.error('Preencha todos os campos!');
+    try {
+      const path = `b1/${docPersonId}/${Date.now()}_${docFile.name}`;
+      const { error: uploadError } = await supabase.storage.from('personnel-documents').upload(path, docFile);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('personnel-documents').getPublicUrl(path);
+      await PersonnelService.addDocumentB1({ file_name: docFile.name, document_type: docType, file_url: urlData.publicUrl, size_kb: Math.round(docFile.size / 1024), personnel_id: docPersonId as number, upload_date: new Date().toISOString() });
+      toast.success('Documento anexado!');
+      setDocFile(null); setDocType(''); setDocNotes('');
+      loadData();
+    } catch (err: any) { toast.error('Erro: ' + err.message); }
+  };
+
+  // Scale helpers
+  const saveTeamConfig = (teams: Record<string, number[]>) => {
+    setScaleTeams(teams);
+    localStorage.setItem('b1_scale_teams', JSON.stringify(teams));
+  };
+
+  const publishScale = async () => {
+    const [year, month] = scaleMonth.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const teamKeys = Object.keys(scaleTeams).filter(k => scaleTeams[k].length > 0);
+    if (teamKeys.length === 0) return toast.error('Configure pelo menos uma equipe!');
+
+    let saved = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const teamIdx = (d - 1) % teamKeys.length;
+      const team = teamKeys[teamIdx];
+      try {
+        await PersonnelService.saveEscala({ data: dateStr, equipe: team, militares: scaleTeams[team], shift_type: scaleShiftType });
+        saved++;
+      } catch { }
+    }
+    toast.success(`Escala publicada: ${saved} dias gerados!`);
+  };
+
+  const filteredPersonnel = personnelList.filter(p =>
+    !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
+    (p.war_name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.graduation || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  // ===== RENDER =====
+  const formField = (label: string, field: keyof Personnel, type = 'text', options?: string[]) => (
+    <div key={field}>
+      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">{label}</label>
+      {options ? (
+        <select value={(formData as any)[field] || ''} onChange={e => setFormData(prev => ({ ...prev, [field]: e.target.value }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm">
+          <option value="">Selecionar...</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : type === 'checkbox' ? (
+        <input type="checkbox" checked={!!(formData as any)[field]} onChange={e => setFormData(prev => ({ ...prev, [field]: e.target.checked }))} className="h-5 w-5" />
+      ) : (
+        <input type={type} value={(formData as any)[field] || ''} onChange={e => setFormData(prev => ({ ...prev, [field]: e.target.value }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm" />
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-background-light text-rustic-brown">
-      {/* Header with improved Tabs */}
-      <header className="flex-shrink-0 px-8 py-6 bg-white border-b border-rustic-border shadow-sm">
-        <div className="max-w-[1400px] mx-auto w-full flex flex-wrap justify-between items-center gap-6">
-          <div>
-            <h2 className="text-3xl font-black tracking-tight text-[#181111]">Gestão B1 - Pessoal</h2>
-            <p className="text-sm opacity-60">Efetivo, Documentação e Férias</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-2xl">military_tech</span></div>
+            <div>
+              <h1 className="text-2xl font-black">Seção B1 — Pessoal</h1>
+              <p className="text-xs text-gray-400">Gestão completa de efetivo, escalas, documentos e exportações</p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {(['LISTAGEM', 'CADASTRO', 'DOCUMENTOS', 'FERIAS', 'ESCALA'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg text-xs font-black transition-all uppercase tracking-widest ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-              >
-                {tab === 'LISTAGEM' ? 'Efetivo' : tab === 'DOCUMENTOS' ? 'Docs' : tab === 'FERIAS' ? 'Férias' : tab === 'CADASTRO' ? 'Cadastrar' : 'Escala'}
-              </button>
-            ))}
+          <div className="flex items-center gap-4 text-xs">
+            <div className="text-center"><span className="text-2xl font-black text-primary block">{personnelList.length}</span><span className="text-gray-400">Total</span></div>
+            <div className="text-center"><span className="text-2xl font-black text-green-600 block">{personnelList.filter(p => p.status === 'Ativo').length}</span><span className="text-gray-400">Ativos</span></div>
+            {alerts.filter(a => a.severity === 'critical').length > 0 && <div className="text-center"><span className="text-2xl font-black text-red-600 block">{alerts.filter(a => a.severity === 'critical').length}</span><span className="text-gray-400">⚠ Alertas</span></div>}
           </div>
         </div>
-      </header>
 
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1400px] mx-auto space-y-8">
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
+          {(['ALERTAS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR'] as Tab[]).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
+              <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO')}
+              {t === 'ALERTAS' && alerts.filter(a => a.severity === 'critical').length > 0 && <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
 
-          {/* TAB: LISTAGEM */}
-          {activeTab === 'LISTAGEM' && (
-            <>
-              {/* Search Bar */}
-              <div className="mb-6">
-                <div className="relative max-w-md">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 text-[20px]">search</span>
-                  <input
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-rustic-border bg-white text-sm focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
-                    placeholder="Buscar por nome ou nome de guerra..."
-                  />
-                </div>
+      {loading && <div className="flex justify-center py-12"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div></div>}
+
+      {!loading && (
+        <>
+          {/* TAB: ALERTAS */}
+          {tab === 'ALERTAS' && <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />}
+
+          {/* TAB: EFETIVO */}
+          {tab === 'EFETIVO' && (
+            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="flex-1 relative"><span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-300 text-[18px]">search</span><input value={search} onChange={e => setSearch(e.target.value)} className="w-full h-10 pl-10 pr-4 rounded-lg border border-rustic-border text-sm" placeholder="Buscar por nome, guerra ou graduação..." /></div>
+                <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('CADASTRO'); }} className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">add</span> NOVO</button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {personnelList.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.war_name?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                  <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group">
-                    <div className="w-20 h-20 rounded-full bg-cover bg-center mb-4 border-2 border-primary/20" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
-                    <h4 className="font-bold text-lg leading-tight">{p.war_name || p.name.split(' ')[0]}</h4>
-                    <p className="text-xs text-gray-400 mb-2 truncate w-full px-4">{p.graduation ? `${p.graduation} — ` : ''}{p.name}</p>
-                    <div className="flex flex-wrap justify-center gap-1.5 mb-4">
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${p.type === 'BM' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>{p.type}</span>
-                      <span className="text-[9px] font-black px-2 py-0.5 rounded bg-stone-100 text-gray-600 uppercase">{p.status}</span>
-                    </div>
-                    <div className={`grid ${profile?.p_pessoal === 'editor' ? 'grid-cols-2' : 'grid-cols-1'} w-full gap-2 border-t border-stone-50 pt-4 mt-auto opacity-0 group-hover:opacity-100 transition-opacity`}>
-                      <button onClick={() => setSelectedPerson(p)} className="text-[10px] font-bold text-primary hover:bg-red-50 py-1.5 rounded-lg transition-colors">DETALHES</button>
-                      {profile?.p_pessoal === 'editor' && (
-                        <button onClick={() => handleDeletePersonnel(p.id!)} className="text-[10px] font-bold text-red-600 hover:bg-red-50 py-1.5 rounded-lg transition-colors">EXCLUIR</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Militar</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
+                  <tbody className="divide-y">{filteredPersonnel.map(p => {
+                    const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-purple-100 text-purple-700' };
+                    return (
+                      <tr key={p.id} className="hover:bg-stone-50/50 cursor-pointer" onClick={() => handleViewProfile(p)}>
+                        <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
+                        <td className="px-4 py-3 text-center font-bold">{p.graduation || p.rank}</td>
+                        <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
+                        <td className="px-4 py-3 text-center">{p.type}</td>
+                        <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={new Date(p.cve_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cve_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
+                        <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={new Date(p.cnh_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cnh_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
+                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          <div className="flex gap-1 justify-center">
+                            <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">edit</span></button>
+                            <button onClick={() => handleDeletePersonnel(p.id!)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-400"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+                {filteredPersonnel.length === 0 && <p className="text-center py-12 text-gray-300">Nenhum militar encontrado.</p>}
               </div>
-            </>
+            </div>
           )}
 
-          {activeTab === 'CADASTRO' && (
-            <div className="max-w-4xl mx-auto bg-white p-10 rounded-3xl border border-rustic-border shadow-sm">
-              <div className="mb-10 text-center">
-                <h3 className="text-2xl font-black text-[#181111] mb-2">Cadastrar Efetivo</h3>
-                <p className="text-sm text-gray-400">Preencha os dados do militar (BM) ou bombeiro comunitário (BC).</p>
+          {/* TAB: CADASTRO */}
+          {tab === 'CADASTRO' && (
+            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+              <h2 className="font-black text-xl mb-6">{editId ? 'Editar Militar' : 'Novo Cadastro de Militar'}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {formField('Nome Completo', 'name')}
+                {formField('Nome de Guerra', 'war_name')}
+                {formField('Posto / Graduação', 'graduation', 'text', RANKS_BM)}
+                {formField('Tipo', 'type', 'text', ['BM', 'BC'])}
+                {formField('Status', 'status', 'text', STATUS_OPTIONS)}
+                {formField('Função', 'role')}
+                {formField('CPF', 'cpf')}
+                {formField('Data Nascimento', 'birth_date', 'date')}
+                {formField('Email', 'email', 'email')}
+                {formField('Telefone', 'phone', 'tel')}
+                {formField('Nível de Instrução', 'education_level', 'text', ['Ensino Fundamental', 'Ensino Médio', 'Ensino Superior', 'Pós-Graduação', 'Mestrado', 'Doutorado'])}
+                {formField('Tipo Sanguíneo', 'blood_type', 'text', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])}
+                {formField('Endereço', 'address')}
+                {formField('Contato Emergência', 'emergency_contact_name')}
+                {formField('Tel. Emergência', 'emergency_phone', 'tel')}
+              </div>
+              <h3 className="font-black text-sm uppercase text-gray-500 mb-4 border-t pt-4">Documentos & Habilitações</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {formField('Possui CVE Ativo', 'cve_active', 'text', ['Sim', 'Não'])}
+                {formField('Data Emissão CVE', 'cve_issue_date', 'date')}
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade CVE (auto: +5 anos)</label>
+                  <input type="date" value={formData.cve_issue_date ? calcExpiry(formData.cve_issue_date, 5) : formData.cve_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
+                </div>
+                {formField('Cat. CNH', 'cnh_category', 'text', ['A', 'B', 'AB', 'C', 'D', 'E', 'AD', 'AE'])}
+                {formField('Nº CNH', 'cnh_number')}
+                {formField('Validade CNH', 'cnh_expiry_date', 'date')}
+                {formField('Data Toxicológico', 'toxicological_date', 'date')}
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade Toxicológico (auto: +2 anos)</label>
+                  <input type="date" value={formData.toxicological_date ? calcExpiry(formData.toxicological_date, 2) : formData.toxicological_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
+                </div>
+                {formField('Porte de Arma', 'weapon_permit', 'checkbox')}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Basic Info */}
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2 mb-4">Informações Básicas</h4>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome Completo *</label>
-                    <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo do militar" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome de Guerra</label>
-                    <input value={formData.war_name} onChange={e => setFormData({ ...formData, war_name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Ex: Pires" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo</label>
-                      <select value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
-                        <option value="BM">Militares (BM)</option>
-                        <option value="BC">Comunitário (BC)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Status</label>
-                      <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as any })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
-                        <option value="ATIVO">Ativo</option>
-                        <option value="FÉRIAS">Férias</option>
-                        <option value="EM CURSO">Em Curso</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Posto ou Graduação</label>
-                    <select value={formData.graduation} onChange={e => setFormData({ ...formData, graduation: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
-                      <option value="">Selecione...</option>
-                      <option value="Soldado">Soldado</option>
-                      <option value="Cabo">Cabo</option>
-                      <option value="3° Sargento">3° Sargento</option>
-                      <option value="2° Sargento">2° Sargento</option>
-                      <option value="1° Sargento">1° Sargento</option>
-                      <option value="Subtenente">Subtenente</option>
-                      <option value="Aspirante">Aspirante</option>
-                      <option value="2° Tenente">2° Tenente</option>
-                      <option value="1° Tenente">1° Tenente</option>
-                      <option value="Capitão">Capitão</option>
-                      <option value="Major">Major</option>
-                      <option value="Tenente-Coronel">Tenente-Coronel</option>
-                      <option value="Coronel">Coronel</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">E-mail</label>
-                    <input value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="email@exemplo.com" />
+              {/* Rank Change Section (edit mode only) */}
+              {editId && (
+                <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                  <h4 className="font-black text-sm mb-3 text-amber-700">Promoção / Alteração de Graduação</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div><label className="text-[10px] font-black block mb-1">Nova Graduação</label><select value={rankChangeNewRank} onChange={e => setRankChangeNewRank(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm"><option value="">Selecionar...</option>{RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
+                    <div><label className="text-[10px] font-black block mb-1">Base Legal</label><input value={rankChangeLegalBasis} onChange={e => setRankChangeLegalBasis(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm" placeholder="Ex: LC 801/2022 Art. XX" /></div>
+                    <div className="flex items-end"><button onClick={() => handleRankChange(formData as Personnel)} className="px-4 py-2.5 bg-amber-600 text-white text-xs font-black rounded-lg">REGISTRAR PROMOÇÃO</button></div>
                   </div>
                 </div>
+              )}
 
-                {/* Additional Info */}
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2 mb-4">Dados Adicionais</h4>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Data de Nasc.</label>
-                      <input type="date" value={formData.birth_date} onChange={e => setFormData({ ...formData, birth_date: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Telefone</label>
-                      <input value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="(47) 99999-9999" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo Sanguíneo</label>
-                      <select value={formData.blood_type} onChange={e => setFormData({ ...formData, blood_type: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
-                        <option value="">Selecione...</option>
-                        <option value="A+">A+</option><option value="A-">A-</option>
-                        <option value="B+">B+</option><option value="B-">B-</option>
-                        <option value="AB+">AB+</option><option value="AB-">AB-</option>
-                        <option value="O+">O+</option><option value="O-">O-</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Possui CVE Ativo?</label>
-                      <select value={formData.cve_active} onChange={e => setFormData({ ...formData, cve_active: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
-                        <option value="">Selecione...</option>
-                        <option value="Sim">Sim</option>
-                        <option value="Não">Não</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Endereço Residencial</label>
-                    <input value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Rua, Número, Bairro, Cidade" />
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-rustic-border/50">
-                    <input type="checkbox" checked={formData.weapon_permit} onChange={e => setFormData({ ...formData, weapon_permit: e.target.checked })} className="w-4 h-4 text-primary rounded" />
-                    <label className="text-xs font-bold text-gray-600">Possui Porte de Arma / Acautelamento</label>
-                  </div>
-                </div>
-              </div>
-
-              {/* New Section: Documentação & Emergência */}
-              <div className="col-span-1 md:col-span-2 mt-4">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2 mb-6">Documentação & Contato de Emergência</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Grau de Instrução</label>
-                      <select value={formData.education_level} onChange={e => setFormData({ ...formData, education_level: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
-                        <option value="">Selecione...</option>
-                        <option value="Fundamental Incompleto">Fundamental Incompleto</option>
-                        <option value="Fundamental Completo">Fundamental Completo</option>
-                        <option value="Médio Incompleto">Médio Incompleto</option>
-                        <option value="Médio Completo">Médio Completo</option>
-                        <option value="Superior Incompleto">Superior Incompleto</option>
-                        <option value="Superior Completo">Superior Completo</option>
-                        <option value="Pós-Graduação">Pós-Graduação</option>
-                        <option value="Mestrado">Mestrado</option>
-                        <option value="Doutorado">Doutorado</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Categoria CNH</label>
-                        <select value={formData.cnh_category} onChange={e => setFormData({ ...formData, cnh_category: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm">
-                          <option value="">Selecione...</option>
-                          <option value="A">A</option>
-                          <option value="B">B</option>
-                          <option value="C">C</option>
-                          <option value="D">D</option>
-                          <option value="E">E</option>
-                          <option value="AB">AB</option>
-                          <option value="AC">AC</option>
-                          <option value="AD">AD</option>
-                          <option value="AE">AE</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Número da CNH</label>
-                        <input value={formData.cnh_number} onChange={e => setFormData({ ...formData, cnh_number: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nº do Registro" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">CPF</label>
-                      <input value={formData.cpf} onChange={e => setFormData({ ...formData, cpf: applyCpfMask(e.target.value) })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="000.000.000-00" maxLength={14} />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nome do Contato de Emergência</label>
-                      <input value={formData.emergency_contact_name} onChange={e => setFormData({ ...formData, emergency_contact_name: e.target.value })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Nome completo do contato" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Telefone de Emergência</label>
-                      <input value={formData.emergency_phone} onChange={e => setFormData({ ...formData, emergency_phone: applyPhoneMask(e.target.value) })} className="w-full h-11 px-4 rounded-xl border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="(47) 99999-9999" maxLength={15} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-12 flex justify-center">
-                {profile?.p_pessoal === 'editor' && (
-                  <button
-                    onClick={handleSavePersonnel}
-                    disabled={loading}
-                    className="px-12 py-4 bg-primary text-white font-black rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined">{loading ? 'sync' : 'how_to_reg'}</span>
-                    {loading ? 'SALVANDO...' : 'FINALIZAR CADASTRO'}
-                  </button>
-                )}
-                {profile?.p_pessoal === 'reader' && (
-                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-700">
-                    <span className="material-symbols-outlined">lock</span>
-                    <p className="text-xs font-bold uppercase tracking-tight">Você possui apenas permissão de LEITURA neste módulo.</p>
-                  </div>
-                )}
+              <div className="flex gap-3 pt-4 border-t">
+                <button onClick={handleSavePersonnel} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">{editId ? 'ATUALIZAR' : 'CADASTRAR'}</button>
+                <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('EFETIVO'); }} className="px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">CANCELAR</button>
               </div>
             </div>
           )}
 
           {/* TAB: DOCUMENTOS */}
-          {activeTab === 'DOCUMENTOS' && (
+          {tab === 'DOCUMENTOS' && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-              {/* Upload Form */}
               <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
-                <h3 className="font-black text-lg mb-6 flex items-center gap-2"><span className="material-symbols-outlined text-primary">upload_file</span> Anexar PDF</h3>
+                <h3 className="font-black text-lg mb-4">Anexar Documento</h3>
                 <div className="space-y-4">
-                  <label className={`flex flex-col items-center justify-center h-40 border-2 border-dashed rounded-xl cursor-pointer hover:bg-stone-50 transition-all ${docFile ? 'border-primary bg-red-50/10' : 'border-gray-200'}`}>
-                    {docFile ? <span className="text-xs font-bold text-primary">{docFile.name}</span> : <span className="text-xs text-gray-400">Clique para selecionar PDF</span>}
-                    <input type="file" accept="application/pdf" className="hidden" onChange={e => e.target.files && setDocFile(e.target.files[0])} />
-                  </label>
-                  <select value={docCategory} onChange={e => setDocCategory(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm">
-                    <option>Certidão</option><option>Portaria</option><option>Requerimento</option><option>Ficha Médica</option>
-                  </select>
-                  <textarea value={docObs} onChange={e => setDocObs(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-xs" placeholder="Observações/Notas" />
-                  <button onClick={handleUploadDocument} disabled={loading} className="w-full py-3 bg-primary text-white font-black rounded-xl hover:brightness-110 disabled:opacity-50">SUBIR DOCUMENTO</button>
+                  <select value={docPersonId} onChange={e => setDocPersonId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
+                  <select value={docType} onChange={e => setDocType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Tipo de documento...</option>{['Certidão', 'Atestado', 'Requerimento', 'Ofício', 'Portaria', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}</select>
+                  <input type="file" onChange={e => setDocFile(e.target.files?.[0] || null)} className="w-full text-sm" />
+                  <textarea value={docNotes} onChange={e => setDocNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
+                  <button onClick={handleUploadDoc} className="w-full py-3 bg-primary text-white font-black rounded-xl">ENVIAR</button>
                 </div>
               </div>
-              {/* Docs List */}
-              <div className="xl:col-span-2 bg-white rounded-2xl border border-rustic-border shadow-sm overflow-hidden">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-stone-50 border-b border-rustic-border text-[10px] font-black uppercase text-gray-400">
-                    <tr><th className="px-6 py-4">Arquivo</th><th className="px-6 py-4">Tipo</th><th className="px-6 py-4">Tamanho</th><th className="px-6 py-4 text-right">Ações</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {documents.map(doc => (
-                      <tr key={doc.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-6 py-4 font-bold"><span className="flex items-center gap-2"><span className="material-symbols-outlined text-primary">description</span> {doc.file_name}</span></td>
-                        <td className="px-6 py-4"><span className="text-[10px] font-bold bg-gray-100 px-2 py-0.5 rounded">{doc.document_type}</span></td>
-                        <td className="px-6 py-4 text-gray-400 text-xs">{doc.size_kb} KB</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <a href={doc.file_url} target="_blank" className="p-2 hover:bg-stone-100 rounded-lg text-primary"><span className="material-symbols-outlined text-[18px]">visibility</span></a>
-                            <button onClick={() => handleDeleteDocument(doc.id!, doc.file_url)} className="p-2 hover:bg-red-50 rounded-lg text-red-600"><span className="material-symbols-outlined text-[18px]">delete</span></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                <h3 className="font-black text-lg mb-4">Documentos ({documents.length})</h3>
+                <div className="space-y-2">{documents.map(d => {
+                  const person = personnelList.find(p => p.id === d.personnel_id);
+                  return (
+                    <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-rustic-border hover:border-primary/30 transition-all">
+                      <span className="material-symbols-outlined text-primary">description</span>
+                      <div className="flex-1 min-w-0"><span className="font-bold text-sm block truncate">{d.file_name}</span><span className="text-[10px] text-gray-400">{d.document_type} {person ? `• ${person.name}` : ''} {d.upload_date ? `• ${new Date(d.upload_date).toLocaleDateString('pt-BR')}` : ''}</span></div>
+                      <a href={d.file_url} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">download</span></a>
+                    </div>
+                  );
+                })}{documents.length === 0 && <p className="text-center py-8 text-gray-300 italic">Nenhum documento anexado.</p>}</div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: ESCALA */}
+          {tab === 'ESCALA' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-black text-xl">Escala de Serviço</h2>
+                  <div className="flex items-center gap-3">
+                    <select value={scaleShiftType} onChange={e => setScaleShiftType(e.target.value as any)} className="h-10 px-3 rounded-lg border text-xs font-bold">
+                      <option value="24x72">24×72</option><option value="12x36">12×36</option><option value="administrative">Administrativo</option>
+                    </select>
+                    <input type="month" value={scaleMonth} onChange={e => setScaleMonth(e.target.value)} className="h-10 px-3 rounded-lg border text-xs font-bold" />
+                  </div>
+                </div>
+
+                {/* Team config */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {['Alpha', 'Bravo', 'Charlie', 'Delta'].map(team => (
+                    <div key={team} className="p-4 bg-stone-50 rounded-xl border border-rustic-border">
+                      <h4 className="font-black text-sm mb-3">{team}</h4>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {(scaleTeams[team] || []).map(pid => {
+                          const p = personnelList.find(pp => pp.id === pid);
+                          return p ? <div key={pid} className="flex items-center justify-between text-xs p-1.5 bg-white rounded-lg"><span>{p.graduation || ''} {p.war_name || p.name}</span><button onClick={() => { const updated = { ...scaleTeams, [team]: scaleTeams[team].filter(id => id !== pid) }; saveTeamConfig(updated); }} className="text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[14px]">close</span></button></div> : null;
+                        })}
+                      </div>
+                      <select onChange={e => { if (e.target.value) { const pid = Number(e.target.value); const current = scaleTeams[team] || []; if (!current.includes(pid)) saveTeamConfig({ ...scaleTeams, [team]: [...current, pid] }); e.target.value = ''; } }} className="w-full h-8 px-2 rounded border text-[10px] mt-2">
+                        <option value="">+ Adicionar militar...</option>
+                        {personnelList.filter(p => p.status === 'Ativo' && !Object.values(scaleTeams).flat().includes(p.id!)).map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                <button onClick={publishScale} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">PUBLICAR ESCALA DO MÊS</button>
+              </div>
+
+              {/* Swap Registration */}
+              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                <h3 className="font-black text-lg mb-4 flex items-center gap-2"><span className="material-symbols-outlined text-amber-500">swap_horiz</span> Troca de Serviço <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Limite: 2/mês/militar</span></h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <select value={swapPersonId} onChange={e => setSwapPersonId(Number(e.target.value))} className="h-11 px-3 rounded-lg border text-sm"><option value="">Militar...</option>{personnelList.filter(p => p.status === 'Ativo').map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}</select>
+                  <input type="date" value={swapOrigDate} onChange={e => setSwapOrigDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Data original" />
+                  <input type="date" value={swapNewDate} onChange={e => setSwapNewDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Nova data" />
+                  <input value={swapReason} onChange={e => setSwapReason(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Motivo" />
+                  <button onClick={handleSaveSwap} className="h-11 bg-amber-500 text-white font-black rounded-xl text-xs">REGISTRAR TROCA</button>
+                </div>
               </div>
             </div>
           )}
 
           {/* TAB: FERIAS */}
-          {activeTab === 'FERIAS' && (
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-              {/* Vacation Form */}
-              <div className="xl:col-span-4 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
-                <h3 className="font-black text-lg mb-6 flex items-center gap-2"><span className="material-symbols-outlined text-primary">calendar_month</span> Nova Programação</h3>
+          {tab === 'FERIAS' && (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
+                <h3 className="font-black text-lg mb-4">Registrar Férias / Licença</h3>
                 <div className="space-y-4">
-                  <select value={vacaPersonId} onChange={e => setVacaPersonId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm">
-                    <option value="">Selecionar Militar...</option>
-                    {personnelList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="text-xs font-bold block">Início: <input type="date" value={vacaStart} onChange={e => setVacaStart(e.target.value)} className="w-full mt-1 h-10 px-2 border rounded-lg" /></label>
-                    <label className="text-xs font-bold block">Fim: <input type="date" value={vacaEnd} onChange={e => setVacaEnd(e.target.value)} className="w-full mt-1 h-10 px-2 border rounded-lg" /></label>
-                  </div>
-                  <textarea value={vacaObs} onChange={e => setVacaObs(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-xs" placeholder="Observações das férias" />
-                  <button onClick={handleSaveVacation} className="w-full py-4 bg-primary text-white font-black rounded-xl hover:brightness-110">PROGRAMAR FÉRIAS</button>
+                  <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
+                  <select value={vacType} onChange={e => setVacType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm">{LEAVE_TYPES.map(lt => <option key={lt.value} value={lt.value}>{lt.label}</option>)}</select>
+                  <input type="date" value={vacStart} onChange={e => setVacStart(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
+                  <input type="date" value={vacEnd} onChange={e => setVacEnd(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
+                  <textarea value={vacNotes} onChange={e => setVacNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
+                  <button onClick={handleSaveVacation} className="w-full py-3 bg-primary text-white font-black rounded-xl">REGISTRAR</button>
                 </div>
               </div>
-              {/* Vacations Timeline/List */}
-              <div className="xl:col-span-8 bg-white rounded-2xl border border-rustic-border shadow-sm p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-black text-lg">Cronograma de Férias {new Date().getFullYear()}</h3>
-                  <div className="flex gap-2">
-                    <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded-full"></div><span className="text-[10px] font-bold">Planejado</span></div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {vacations.map(v => (
-                    <div key={v.id} className="flex items-center gap-4 p-4 rounded-xl border border-rustic-border hover:border-primary/30 group transition-all">
-                      <div className="w-12 h-12 rounded-lg bg-blue-50 flex flex-col items-center justify-center text-blue-700 font-black">
-                        <span className="text-[10px] uppercase">{new Date(v.start_date).toLocaleDateString('pt-BR', { month: 'short' })}</span>
-                        <span className="text-lg leading-none">{v.start_date.split('-')[2]}</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-bold text-sm">{v.full_name}</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase">{v.day_count} DIAS • {v.start_date} ATÉ {v.end_date}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded-full uppercase tracking-tighter">PLANEJADO</span>
-                        <button
-                          onClick={() => handleDeleteVacation(v.id!)}
-                          className="p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
-                          title="Excluir Férias"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">calendar_today_delay</span>
-                        </button>
-                      </div>
+              <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                <h3 className="font-black text-lg mb-4">Períodos Registrados ({vacations.length})</h3>
+                <div className="space-y-2">{vacations.map(v => {
+                  const leaveLabel = LEAVE_TYPES.find(lt => lt.value === v.leave_type)?.label || v.leave_type || 'Férias';
+                  return (
+                    <div key={v.id} className="flex items-center gap-4 p-4 rounded-xl border border-rustic-border hover:border-primary/30">
+                      <span className="material-symbols-outlined text-blue-500">event</span>
+                      <div className="flex-1"><span className="font-bold text-sm block">{v.full_name}</span><span className="text-xs text-gray-400">{leaveLabel} • {new Date(v.start_date).toLocaleDateString('pt-BR')} — {new Date(v.end_date).toLocaleDateString('pt-BR')} ({v.day_count}d)</span></div>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${v.status === 'concluido' ? 'bg-green-100 text-green-700' : v.status === 'em_andamento' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'} uppercase`}>{v.status || 'planejado'}</span>
+                      <button onClick={async () => { if (confirm('Remover?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }} className="p-1 text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[16px]">delete</span></button>
                     </div>
-                  ))}
-                  {vacations.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhuma programação de férias encontrada.</p>}
-                </div>
+                  );
+                })}{vacations.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum período registrado.</p>}</div>
               </div>
             </div>
           )}
 
-          {/* TAB: ESCALA - 24x72 Generator */}
-          {activeTab === 'ESCALA' && (
-            <div className="space-y-8">
-              {/* Configuration Panel */}
-              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                <div className="flex justify-between items-center mb-6 border-b border-rustic-border pb-4">
-                  <h3 className="font-black text-lg flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">groups</span>
-                    Configuração das Equipes (24x72)
-                  </h3>
-                  <div className="flex items-center gap-4">
-                    <button
-                      disabled={savingRoster}
-                      onClick={async () => {
-                        const today = new Date();
-                        const team = getTeamForDate(today);
-
-                        if (team.members.length === 0) {
-                          toast.error("Equipe de hoje está vazia! Adicione militares antes de publicar.");
-                          return;
-                        }
-
-                        if (!confirm(`Publicar escala de hoje (${today.toLocaleDateString('pt-BR')}) para a Equipe ${team.name}?\n\nMilitares: ${team.members.length}`)) return;
-
-                        setSavingRoster(true);
-                        try {
-                          await SupabaseService.saveEscala({
-                            data: today.toISOString().split('T')[0],
-                            equipe: team.name,
-                            militares: team.members
-                          });
-                          toast.success(`Escala da Equipe ${team.name} publicada com sucesso!`);
-                        } catch (err) {
-                          console.error('Error publishing escala:', err);
-                          toast.error("Erro ao publicar escala. Verifique sua conexão.");
-                        } finally {
-                          setSavingRoster(false);
-                        }
-                      }}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110 flex items-center gap-2 disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">{savingRoster ? 'sync' : 'publish'}</span>
-                      {savingRoster ? 'PUBLICANDO...' : 'PUBLICAR HOJE'}
-                    </button>
-                    <label className="text-xs font-bold text-gray-500">
-                      Data Base (Equipe A):
-                      <input type="date" value={rosterStartDate} onChange={e => setRosterStartDate(e.target.value)} className="ml-2 border rounded p-1 text-sm bg-stone-50" />
-                    </label>
-                    <button onClick={saveRosterConfig} disabled={savingRoster} className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-black shadow-md hover:brightness-110 disabled:opacity-50">{savingRoster ? 'SALVANDO...' : 'SALVAR CONFIG'}</button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  {[
-                    { id: 'A', name: 'Equipe Alpha', state: teamA, setter: setTeamA, color: 'bg-red-50 border-red-100' },
-                    { id: 'B', name: 'Equipe Bravo', state: teamB, setter: setTeamB, color: 'bg-blue-50 border-blue-100' },
-                    { id: 'C', name: 'Equipe Charlie', state: teamC, setter: setTeamC, color: 'bg-green-50 border-green-100' },
-                    { id: 'D', name: 'Equipe Delta', state: teamD, setter: setTeamD, color: 'bg-yellow-50 border-yellow-100' },
-                  ].map(team => (
-                    <div key={team.id} className={`p-4 rounded-xl border ${team.color}`}>
-                      <h4 className="font-black text-sm uppercase mb-3 text-center opacity-70">{team.name}</h4>
-                      <div className="h-48 overflow-y-auto bg-white rounded-lg border border-gray-100 p-2 space-y-1">
-                        {personnelList.filter(p => !team.state.includes(p.id!) && p.status === 'ATIVO').length === 0 && (
-                          <p className="text-[10px] text-center text-gray-300 py-2">Todos alocados</p>
-                        )}
-                        {/* Selected Members */}
-                        {team.state.map(id => {
-                          const p = personnelList.find(x => x.id === id);
-                          return p ? (
-                            <div key={id} className="flex justify-between items-center text-xs p-1.5 bg-gray-50 rounded border border-gray-100">
-                              <span className="font-bold truncate">{p.war_name || p.name.split(' ')[0]}</span>
-                              <button onClick={() => team.setter(prev => prev.filter(x => x !== id))} className="text-red-400 hover:text-red-600">×</button>
-                            </div>
-                          ) : null;
-                        })}
-
-                        <hr className="my-2 border-dashed" />
-
-                        {/* Available Members Selector */}
-                        <select
-                          className="w-full text-[10px] p-1 border rounded bg-stone-50"
-                          value=""
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val) {
-                              team.setter(prev => [...prev, Number(val)]);
-                            }
-                          }}
-                        >
-                          <option value="">+ Adicionar Militar...</option>
-                          {personnelList
-                            .filter(p => !teamA.includes(p.id!) && !teamB.includes(p.id!) && !teamC.includes(p.id!) && !teamD.includes(p.id!) && p.status === 'ATIVO')
-                            .map(p => (
-                              <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name.split(' ')[0]}</option>
-                            ))
-                          }
-                        </select>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Calendar View */}
-              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-black text-lg">Escala Mensal</h3>
-                  <div className="flex gap-2">
-                    <button onClick={() => setRosterMonth(prev => prev - 1)} className="p-1 rounded bg-stone-100 hover:bg-stone-200">
-                      <span className="material-symbols-outlined">chevron_left</span>
-                    </button>
-                    <span className="font-bold uppercase w-32 text-center pt-1">
-                      {new Date(rosterYear, rosterMonth).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                    </span>
-                    <button onClick={() => setRosterMonth(prev => prev + 1)} className="p-1 rounded bg-stone-100 hover:bg-stone-200">
-                      <span className="material-symbols-outlined">chevron_right</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
-                  {/* Headers */}
-                  {['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'].map(d => (
-                    <div key={d} className="bg-stone-100 p-2 text-center text-[10px] font-black uppercase text-gray-500">{d}</div>
-                  ))}
-
-                  {/* Empty Days */}
-                  {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                    <div key={`empty-${i}`} className="bg-white min-h-[100px]" />
-                  ))}
-
-                  {/* Days */}
-                  {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const date = new Date(rosterYear, rosterMonth, day);
-                    const team = getTeamForDate(date);
-                    const isToday = new Date().toDateString() === date.toDateString();
-
-                    return (
-                      <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-stone-50 transition-colors ${isToday ? 'ring-2 ring-primary/20 bg-red-50/10' : ''}`}>
-                        <div className="flex justify-between items-start mb-2">
-                          <span className={`text-xs font-bold ${isToday ? 'bg-primary text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-700'}`}>{day}</span>
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${team.color}`}>{team.name}</span>
-                        </div>
-                        <div className="space-y-1">
-                          {team.members.map(mid => {
-                            const p = personnelList.find(x => x.id === mid);
-                            return p ? (
-                              <div key={mid} className="text-[10px] font-medium text-gray-600 truncate flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                                {p.war_name || p.name.split(' ')[0]}
-                              </div>
-                            ) : null;
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+          {/* TAB: BOLETIM */}
+          {tab === 'BOLETIM' && (
+            <BulletinSection bulletins={bulletins} onAddBulletin={async (b) => { await PersonnelService.addBulletin(b); loadBulletins(); toast.success('Boletim criado!'); }} onUpdateBulletin={async (id, u) => { await PersonnelService.updateBulletin(id, u); loadBulletins(); toast.success('Boletim atualizado!'); }} onGetNotes={PersonnelService.getBulletinNotes} onAddNote={async (n) => { await PersonnelService.addBulletinNote(n); toast.success('Nota adicionada!'); }} onGetVersions={PersonnelService.getBulletinVersions} isEditor={true} />
           )}
 
-        </div>
-      </div>
+          {/* TAB: DISCIPLINA */}
+          {tab === 'DISCIPLINA' && (
+            <DisciplinarySection records={disciplinaryRecords} personnelList={personnelList} onAdd={async (r) => { await PersonnelService.addDisciplinaryRecord(r); loadDisciplinary(); toast.success('Registro adicionado!'); }} onDelete={async (id) => { if (confirm('Remover registro?')) { await PersonnelService.deleteDisciplinaryRecord(id); loadDisciplinary(); toast.success('Removido!'); } }} isEditor={true} />
+          )}
 
-      {/* MODAL: DETALHES DO PESSOAL */}
-      {selectedPerson && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-[#2c1810] to-[#4a2c20] p-8 text-white relative">
-              <button onClick={() => setSelectedPerson(null)} className="absolute top-6 right-6 text-white/60 hover:text-white transition-colors">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-              <div className="flex items-center gap-6">
-                <div className="w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 bg-cover bg-center" style={{ backgroundImage: `url(${selectedPerson.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 bg-primary/20 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.graduation || selectedPerson.rank || selectedPerson.type}</span>
-                    <span className="px-2 py-0.5 bg-white/10 border border-white/10 rounded text-[10px] font-black uppercase tracking-widest">{selectedPerson.type}</span>
-                  </div>
-                  <h3 className="text-3xl font-black tracking-tight">{selectedPerson.name}</h3>
-                  <p className="text-white/60 font-bold uppercase text-[11px] tracking-widest mt-1">Guerra: {selectedPerson.war_name || 'Não informado'}</p>
-                </div>
-              </div>
-            </div>
+          {/* TAB: PRONTIDAO */}
+          {tab === 'PRONTIDAO' && <ReadinessReport personnelList={personnelList} vacations={vacations} />}
 
-            {/* Modal Content */}
-            <div className="p-8 grid grid-cols-2 gap-8 bg-stone-50/50">
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-3 border-b border-primary/10 pb-1">Informações de Contato</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary/40 text-[20px]">mail</span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">E-mail</p>
-                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.email || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary/40 text-[20px]">call</span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Telefone</p>
-                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.phone || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-primary/40 text-[20px] mt-1">home</span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Endereço</p>
-                        <p className="text-sm font-bold text-rustic-brown leading-snug">{selectedPerson.address || 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          {/* TAB: PERFIL */}
+          {tab === 'PERFIL' && profilePerson && (
+            <PersonnelProfile person={profilePerson} rankHistory={profileRankHistory} swaps={profileSwaps} disciplinary={profileDisciplinary} vacations={profileVacations} documents={profileDocs} onClose={() => { setProfilePerson(null); setTab('EFETIVO'); }} />
+          )}
+          {tab === 'PERFIL' && !profilePerson && <div className="text-center py-12 text-gray-300"><p>Selecione um militar na aba Efetivo para ver o perfil completo.</p></div>}
 
-                <div>
-                  <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-3 border-b border-primary/10 pb-1">Dados Funcionais</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary/40 text-[20px]">badge</span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Função/Role</p>
-                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.role || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary/40 text-[20px]">military_tech</span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Posto ou Graduação</p>
-                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.graduation || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary/40 text-[20px]">verified</span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">CVE Ativo</p>
-                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cve_active || 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-3 border-b border-primary/10 pb-1">Identificação & Saúde</h4>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-[20px]">cake</span>
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Nascimento</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.birth_date ? new Date(selectedPerson.birth_date).toLocaleDateString('pt-BR') : 'N/A'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-[20px]">water_drop</span>
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo Sanguíneo</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.blood_type || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary/40 text-[20px]">drive_eta</span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">CNH</p>
-                        <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cnh || 'N/A'}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 p-3 bg-red-50/50 rounded-xl border border-red-100/50">
-                      <span className={`material-symbols-outlined ${selectedPerson.weapon_permit ? 'text-green-600' : 'text-gray-400'}`}>
-                        {selectedPerson.weapon_permit ? 'verified_user' : 'cancel'}
-                      </span>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Porte de Arma</p>
-                        <p className={`text-[10px] font-black uppercase ${selectedPerson.weapon_permit ? 'text-green-600' : 'text-gray-400'}`}>
-                          {selectedPerson.weapon_permit ? 'AUTORIZADO / ACAUTELADO' : 'NÃO POSSUI'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* New detail fields */}
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-[20px]">school</span>
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Grau de Instrução</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.education_level || 'N/A'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-[20px]">id_card</span>
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">CPF</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cpf || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-[20px]">credit_card</span>
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Cat. CNH / Nº</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.cnh_category || 'N/A'} {selectedPerson.cnh_number ? `• ${selectedPerson.cnh_number}` : ''}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary/40 text-[20px]">emergency</span>
-                        <div>
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Contato Emergência</p>
-                          <p className="text-sm font-bold text-rustic-brown">{selectedPerson.emergency_contact_name || 'N/A'}</p>
-                          <p className="text-[10px] text-gray-500">{selectedPerson.emergency_phone || ''}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-auto pt-6 flex justify-end">
-                  <button onClick={() => setSelectedPerson(null)} className="px-6 py-2 bg-stone-200 text-rustic-brown font-black text-xs rounded-xl hover:bg-stone-300 transition-colors">FECHAR</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          {/* TAB: EXPORTAR */}
+          {tab === 'EXPORTAR' && (
+            <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
+          )}
+        </>
       )}
     </div>
   );

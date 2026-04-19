@@ -34,7 +34,7 @@ export interface Personnel {
     war_name?: string;
     rank: string;
     role: string;
-    status: 'ATIVO' | 'FÉRIAS' | 'EM CURSO';
+    status: 'Ativo' | 'Férias' | 'Licença' | 'Afastado' | 'Cedido';
     type: 'BM' | 'BC';
     address?: string;
     email?: string;
@@ -47,12 +47,122 @@ export interface Personnel {
     education_level?: string;
     cnh_category?: string;
     cnh_number?: string;
+    cnh_expiry_date?: string;
     cpf?: string;
     emergency_phone?: string;
     emergency_contact_name?: string;
     cve_active?: string;
+    cve_issue_date?: string;
+    cve_expiry_date?: string;
+    toxicological_date?: string;
+    toxicological_expiry_date?: string;
     graduation?: string;
+    last_cadastro_review?: string;
+    created_at?: string;
 }
+
+export interface RankHistory {
+    id?: string;
+    personnel_id: number;
+    previous_rank: string;
+    new_rank: string;
+    change_date: string;
+    legal_basis: string;
+    responsible_officer?: string;
+    created_at?: string;
+}
+
+export interface ServiceSwap {
+    id?: string;
+    personnel_id: number;
+    original_date: string;
+    new_date: string;
+    swap_with_personnel_id?: number;
+    reason: string;
+    swap_date: string;
+    month_ref: string;
+    created_at?: string;
+    // Joined fields
+    personnel_name?: string;
+    swap_with_name?: string;
+}
+
+export interface DisciplinaryRecord {
+    id?: string;
+    personnel_id: number;
+    record_type: 'elogio' | 'condecoracao' | 'punicao' | 'comportamento';
+    date: string;
+    description: string;
+    legal_reference?: string;
+    responsible_authority?: string;
+    created_at?: string;
+    // Joined
+    personnel_name?: string;
+}
+
+export interface Bulletin {
+    id?: string;
+    number?: number;
+    week_start: string;
+    week_end: string;
+    status: 'rascunho' | 'em_revisao' | 'aguardando_assinatura' | 'publicado';
+    content?: string;
+    signed_file_url?: string;
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface BulletinNote {
+    id?: string;
+    bulletin_id: string;
+    section: string;
+    content: string;
+    submitted_by?: string;
+    submitted_at?: string;
+    status?: 'pendente' | 'aprovada' | 'rejeitada';
+}
+
+export interface BulletinVersion {
+    id?: string;
+    bulletin_id: string;
+    content: string;
+    edited_by?: string;
+    edited_at?: string;
+}
+
+export interface SigrhExport {
+    id?: string;
+    export_type: string;
+    month_ref: string;
+    submitted_date?: string;
+    responsible?: string;
+    system: 'SIGRH' | 'SGP-e';
+    created_at?: string;
+}
+
+export interface VacationLeave {
+    id?: string;
+    personnel_id: number;
+    full_name: string;
+    start_date: string;
+    end_date: string;
+    day_count: number;
+    leave_type: 'ferias' | 'licenca_medica' | 'licenca_especial' | 'afastamento' | 'cedido' | 'outros';
+    status?: 'planejado' | 'aprovado' | 'em_andamento' | 'concluido';
+    notes?: string;
+}
+
+export interface AlertItem {
+    personnelId: number;
+    personnelName: string;
+    alertType: string;
+    referenceDate: string;
+    severity: 'critical' | 'warning' | 'info';
+    message: string;
+}
+
+// ===== Legacy types kept for compatibility =====
 
 export interface GuReport {
     id?: string;
@@ -212,6 +322,7 @@ export interface DocumentB1 {
     uploaded_by?: string;
     upload_date?: string;
     notes?: string;
+    personnel_id?: number;
 }
 
 export interface Vacation {
@@ -221,6 +332,7 @@ export interface Vacation {
     start_date: string;
     end_date: string;
     day_count: number;
+    leave_type?: string;
     status?: 'planejado' | 'aprovado' | 'em_andamento' | 'concluido';
     notes?: string;
 }
@@ -303,5 +415,6 @@ export interface Escala {
     data: string;
     equipe: string;
     militares: number[]; // IDs dos militares
+    shift_type?: '24x72' | '12x36' | 'administrative';
     created_at?: string;
 }
