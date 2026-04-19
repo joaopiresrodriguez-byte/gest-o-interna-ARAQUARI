@@ -1,4 +1,4 @@
-import { Personnel, Vehicle, Occurrence } from './types';
+import { Personnel, Vehicle, Occurrence, B1Course, EpiDelivery } from './types';
 
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 
@@ -112,5 +112,37 @@ export const GoogleSheetsService = {
             ]);
         }
         return true;
+    },
+
+    syncCourse: async (course: Partial<B1Course>, personnelName: string, rank: string): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),
+            personnelName,
+            rank,
+            course.course_name || '',
+            course.institution || '',
+            course.workload_hours?.toString() || '',
+            formatDate(course.completion_date),
+            formatDate(course.expiry_date),
+            course.category || '',
+        ];
+        return sendToSheets('Cursos B1', row);
+    },
+
+    syncEpi: async (epi: Partial<EpiDelivery>, personnelName: string, rank: string): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),
+            personnelName,
+            rank,
+            epi.item_name || '',
+            epi.item_type || '',
+            epi.item_description || '',
+            formatDate(epi.delivery_date),
+            formatDate(epi.replacement_date),
+            epi.quantity?.toString() || '1',
+            epi.condition || '',
+            epi.patrimonio_number || '',
+        ];
+        return sendToSheets('Uniformes EPIs', row);
     },
 };

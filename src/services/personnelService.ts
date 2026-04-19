@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem } from './types';
+import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification } from './types';
 import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
 
@@ -405,8 +405,142 @@ export const PersonnelService = {
         return data;
     },
 
+    // ===== B1 COURSES CRUD =====
+    getCourses: async (personnelId?: number): Promise<B1Course[]> => {
+        try {
+            let query = supabase.from('b1_courses').select('*').order('completion_date', { ascending: false });
+            if (personnelId) query = query.eq('personnel_id', personnelId);
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching courses:', error);
+            return [];
+        }
+    },
+
+    addCourse: async (course: Omit<B1Course, 'id'>): Promise<B1Course> => {
+        const { data, error } = await supabase.from('b1_courses').insert(course).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    updateCourse: async (id: string, updates: Partial<B1Course>): Promise<B1Course> => {
+        const { data, error } = await supabase.from('b1_courses').update(updates).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    deleteCourse: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('b1_courses').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // ===== EPI DELIVERIES CRUD =====
+    getEpiDeliveries: async (personnelId?: number): Promise<EpiDelivery[]> => {
+        try {
+            let query = supabase.from('epi_deliveries').select('*').order('delivery_date', { ascending: false });
+            if (personnelId) query = query.eq('personnel_id', personnelId);
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching EPI deliveries:', error);
+            return [];
+        }
+    },
+
+    addEpiDelivery: async (delivery: Omit<EpiDelivery, 'id'>): Promise<EpiDelivery> => {
+        const { data, error } = await supabase.from('epi_deliveries').insert(delivery).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    deleteEpiDelivery: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('epi_deliveries').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    getFleetByPatrimonio: async (patrimonioNumber: string): Promise<{ name: string; details: string } | null> => {
+        try {
+            const { data, error } = await supabase
+                .from('fleet')
+                .select('name, details')
+                .eq('patrimonio_number', patrimonioNumber)
+                .single();
+            if (error) return null;
+            return data;
+        } catch {
+            return null;
+        }
+    },
+
+    // ===== INTERNAL NOTIFICATIONS CRUD =====
+    getNotifications: async (limit = 50): Promise<InternalNotification[]> => {
+        try {
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            const { data, error } = await supabase
+                .from('internal_notifications')
+                .select('*')
+                .is('archived_at', null)
+                .gte('created_at', ninetyDaysAgo.toISOString())
+                .order('created_at', { ascending: false })
+                .limit(limit);
+            if (error) throw error;
+            const now = new Date();
+            return (data || []).map(n => ({
+                ...n,
+                time_ago: (() => {
+                    const diff = Math.floor((now.getTime() - new Date(n.created_at).getTime()) / 60000);
+                    if (diff < 60) return `${diff}min atrás`;
+                    if (diff < 1440) return `${Math.floor(diff / 60)}h atrás`;
+                    return `${Math.floor(diff / 1440)}d atrás`;
+                })(),
+            }));
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
+            return [];
+        }
+    },
+
+    getUnreadCount: async (): Promise<number> => {
+        try {
+            const { count, error } = await supabase
+                .from('internal_notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('is_read', false)
+                .is('archived_at', null);
+            if (error) throw error;
+            return count || 0;
+        } catch {
+            return 0;
+        }
+    },
+
+    addNotification: async (notif: Omit<InternalNotification, 'id'>): Promise<InternalNotification> => {
+        const { data, error } = await supabase.from('internal_notifications').insert(notif).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    markAsRead: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('internal_notifications').update({ is_read: true }).eq('id', id);
+        if (error) throw error;
+    },
+
+    markAllAsRead: async (): Promise<void> => {
+        const { error } = await supabase.from('internal_notifications').update({ is_read: true }).eq('is_read', false);
+        if (error) throw error;
+    },
+
+    sendBulkNotification: async (title: string, message: string, sourceEvent: string): Promise<void> => {
+        const notif = { title, message, source_event: sourceEvent, is_read: false };
+        await supabase.from('internal_notifications').insert(notif);
+    },
+
     // ===== ALERTS ENGINE =====
-    generateAlerts: (personnelList: Personnel[], vacations: Vacation[], swapCounts: Map<number, number>): AlertItem[] => {
+    generateAlerts: (personnelList: Personnel[], vacations: Vacation[], swapCounts: Map<number, number>, courses?: B1Course[], epiDeliveries?: EpiDelivery[]): AlertItem[] => {
         const alerts: AlertItem[] = [];
         const today = new Date();
         const in60Days = new Date(today);
@@ -419,7 +553,6 @@ export const PersonnelService = {
         monthsAgo12.setMonth(monthsAgo12.getMonth() - 12);
 
         for (const p of personnelList) {
-            // CVE expiring within 60 days
             if (p.cve_expiry_date) {
                 const expiry = new Date(p.cve_expiry_date);
                 if (expiry <= today) {
@@ -428,8 +561,6 @@ export const PersonnelService = {
                     alerts.push({ personnelId: p.id!, personnelName: p.name, alertType: 'CVE Expirando', referenceDate: p.cve_expiry_date, severity: 'warning', message: `CVE expira em ${new Date(p.cve_expiry_date).toLocaleDateString('pt-BR')}` });
                 }
             }
-
-            // Toxicological exam expiring within 60 days (CNH D)
             if (p.cnh_category && p.cnh_category.includes('D') && p.toxicological_expiry_date) {
                 const expiry = new Date(p.toxicological_expiry_date);
                 if (expiry <= today) {
@@ -438,8 +569,6 @@ export const PersonnelService = {
                     alerts.push({ personnelId: p.id!, personnelName: p.name, alertType: 'Toxicológico Expirando', referenceDate: p.toxicological_expiry_date, severity: 'warning', message: `Exame toxicológico expira em ${new Date(p.toxicological_expiry_date).toLocaleDateString('pt-BR')}` });
                 }
             }
-
-            // CNH expiring within 90 days
             if (p.cnh_expiry_date) {
                 const expiry = new Date(p.cnh_expiry_date);
                 if (expiry <= today) {
@@ -448,14 +577,10 @@ export const PersonnelService = {
                     alerts.push({ personnelId: p.id!, personnelName: p.name, alertType: 'CNH Expirando', referenceDate: p.cnh_expiry_date, severity: 'warning', message: `CNH expira em ${new Date(p.cnh_expiry_date).toLocaleDateString('pt-BR')}` });
                 }
             }
-
-            // Swap limit reached
             const swaps = swapCounts.get(p.id!) || 0;
             if (swaps >= 2) {
                 alerts.push({ personnelId: p.id!, personnelName: p.name, alertType: 'Limite de Trocas', referenceDate: today.toISOString().split('T')[0], severity: 'warning', message: `Atingiu o limite de ${swaps} trocas de serviço neste mês` });
             }
-
-            // Cadastro review overdue (12 months)
             if (p.last_cadastro_review) {
                 const lastReview = new Date(p.last_cadastro_review);
                 if (lastReview <= monthsAgo12) {
@@ -466,7 +591,6 @@ export const PersonnelService = {
             }
         }
 
-        // Vacations starting in next 30 days
         for (const v of vacations) {
             const start = new Date(v.start_date);
             if (start >= today && start <= in30Days) {
@@ -474,10 +598,38 @@ export const PersonnelService = {
             }
         }
 
-        // Sort: critical first, then warning, then info
+        // Course qualification expiry alerts
+        if (courses) {
+            const personnelMap = new Map(personnelList.map(p => [p.id!, p]));
+            for (const c of courses) {
+                if (!c.expiry_date) continue;
+                const expiry = new Date(c.expiry_date);
+                const person = personnelMap.get(c.personnel_id);
+                const personName = person?.name || c.personnel_name || 'Desconhecido';
+                if (expiry <= today) {
+                    alerts.push({ personnelId: c.personnel_id, personnelName: personName, alertType: 'Qualificação Expirada', referenceDate: c.expiry_date, severity: 'critical', message: `Qualificação "${c.course_name}" expirou em ${new Date(c.expiry_date).toLocaleDateString('pt-BR')}` });
+                } else if (expiry <= in60Days) {
+                    alerts.push({ personnelId: c.personnel_id, personnelName: personName, alertType: 'Qualificação Expirando', referenceDate: c.expiry_date, severity: 'warning', message: `Qualificação "${c.course_name}" expira em ${new Date(c.expiry_date).toLocaleDateString('pt-BR')}` });
+                }
+            }
+        }
+
+        // EPI replacement date alerts
+        if (epiDeliveries) {
+            const personnelMap = new Map(personnelList.map(p => [p.id!, p]));
+            for (const e of epiDeliveries) {
+                if (!e.replacement_date) continue;
+                const replDate = new Date(e.replacement_date);
+                const person = personnelMap.get(e.personnel_id);
+                const personName = person?.name || e.personnel_name || 'Desconhecido';
+                if (replDate <= today) {
+                    alerts.push({ personnelId: e.personnel_id, personnelName: personName, alertType: 'EPI/Uniforme Vencido', referenceDate: e.replacement_date, severity: 'warning', message: `Item "${e.item_name}" passou da data de reposição prevista (${new Date(e.replacement_date).toLocaleDateString('pt-BR')})` });
+                }
+            }
+        }
+
         const severityOrder = { critical: 0, warning: 1, info: 2 };
         alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
         return alerts;
     },
 };

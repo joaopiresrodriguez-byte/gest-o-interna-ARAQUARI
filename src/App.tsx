@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'sonner';
 import { LoadingFallback } from './components/LoadingFallback';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
+import NotificationBell from './components/NotificationBell';
 
 // Lazy loading de páginas para code splitting
 const DashboardAvisos = lazy(() => import('./pages/DashboardAvisos'));
@@ -119,10 +120,11 @@ const AppLayout: React.FC = () => {
             className="bg-center bg-no-repeat bg-cover rounded-full size-12 shadow-md border-2 border-[#8B5A2B]"
             style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBhhkhZqDlWCkshTqvj49ObzKfPKSTNrk8jLEZpSAaoyFHhzejl3L6l_g1NZkZ1gen8Ccn-QS-xmIystBvz0nu1WNiaYjR6bzF-KWFnnv8i2Urv0at8T9f6Hg63iDrqbXlk8h3V7o8n_Vmv3XOVphoOEnBGSIDkK--xG2SN7JQLLCSPmxhXDvnN0uylpKXjNigsF67qeaR9VnBDdq5rdbRO6xnEAV-CFm-cpQjJrc9-a2p3GCLfDptK5_wDNtMtVoHgBNvUPuycbYU")' }}
           />
-          <div className="flex flex-col">
+          <div className="flex flex-col flex-1">
             <h1 className="text-white text-base font-black leading-tight tracking-wide uppercase">Gestão Interna</h1>
             <h1 className="text-primary text-sm font-bold leading-tight tracking-wider uppercase">CBMSC Araquari</h1>
           </div>
+          <NotificationBell />
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 flex flex-col gap-2 px-3">

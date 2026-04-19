@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, Escala } from '../services/types';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
@@ -10,10 +10,15 @@ import BulletinSection from '../components/b1/BulletinSection';
 import ReadinessReport from '../components/b1/ReadinessReport';
 import PersonnelProfile from '../components/b1/PersonnelProfile';
 import ExportSection from '../components/b1/ExportSection';
+import CursosB1 from '../components/b1/CursosB1';
+import EpiB1 from '../components/b1/EpiB1';
+import DisponibilidadeB1 from '../components/b1/DisponibilidadeB1';
+import NotificacoesB1 from '../components/b1/NotificacoesB1';
+import DashboardComandante from '../components/b1/DashboardComandante';
 
-type Tab = 'ALERTAS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS';
+type Tab = 'ALERTAS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'EPI' | 'DISPONIBILIDADE' | 'NOTIFICACOES' | 'DASHBOARD';
 
-const tabIcons: Record<Tab, string> = { ALERTAS: 'notifications_active', EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', BOLETIM: 'article', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder' };
+const tabIcons: Record<Tab, string> = { ALERTAS: 'notifications_active', EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', BOLETIM: 'article', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', EPI: 'checkroom', DISPONIBILIDADE: 'location_on', NOTIFICACOES: 'notifications', DASHBOARD: 'dashboard' };
 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
 const STATUS_OPTIONS = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
@@ -93,6 +98,12 @@ const PessoalB1: React.FC = () => {
   const [bulletins, setBulletins] = useState<Bulletin[]>([]);
   const [sigrhExports, setSigrhExports] = useState<SigrhExport[]>([]);
 
+  // New modules state
+  const [courses, setCourses] = useState<B1Course[]>([]);
+  const [epiDeliveries, setEpiDeliveries] = useState<EpiDelivery[]>([]);
+  const [notifications, setNotifications] = useState<InternalNotification[]>([]);
+  const [escalas, setEscalas] = useState<Escala[]>([]);
+
   // Rank change
   const [rankChangeNewRank, setRankChangeNewRank] = useState('');
   const [rankChangeLegalBasis, setRankChangeLegalBasis] = useState('');
@@ -125,6 +136,18 @@ const PessoalB1: React.FC = () => {
         }
       }
       setAlerts(PersonnelService.generateAlerts(pList, vList, swapCounts));
+
+      // Load new module data in parallel
+      const [courseList, epiList, notifList, escalasData] = await Promise.all([
+        PersonnelService.getCourses(),
+        PersonnelService.getEpiDeliveries(),
+        PersonnelService.getNotifications(),
+        supabase.from('escalas').select('*').order('data', { ascending: false }).limit(90),
+      ]);
+      setCourses(courseList);
+      setEpiDeliveries(epiList);
+      setNotifications(notifList);
+      setEscalas((escalasData.data || []) as Escala[]);
     } catch (err: any) {
       toast.error('Erro ao carregar dados: ' + (err.message || 'Desconhecido'));
     } finally {
@@ -218,6 +241,12 @@ const PessoalB1: React.FC = () => {
     const dayCount = Math.ceil((new Date(vacEnd).getTime() - new Date(vacStart).getTime()) / 86400000) + 1;
     try {
       await PersonnelService.addVacation({ personnel_id: vacPersonnelId as number, full_name: person?.name || '', start_date: vacStart, end_date: vacEnd, day_count: dayCount, leave_type: vacType, status: 'planejado', notes: vacNotes });
+      PersonnelService.addNotification({
+        title: 'Férias/Licença Registrada',
+        message: `${person?.name || 'Militar'}: ${LEAVE_TYPES.find(lt => lt.value === vacType)?.label || vacType} de ${vacStart} a ${vacEnd}.`,
+        source_event: 'vacation_registered', is_read: false,
+        target_personnel_id: vacPersonnelId as number,
+      }).catch(() => { });
       toast.success('Período registrado!');
       setVacPersonnelId(''); setVacStart(''); setVacEnd(''); setVacNotes('');
       loadData();
@@ -232,6 +261,13 @@ const PessoalB1: React.FC = () => {
     if (count >= 2) return toast.error(`⛔ BLOQUEADO: Militar já possui ${count} trocas neste mês. Limite de 2 trocas/mês atingido.`);
     try {
       await PersonnelService.addServiceSwap({ personnel_id: swapPersonId as number, original_date: swapOrigDate, new_date: swapNewDate, swap_with_personnel_id: swapWithId ? swapWithId as number : undefined, reason: swapReason, swap_date: new Date().toISOString().split('T')[0], month_ref: monthRef });
+      const swapPerson = personnelList.find(p => p.id === swapPersonId);
+      PersonnelService.addNotification({
+        title: 'Troca de Serviço Registrada',
+        message: `${swapPerson?.name || 'Militar'}: troca de ${swapOrigDate} para ${swapNewDate}. Motivo: ${swapReason}`,
+        source_event: 'swap_registered', is_read: false,
+        target_personnel_id: swapPersonId as number,
+      }).catch(() => { });
       toast.success('Troca de serviço registrada!');
       setSwapPersonId(''); setSwapOrigDate(''); setSwapNewDate(''); setSwapReason(''); setSwapWithId('');
       loadData();
@@ -288,6 +324,11 @@ const PessoalB1: React.FC = () => {
       } catch { }
     }
     toast.success(`Escala publicada: ${saved} dias gerados!`);
+    PersonnelService.sendBulkNotification(
+      'Escala Publicada',
+      `A escala de serviço para ${scaleMonth} foi publicada com ${saved} dias e regime ${scaleShiftType}.`,
+      'scale_published'
+    ).catch(() => { });
   };
 
   const filteredPersonnel = personnelList.filter(p =>
@@ -334,10 +375,11 @@ const PessoalB1: React.FC = () => {
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
-          {(['ALERTAS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR'] as Tab[]).map(t => (
+          {(['DASHBOARD', 'ALERTAS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS', 'EPI', 'DISPONIBILIDADE', 'NOTIFICACOES'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
-              <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO')}
+              <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DISPONIBILIDADE', 'DISPON.').replace('NOTIFICACOES', 'AVISOS').replace('DASHBOARD', 'DASHBOARD')}
               {t === 'ALERTAS' && alerts.filter(a => a.severity === 'critical').length > 0 && <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length}</span>}
+              {t === 'NOTIFICACOES' && notifications.filter(n => !n.is_read).length > 0 && <span className="w-5 h-5 rounded-full bg-cbm-red text-white text-[9px] flex items-center justify-center ml-1">{notifications.filter(n => !n.is_read).length}</span>}
             </button>
           ))}
         </div>
@@ -575,6 +617,41 @@ const PessoalB1: React.FC = () => {
           {/* TAB: EXPORTAR */}
           {tab === 'EXPORTAR' && (
             <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
+          )}
+
+          {/* TAB: DASHBOARD */}
+          {tab === 'DASHBOARD' && (
+            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+              <DashboardComandante personnelList={personnelList} vacations={vacations} courses={courses} epiDeliveries={epiDeliveries} notifications={notifications} alerts={alerts} onNavigate={(t) => setTab(t as Tab)} />
+            </div>
+          )}
+
+          {/* TAB: CURSOS */}
+          {tab === 'CURSOS' && (
+            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+              <CursosB1 personnelList={personnelList} />
+            </div>
+          )}
+
+          {/* TAB: EPI */}
+          {tab === 'EPI' && (
+            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+              <EpiB1 personnelList={personnelList} />
+            </div>
+          )}
+
+          {/* TAB: DISPONIBILIDADE */}
+          {tab === 'DISPONIBILIDADE' && (
+            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+              <DisponibilidadeB1 personnelList={personnelList} vacations={vacations} escalas={escalas} />
+            </div>
+          )}
+
+          {/* TAB: NOTIFICACOES */}
+          {tab === 'NOTIFICACOES' && (
+            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+              <NotificacoesB1 />
+            </div>
           )}
         </>
       )}

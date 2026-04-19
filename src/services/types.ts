@@ -418,3 +418,51 @@ export interface Escala {
     shift_type?: '24x72' | '12x36' | 'administrative';
     created_at?: string;
 }
+
+export interface B1Course {
+    id?: string;
+    personnel_id: number;
+    course_name: string;
+    institution: string;
+    workload_hours?: number;
+    completion_date: string;
+    expiry_date?: string;
+    category: 'Operacional' | 'Administrativo' | 'Saúde' | 'Liderança' | 'Especialização Técnica' | 'Outros';
+    certificate_url?: string;
+    created_at?: string;
+    // Joined
+    personnel_name?: string;
+    personnel_rank?: string;
+    personnel_cpf?: string;
+}
+
+export interface EpiDelivery {
+    id?: string;
+    personnel_id: number;
+    item_type: 'Uniforme' | 'EPI' | 'Equipamento Individual' | 'Outros';
+    item_name: string;
+    item_description?: string;
+    delivery_date: string;
+    replacement_date?: string;
+    quantity: number;
+    condition: 'Novo' | 'Bom' | 'Regular';
+    patrimonio_number?: string;
+    created_at?: string;
+    // Joined / resolved
+    personnel_name?: string;
+    personnel_rank?: string;
+    patrimonio_description?: string;
+}
+
+export interface InternalNotification {
+    id?: string;
+    title: string;
+    message: string;
+    source_event: string;
+    is_read: boolean;
+    target_personnel_id?: number;
+    created_at?: string;
+    archived_at?: string;
+    // Derived
+    time_ago?: string;
+}
