@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Personnel, Vacation, Escala } from '../../services/types';
 
 interface Props {

@@ -6,13 +6,22 @@ import { PAGINATION } from '../config/constants';
 // Field selectors for optimized queries
 const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cnh_expiry_date, cpf, emergency_phone, emergency_contact_name, cve_active, cve_issue_date, cve_expiry_date, toxicological_date, toxicological_expiry_date, graduation, last_cadastro_review';
 const DOCUMENT_FIELDS = 'id, file_name, document_type, file_url, size_kb, uploaded_by, upload_date, notes, personnel_id';
-const VACATION_FIELDS = 'id, personnel_id, full_name, start_date, end_date, day_count, leave_type, status, notes';
+const VACATION_FIELDS = 'id, personnel_id, full_name, start_date, end_date, day_count, status, notes';
 
 const personnelBase = new BaseService<Personnel>('personnel', PERSONNEL_FIELDS);
 const documentsBase = new BaseService<DocumentB1>('personnel_documents', DOCUMENT_FIELDS);
 const vacationsBase = new BaseService<Vacation>('personnel_vacations', VACATION_FIELDS);
 
 export const PersonnelService = {
+    // ===== VALIDATIONS =====
+    validateCondutor: (person: Partial<Personnel>): string | null => {
+        if (person.role?.toLowerCase().includes('condutor')) {
+            if (person.cve_active !== 'Sim') return 'Condutores devem ter CVE Ativo!';
+            if (!person.cnh_category?.includes('D')) return 'Condutores devem possuir CNH categoria D!';
+        }
+        return null;
+    },
+
     // ===== PERSONNEL CRUD =====
     getPersonnel: async (page?: number): Promise<Personnel[]> => {
         try {
@@ -30,6 +39,8 @@ export const PersonnelService = {
     },
 
     addPersonnel: async (person: Omit<Personnel, 'id'>): Promise<Personnel> => {
+        const error = PersonnelService.validateCondutor(person);
+        if (error) throw new Error(error);
         try {
             return await personnelBase.create(person);
         } catch (error) {
@@ -39,6 +50,10 @@ export const PersonnelService = {
     },
 
     updatePersonnel: async (id: number, person: Partial<Personnel>): Promise<Personnel> => {
+        const fullPerson = await PersonnelService.getPersonnelById(id);
+        const merged = { ...(fullPerson || {}), ...person };
+        const error = PersonnelService.validateCondutor(merged as Personnel);
+        if (error) throw new Error(error);
         try {
             return await personnelBase.update(id, person);
         } catch (error) {
@@ -269,6 +284,8 @@ export const PersonnelService = {
     },
 
     addServiceSwap: async (swap: Omit<ServiceSwap, 'id'>): Promise<ServiceSwap> => {
+        const count = await PersonnelService.getSwapCountThisMonth(swap.personnel_id, swap.month_ref);
+        if (count >= 2) throw new Error(`Limite de 2 trocas/mês atingido para este militar (${count} registradas).`);
         const { data, error } = await supabase
             .from('service_swaps')
             .insert(swap)

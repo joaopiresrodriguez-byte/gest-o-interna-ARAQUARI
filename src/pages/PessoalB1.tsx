@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
@@ -319,9 +319,24 @@ const PessoalB1: React.FC = () => {
       const teamIdx = (d - 1) % teamKeys.length;
       const team = teamKeys[teamIdx];
       try {
+        // Regra: Descanso de 1 dia no mínimo
+        const prevDate = new Date(year, month - 1, d - 1);
+        const prevDateStr = prevDate.toISOString().split('T')[0];
+        const prevEscala = await PersonnelService.getEscalaByDate(prevDateStr);
+
+        if (prevEscala && prevEscala.militares) {
+          const overlapping = scaleTeams[team].filter(id => prevEscala.militares.includes(id));
+          if (overlapping.length > 0) {
+            const names = overlapping.map(id => personnelList.find(p => p.id === id)?.name || id).join(', ');
+            toast.warning(`Aviso: ${names} estão escalados em dias consecutivos (${prevDateStr} e ${dateStr}).`);
+          }
+        }
+
         await PersonnelService.saveEscala({ data: dateStr, equipe: team, militares: scaleTeams[team], shift_type: scaleShiftType });
         saved++;
-      } catch { }
+      } catch (err: any) {
+        console.error(`Erro ao salvar dia ${d}:`, err);
+      }
     }
     toast.success(`Escala publicada: ${saved} dias gerados!`);
     PersonnelService.sendBulkNotification(
@@ -355,306 +370,317 @@ const PessoalB1: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-2xl">military_tech</span></div>
-            <div>
-              <h1 className="text-2xl font-black">Seção B1 — Pessoal</h1>
-              <p className="text-xs text-gray-400">Gestão completa de efetivo, escalas, documentos e exportações</p>
+    <div className="h-full flex flex-col overflow-hidden bg-gray-100 relative text-rustic-brown">
+      {/* Header - Fixed at top */}
+      <div className="p-6 flex-shrink-0">
+        <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-2xl">military_tech</span></div>
+              <div>
+                <h1 className="text-2xl font-black">Seção B1 — Pessoal</h1>
+                <p className="text-xs text-gray-400">Gestão completa de efetivo, escalas, documentos e exportações</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-xs">
+              <div className="text-center"><span className="text-2xl font-black text-primary block">{personnelList.length}</span><span className="text-gray-400">Total</span></div>
+              <div className="text-center"><span className="text-2xl font-black text-green-600 block">{personnelList.filter(p => p.status === 'Ativo').length}</span><span className="text-gray-400">Ativos</span></div>
+              {alerts.filter(a => a.severity === 'critical').length > 0 && <div className="text-center"><span className="text-2xl font-black text-red-600 block">{alerts.filter(a => a.severity === 'critical').length}</span><span className="text-gray-400">⚠ Alertas</span></div>}
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs">
-            <div className="text-center"><span className="text-2xl font-black text-primary block">{personnelList.length}</span><span className="text-gray-400">Total</span></div>
-            <div className="text-center"><span className="text-2xl font-black text-green-600 block">{personnelList.filter(p => p.status === 'Ativo').length}</span><span className="text-gray-400">Ativos</span></div>
-            {alerts.filter(a => a.severity === 'critical').length > 0 && <div className="text-center"><span className="text-2xl font-black text-red-600 block">{alerts.filter(a => a.severity === 'critical').length}</span><span className="text-gray-400">⚠ Alertas</span></div>}
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
-          {(['DASHBOARD', 'ALERTAS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS', 'EPI', 'DISPONIBILIDADE', 'NOTIFICACOES'] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
-              <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DISPONIBILIDADE', 'DISPON.').replace('NOTIFICACOES', 'AVISOS').replace('DASHBOARD', 'DASHBOARD')}
-              {t === 'ALERTAS' && alerts.filter(a => a.severity === 'critical').length > 0 && <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length}</span>}
-              {t === 'NOTIFICACOES' && notifications.filter(n => !n.is_read).length > 0 && <span className="w-5 h-5 rounded-full bg-cbm-red text-white text-[9px] flex items-center justify-center ml-1">{notifications.filter(n => !n.is_read).length}</span>}
-            </button>
-          ))}
+          {/* Tabs */}
+          <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
+            {(['DASHBOARD', 'ALERTAS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS', 'EPI', 'DISPONIBILIDADE', 'NOTIFICACOES'] as Tab[]).map(t => (
+              <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
+                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DISPONIBILIDADE', 'DISPON.').replace('NOTIFICACOES', 'AVISOS').replace('DASHBOARD', 'DASHBOARD')}
+                {t === 'ALERTAS' && alerts.filter(a => a.severity === 'critical').length > 0 && <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length}</span>}
+                {t === 'NOTIFICACOES' && notifications.filter(n => !n.is_read).length > 0 && <span className="w-5 h-5 rounded-full bg-cbm-red text-white text-[9px] flex items-center justify-center ml-1">{notifications.filter(n => !n.is_read).length}</span>}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {loading && <div className="flex justify-center py-12"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div></div>}
-
-      {!loading && (
-        <>
-          {/* TAB: ALERTAS */}
-          {tab === 'ALERTAS' && <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />}
-
-          {/* TAB: EFETIVO */}
-          {tab === 'EFETIVO' && (
-            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex-1 relative"><span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-300 text-[18px]">search</span><input value={search} onChange={e => setSearch(e.target.value)} className="w-full h-10 pl-10 pr-4 rounded-lg border border-rustic-border text-sm" placeholder="Buscar por nome, guerra ou graduação..." /></div>
-                <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('CADASTRO'); }} className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">add</span> NOVO</button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Militar</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
-                  <tbody className="divide-y">{filteredPersonnel.map(p => {
-                    const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-purple-100 text-purple-700' };
-                    return (
-                      <tr key={p.id} className="hover:bg-stone-50/50 cursor-pointer" onClick={() => handleViewProfile(p)}>
-                        <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
-                        <td className="px-4 py-3 text-center font-bold">{p.graduation || p.rank}</td>
-                        <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
-                        <td className="px-4 py-3 text-center">{p.type}</td>
-                        <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={new Date(p.cve_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cve_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
-                        <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={new Date(p.cnh_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cnh_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
-                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
-                          <div className="flex gap-1 justify-center">
-                            <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">edit</span></button>
-                            <button onClick={() => handleDeletePersonnel(p.id!)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-400"><span className="material-symbols-outlined text-[16px]">delete</span></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}</tbody>
-                </table>
-                {filteredPersonnel.length === 0 && <p className="text-center py-12 text-gray-300">Nenhum militar encontrado.</p>}
-              </div>
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto px-6 pb-8">
+        <div className="max-w-[1400px] mx-auto">
+          {loading && (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
             </div>
           )}
 
-          {/* TAB: CADASTRO */}
-          {tab === 'CADASTRO' && (
-            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-              <h2 className="font-black text-xl mb-6">{editId ? 'Editar Militar' : 'Novo Cadastro de Militar'}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {formField('Nome Completo', 'name')}
-                {formField('Nome de Guerra', 'war_name')}
-                {formField('Posto / Graduação', 'graduation', 'text', RANKS_BM)}
-                {formField('Tipo', 'type', 'text', ['BM', 'BC'])}
-                {formField('Status', 'status', 'text', STATUS_OPTIONS)}
-                {formField('Função', 'role')}
-                {formField('CPF', 'cpf')}
-                {formField('Data Nascimento', 'birth_date', 'date')}
-                {formField('Email', 'email', 'email')}
-                {formField('Telefone', 'phone', 'tel')}
-                {formField('Nível de Instrução', 'education_level', 'text', ['Ensino Fundamental', 'Ensino Médio', 'Ensino Superior', 'Pós-Graduação', 'Mestrado', 'Doutorado'])}
-                {formField('Tipo Sanguíneo', 'blood_type', 'text', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])}
-                {formField('Endereço', 'address')}
-                {formField('Contato Emergência', 'emergency_contact_name')}
-                {formField('Tel. Emergência', 'emergency_phone', 'tel')}
-              </div>
-              <h3 className="font-black text-sm uppercase text-gray-500 mb-4 border-t pt-4">Documentos & Habilitações</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {formField('Possui CVE Ativo', 'cve_active', 'text', ['Sim', 'Não'])}
-                {formField('Data Emissão CVE', 'cve_issue_date', 'date')}
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade CVE (auto: +5 anos)</label>
-                  <input type="date" value={formData.cve_issue_date ? calcExpiry(formData.cve_issue_date, 5) : formData.cve_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
-                </div>
-                {formField('Cat. CNH', 'cnh_category', 'text', ['A', 'B', 'AB', 'C', 'D', 'E', 'AD', 'AE'])}
-                {formField('Nº CNH', 'cnh_number')}
-                {formField('Validade CNH', 'cnh_expiry_date', 'date')}
-                {formField('Data Toxicológico', 'toxicological_date', 'date')}
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade Toxicológico (auto: +2 anos)</label>
-                  <input type="date" value={formData.toxicological_date ? calcExpiry(formData.toxicological_date, 2) : formData.toxicological_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
-                </div>
-                {formField('Porte de Arma', 'weapon_permit', 'checkbox')}
-              </div>
+          {!loading && (
+            <div className="space-y-6">
+              {/* TAB: ALERTAS */}
+              {tab === 'ALERTAS' && <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />}
 
-              {/* Rank Change Section (edit mode only) */}
-              {editId && (
-                <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
-                  <h4 className="font-black text-sm mb-3 text-amber-700">Promoção / Alteração de Graduação</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div><label className="text-[10px] font-black block mb-1">Nova Graduação</label><select value={rankChangeNewRank} onChange={e => setRankChangeNewRank(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm"><option value="">Selecionar...</option>{RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
-                    <div><label className="text-[10px] font-black block mb-1">Base Legal</label><input value={rankChangeLegalBasis} onChange={e => setRankChangeLegalBasis(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm" placeholder="Ex: LC 801/2022 Art. XX" /></div>
-                    <div className="flex items-end"><button onClick={() => handleRankChange(formData as Personnel)} className="px-4 py-2.5 bg-amber-600 text-white text-xs font-black rounded-lg">REGISTRAR PROMOÇÃO</button></div>
+              {/* TAB: EFETIVO */}
+              {tab === 'EFETIVO' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="flex-1 relative"><span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-300 text-[18px]">search</span><input value={search} onChange={e => setSearch(e.target.value)} className="w-full h-10 pl-10 pr-4 rounded-lg border border-rustic-border text-sm" placeholder="Buscar por nome, guerra ou graduação..." /></div>
+                    <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('CADASTRO'); }} className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">add</span> NOVO</button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Militar</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
+                      <tbody className="divide-y">{filteredPersonnel.map(p => {
+                        const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-purple-100 text-purple-700' };
+                        return (
+                          <tr key={p.id} className="hover:bg-stone-50/50 cursor-pointer" onClick={() => handleViewProfile(p)}>
+                            <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
+                            <td className="px-4 py-3 text-center font-bold">{p.graduation || p.rank}</td>
+                            <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
+                            <td className="px-4 py-3 text-center">{p.type}</td>
+                            <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={new Date(p.cve_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cve_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
+                            <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={new Date(p.cnh_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cnh_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
+                            <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                              <div className="flex gap-1 justify-center">
+                                <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">edit</span></button>
+                                <button onClick={() => handleDeletePersonnel(p.id!)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-400"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}</tbody>
+                    </table>
+                    {filteredPersonnel.length === 0 && <p className="text-center py-12 text-gray-300">Nenhum militar encontrado.</p>}
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-3 pt-4 border-t">
-                <button onClick={handleSavePersonnel} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">{editId ? 'ATUALIZAR' : 'CADASTRAR'}</button>
-                <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('EFETIVO'); }} className="px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">CANCELAR</button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB: DOCUMENTOS */}
-          {tab === 'DOCUMENTOS' && (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
-                <h3 className="font-black text-lg mb-4">Anexar Documento</h3>
-                <div className="space-y-4">
-                  <select value={docPersonId} onChange={e => setDocPersonId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
-                  <select value={docType} onChange={e => setDocType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Tipo de documento...</option>{['Certidão', 'Atestado', 'Requerimento', 'Ofício', 'Portaria', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}</select>
-                  <input type="file" onChange={e => setDocFile(e.target.files?.[0] || null)} className="w-full text-sm" />
-                  <textarea value={docNotes} onChange={e => setDocNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
-                  <button onClick={handleUploadDoc} className="w-full py-3 bg-primary text-white font-black rounded-xl">ENVIAR</button>
-                </div>
-              </div>
-              <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                <h3 className="font-black text-lg mb-4">Documentos ({documents.length})</h3>
-                <div className="space-y-2">{documents.map(d => {
-                  const person = personnelList.find(p => p.id === d.personnel_id);
-                  return (
-                    <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-rustic-border hover:border-primary/30 transition-all">
-                      <span className="material-symbols-outlined text-primary">description</span>
-                      <div className="flex-1 min-w-0"><span className="font-bold text-sm block truncate">{d.file_name}</span><span className="text-[10px] text-gray-400">{d.document_type} {person ? `• ${person.name}` : ''} {d.upload_date ? `• ${new Date(d.upload_date).toLocaleDateString('pt-BR')}` : ''}</span></div>
-                      <a href={d.file_url} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">download</span></a>
+              {/* TAB: CADASTRO */}
+              {tab === 'CADASTRO' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                  <h2 className="font-black text-xl mb-6">{editId ? 'Editar Militar' : 'Novo Cadastro de Militar'}</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    {formField('Nome Completo', 'name')}
+                    {formField('Nome de Guerra', 'war_name')}
+                    {formField('Posto / Graduação', 'graduation', 'text', RANKS_BM)}
+                    {formField('Tipo', 'type', 'text', ['BM', 'BC'])}
+                    {formField('Status', 'status', 'text', STATUS_OPTIONS)}
+                    {formField('Função', 'role')}
+                    {formField('CPF', 'cpf')}
+                    {formField('Data Nascimento', 'birth_date', 'date')}
+                    {formField('Email', 'email', 'email')}
+                    {formField('Telefone', 'phone', 'tel')}
+                    {formField('Nível de Instrução', 'education_level', 'text', ['Ensino Fundamental', 'Ensino Médio', 'Ensino Superior', 'Pós-Graduação', 'Mestrado', 'Doutorado'])}
+                    {formField('Tipo Sanguíneo', 'blood_type', 'text', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])}
+                    {formField('Endereço', 'address')}
+                    {formField('Contato Emergência', 'emergency_contact_name')}
+                    {formField('Tel. Emergência', 'emergency_phone', 'tel')}
+                  </div>
+                  <h3 className="font-black text-sm uppercase text-gray-500 mb-4 border-t pt-4">Documentos & Habilitações</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    {formField('Possui CVE Ativo', 'cve_active', 'text', ['Sim', 'Não'])}
+                    {formField('Data Emissão CVE', 'cve_issue_date', 'date')}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade CVE (auto: +5 anos)</label>
+                      <input type="date" value={formData.cve_issue_date ? calcExpiry(formData.cve_issue_date, 5) : formData.cve_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
                     </div>
-                  );
-                })}{documents.length === 0 && <p className="text-center py-8 text-gray-300 italic">Nenhum documento anexado.</p>}</div>
-              </div>
-            </div>
-          )}
+                    {formField('Cat. CNH', 'cnh_category', 'text', ['A', 'B', 'AB', 'C', 'D', 'E', 'AD', 'AE'])}
+                    {formField('Nº CNH', 'cnh_number')}
+                    {formField('Validade CNH', 'cnh_expiry_date', 'date')}
+                    {formField('Data Toxicológico', 'toxicological_date', 'date')}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade Toxicológico (auto: +2 anos)</label>
+                      <input type="date" value={formData.toxicological_date ? calcExpiry(formData.toxicological_date, 2) : formData.toxicological_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
+                    </div>
+                    {formField('Porte de Arma', 'weapon_permit', 'checkbox')}
+                  </div>
 
-          {/* TAB: ESCALA */}
-          {tab === 'ESCALA' && (
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="font-black text-xl">Escala de Serviço</h2>
-                  <div className="flex items-center gap-3">
-                    <select value={scaleShiftType} onChange={e => setScaleShiftType(e.target.value as any)} className="h-10 px-3 rounded-lg border text-xs font-bold">
-                      <option value="24x72">24×72</option><option value="12x36">12×36</option><option value="administrative">Administrativo</option>
-                    </select>
-                    <input type="month" value={scaleMonth} onChange={e => setScaleMonth(e.target.value)} className="h-10 px-3 rounded-lg border text-xs font-bold" />
+                  {/* Rank Change Section (edit mode only) */}
+                  {editId && (
+                    <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                      <h4 className="font-black text-sm mb-3 text-amber-700">Promoção / Alteração de Graduação</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label className="text-[10px] font-black block mb-1">Nova Graduação</label><select value={rankChangeNewRank} onChange={e => setRankChangeNewRank(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm"><option value="">Selecionar...</option>{RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
+                        <div><label className="text-[10px] font-black block mb-1">Base Legal</label><input value={rankChangeLegalBasis} onChange={e => setRankChangeLegalBasis(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm" placeholder="Ex: LC 801/2022 Art. XX" /></div>
+                        <div className="flex items-end"><button onClick={() => handleRankChange(formData as Personnel)} className="px-4 py-2.5 bg-amber-600 text-white text-xs font-black rounded-lg">REGISTRAR PROMOÇÃO</button></div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-4 border-t">
+                    <button onClick={handleSavePersonnel} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">{editId ? 'ATUALIZAR' : 'CADASTRAR'}</button>
+                    <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('EFETIVO'); }} className="px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">CANCELAR</button>
                   </div>
                 </div>
+              )}
 
-                {/* Team config */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  {['Alpha', 'Bravo', 'Charlie', 'Delta'].map(team => (
-                    <div key={team} className="p-4 bg-stone-50 rounded-xl border border-rustic-border">
-                      <h4 className="font-black text-sm mb-3">{team}</h4>
-                      <div className="space-y-1 max-h-40 overflow-y-auto">
-                        {(scaleTeams[team] || []).map(pid => {
-                          const p = personnelList.find(pp => pp.id === pid);
-                          return p ? <div key={pid} className="flex items-center justify-between text-xs p-1.5 bg-white rounded-lg"><span>{p.graduation || ''} {p.war_name || p.name}</span><button onClick={() => { const updated = { ...scaleTeams, [team]: scaleTeams[team].filter(id => id !== pid) }; saveTeamConfig(updated); }} className="text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[14px]">close</span></button></div> : null;
-                        })}
+              {/* TAB: DOCUMENTOS */}
+              {tab === 'DOCUMENTOS' && (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
+                    <h3 className="font-black text-lg mb-4">Anexar Documento</h3>
+                    <div className="space-y-4">
+                      <select value={docPersonId} onChange={e => setDocPersonId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
+                      <select value={docType} onChange={e => setDocType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Tipo de documento...</option>{['Certidão', 'Atestado', 'Requerimento', 'Ofício', 'Portaria', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}</select>
+                      <input type="file" onChange={e => setDocFile(e.target.files?.[0] || null)} className="w-full text-sm" />
+                      <textarea value={docNotes} onChange={e => setDocNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
+                      <button onClick={handleUploadDoc} className="w-full py-3 bg-primary text-white font-black rounded-xl">ENVIAR</button>
+                    </div>
+                  </div>
+                  <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                    <h3 className="font-black text-lg mb-4">Documentos ({documents.length})</h3>
+                    <div className="space-y-2">{documents.map(d => {
+                      const person = personnelList.find(p => p.id === d.personnel_id);
+                      return (
+                        <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-rustic-border hover:border-primary/30 transition-all">
+                          <span className="material-symbols-outlined text-primary">description</span>
+                          <div className="flex-1 min-w-0"><span className="font-bold text-sm block truncate">{d.file_name}</span><span className="text-[10px] text-gray-400">{d.document_type} {person ? `• ${person.name}` : ''} {d.upload_date ? `• ${new Date(d.upload_date).toLocaleDateString('pt-BR')}` : ''}</span></div>
+                          <a href={d.file_url} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">download</span></a>
+                        </div>
+                      );
+                    })}{documents.length === 0 && <p className="text-center py-8 text-gray-300 italic">Nenhum documento anexado.</p>}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: ESCALA */}
+              {tab === 'ESCALA' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="font-black text-xl">Escala de Serviço</h2>
+                      <div className="flex items-center gap-3">
+                        <select value={scaleShiftType} onChange={e => setScaleShiftType(e.target.value as any)} className="h-10 px-3 rounded-lg border text-xs font-bold">
+                          <option value="24x72">24×72</option><option value="12x36">12×36</option><option value="administrative">Administrativo</option>
+                        </select>
+                        <input type="month" value={scaleMonth} onChange={e => setScaleMonth(e.target.value)} className="h-10 px-3 rounded-lg border text-xs font-bold" />
                       </div>
-                      <select onChange={e => { if (e.target.value) { const pid = Number(e.target.value); const current = scaleTeams[team] || []; if (!current.includes(pid)) saveTeamConfig({ ...scaleTeams, [team]: [...current, pid] }); e.target.value = ''; } }} className="w-full h-8 px-2 rounded border text-[10px] mt-2">
-                        <option value="">+ Adicionar militar...</option>
-                        {personnelList.filter(p => p.status === 'Ativo' && !Object.values(scaleTeams).flat().includes(p.id!)).map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}
-                      </select>
                     </div>
-                  ))}
-                </div>
 
-                <button onClick={publishScale} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">PUBLICAR ESCALA DO MÊS</button>
-              </div>
-
-              {/* Swap Registration */}
-              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                <h3 className="font-black text-lg mb-4 flex items-center gap-2"><span className="material-symbols-outlined text-amber-500">swap_horiz</span> Troca de Serviço <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Limite: 2/mês/militar</span></h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  <select value={swapPersonId} onChange={e => setSwapPersonId(Number(e.target.value))} className="h-11 px-3 rounded-lg border text-sm"><option value="">Militar...</option>{personnelList.filter(p => p.status === 'Ativo').map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}</select>
-                  <input type="date" value={swapOrigDate} onChange={e => setSwapOrigDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Data original" />
-                  <input type="date" value={swapNewDate} onChange={e => setSwapNewDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Nova data" />
-                  <input value={swapReason} onChange={e => setSwapReason(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Motivo" />
-                  <button onClick={handleSaveSwap} className="h-11 bg-amber-500 text-white font-black rounded-xl text-xs">REGISTRAR TROCA</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB: FERIAS */}
-          {tab === 'FERIAS' && (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-              <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
-                <h3 className="font-black text-lg mb-4">Registrar Férias / Licença</h3>
-                <div className="space-y-4">
-                  <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
-                  <select value={vacType} onChange={e => setVacType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm">{LEAVE_TYPES.map(lt => <option key={lt.value} value={lt.value}>{lt.label}</option>)}</select>
-                  <input type="date" value={vacStart} onChange={e => setVacStart(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
-                  <input type="date" value={vacEnd} onChange={e => setVacEnd(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
-                  <textarea value={vacNotes} onChange={e => setVacNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
-                  <button onClick={handleSaveVacation} className="w-full py-3 bg-primary text-white font-black rounded-xl">REGISTRAR</button>
-                </div>
-              </div>
-              <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                <h3 className="font-black text-lg mb-4">Períodos Registrados ({vacations.length})</h3>
-                <div className="space-y-2">{vacations.map(v => {
-                  const leaveLabel = LEAVE_TYPES.find(lt => lt.value === v.leave_type)?.label || v.leave_type || 'Férias';
-                  return (
-                    <div key={v.id} className="flex items-center gap-4 p-4 rounded-xl border border-rustic-border hover:border-primary/30">
-                      <span className="material-symbols-outlined text-blue-500">event</span>
-                      <div className="flex-1"><span className="font-bold text-sm block">{v.full_name}</span><span className="text-xs text-gray-400">{leaveLabel} • {new Date(v.start_date).toLocaleDateString('pt-BR')} — {new Date(v.end_date).toLocaleDateString('pt-BR')} ({v.day_count}d)</span></div>
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${v.status === 'concluido' ? 'bg-green-100 text-green-700' : v.status === 'em_andamento' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'} uppercase`}>{v.status || 'planejado'}</span>
-                      <button onClick={async () => { if (confirm('Remover?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }} className="p-1 text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                    {/* Team config */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                      {['Alpha', 'Bravo', 'Charlie', 'Delta'].map(team => (
+                        <div key={team} className="p-4 bg-stone-50 rounded-xl border border-rustic-border">
+                          <h4 className="font-black text-sm mb-3">{team}</h4>
+                          <div className="space-y-1 max-h-40 overflow-y-auto">
+                            {(scaleTeams[team] || []).map(pid => {
+                              const p = personnelList.find(pp => pp.id === pid);
+                              return p ? <div key={pid} className="flex items-center justify-between text-xs p-1.5 bg-white rounded-lg"><span>{p.graduation || ''} {p.war_name || p.name}</span><button onClick={() => { const updated = { ...scaleTeams, [team]: scaleTeams[team].filter(id => id !== pid) }; saveTeamConfig(updated); }} className="text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[14px]">close</span></button></div> : null;
+                            })}
+                          </div>
+                          <select onChange={e => { if (e.target.value) { const pid = Number(e.target.value); const current = scaleTeams[team] || []; if (!current.includes(pid)) saveTeamConfig({ ...scaleTeams, [team]: [...current, pid] }); e.target.value = ''; } }} className="w-full h-8 px-2 rounded border text-[10px] mt-2">
+                            <option value="">+ Adicionar militar...</option>
+                            {personnelList.filter(p => p.status === 'Ativo' && !Object.values(scaleTeams).flat().includes(p.id!)).map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}
+                          </select>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}{vacations.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum período registrado.</p>}</div>
-              </div>
+
+                    <button onClick={publishScale} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">PUBLICAR ESCALA DO MÊS</button>
+                  </div>
+
+                  {/* Swap Registration */}
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                    <h3 className="font-black text-lg mb-4 flex items-center gap-2"><span className="material-symbols-outlined text-amber-500">swap_horiz</span> Troca de Serviço <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Limite: 2/mês/militar</span></h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                      <select value={swapPersonId} onChange={e => setSwapPersonId(Number(e.target.value))} className="h-11 px-3 rounded-lg border text-sm"><option value="">Militar...</option>{personnelList.filter(p => p.status === 'Ativo').map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}</select>
+                      <input type="date" value={swapOrigDate} onChange={e => setSwapOrigDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Data original" />
+                      <input type="date" value={swapNewDate} onChange={e => setSwapNewDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Nova data" />
+                      <input value={swapReason} onChange={e => setSwapReason(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Motivo" />
+                      <button onClick={handleSaveSwap} className="h-11 bg-amber-500 text-white font-black rounded-xl text-xs">REGISTRAR TROCA</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: FERIAS */}
+              {tab === 'FERIAS' && (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
+                    <h3 className="font-black text-lg mb-4">Registrar Férias / Licença</h3>
+                    <div className="space-y-4">
+                      <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
+                      <select value={vacType} onChange={e => setVacType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm">{LEAVE_TYPES.map(lt => <option key={lt.value} value={lt.value}>{lt.label}</option>)}</select>
+                      <input type="date" value={vacStart} onChange={e => setVacStart(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
+                      <input type="date" value={vacEnd} onChange={e => setVacEnd(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
+                      <textarea value={vacNotes} onChange={e => setVacNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
+                      <button onClick={handleSaveVacation} className="w-full py-3 bg-primary text-white font-black rounded-xl">REGISTRAR</button>
+                    </div>
+                  </div>
+                  <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                    <h3 className="font-black text-lg mb-4">Períodos Registrados ({vacations.length})</h3>
+                    <div className="space-y-2">{vacations.map(v => {
+                      const leaveLabel = LEAVE_TYPES.find(lt => lt.value === v.leave_type)?.label || v.leave_type || 'Férias';
+                      return (
+                        <div key={v.id} className="flex items-center gap-4 p-4 rounded-xl border border-rustic-border hover:border-primary/30">
+                          <span className="material-symbols-outlined text-blue-500">event</span>
+                          <div className="flex-1"><span className="font-bold text-sm block">{v.full_name}</span><span className="text-xs text-gray-400">{leaveLabel} • {new Date(v.start_date).toLocaleDateString('pt-BR')} — {new Date(v.end_date).toLocaleDateString('pt-BR')} ({v.day_count}d)</span></div>
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${v.status === 'concluido' ? 'bg-green-100 text-green-700' : v.status === 'em_andamento' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'} uppercase`}>{v.status || 'planejado'}</span>
+                          <button onClick={async () => { if (confirm('Remover?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }} className="p-1 text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                        </div>
+                      );
+                    })}{vacations.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum período registrado.</p>}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: BOLETIM */}
+              {tab === 'BOLETIM' && (
+                <BulletinSection bulletins={bulletins} onAddBulletin={async (b) => { await PersonnelService.addBulletin(b); loadBulletins(); toast.success('Boletim criado!'); }} onUpdateBulletin={async (id, u) => { await PersonnelService.updateBulletin(id, u); loadBulletins(); toast.success('Boletim atualizado!'); }} onGetNotes={PersonnelService.getBulletinNotes} onAddNote={async (n) => { await PersonnelService.addBulletinNote(n); toast.success('Nota adicionada!'); }} onGetVersions={PersonnelService.getBulletinVersions} isEditor={true} />
+              )}
+
+              {/* TAB: DISCIPLINA */}
+              {tab === 'DISCIPLINA' && (
+                <DisciplinarySection records={disciplinaryRecords} personnelList={personnelList} onAdd={async (r) => { await PersonnelService.addDisciplinaryRecord(r); loadDisciplinary(); toast.success('Registro adicionado!'); }} onDelete={async (id) => { if (confirm('Remover registro?')) { await PersonnelService.deleteDisciplinaryRecord(id); loadDisciplinary(); toast.success('Removido!'); } }} isEditor={true} />
+              )}
+
+              {/* TAB: PRONTIDAO */}
+              {tab === 'PRONTIDAO' && <ReadinessReport personnelList={personnelList} vacations={vacations} />}
+
+              {/* TAB: PERFIL */}
+              {tab === 'PERFIL' && profilePerson && (
+                <PersonnelProfile person={profilePerson} rankHistory={profileRankHistory} swaps={profileSwaps} disciplinary={profileDisciplinary} vacations={profileVacations} documents={profileDocs} onClose={() => { setProfilePerson(null); setTab('EFETIVO'); }} />
+              )}
+              {tab === 'PERFIL' && !profilePerson && <div className="text-center py-12 text-gray-300"><p>Selecione um militar na aba Efetivo para ver o perfil completo.</p></div>}
+
+              {/* TAB: EXPORTAR */}
+              {tab === 'EXPORTAR' && (
+                <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
+              )}
+
+              {/* TAB: DASHBOARD */}
+              {tab === 'DASHBOARD' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                  <DashboardComandante personnelList={personnelList} vacations={vacations} courses={courses} epiDeliveries={epiDeliveries} notifications={notifications} alerts={alerts} onNavigate={(t) => setTab(t as Tab)} />
+                </div>
+              )}
+
+              {/* TAB: CURSOS */}
+              {tab === 'CURSOS' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                  <CursosB1 personnelList={personnelList} />
+                </div>
+              )}
+
+              {/* TAB: EPI */}
+              {tab === 'EPI' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                  <EpiB1 personnelList={personnelList} />
+                </div>
+              )}
+
+              {/* TAB: DISPONIBILIDADE */}
+              {tab === 'DISPONIBILIDADE' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                  <DisponibilidadeB1 personnelList={personnelList} vacations={vacations} escalas={escalas} />
+                </div>
+              )}
+
+              {/* TAB: NOTIFICACOES */}
+              {tab === 'NOTIFICACOES' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                  <NotificacoesB1 />
+                </div>
+              )}
             </div>
           )}
-
-          {/* TAB: BOLETIM */}
-          {tab === 'BOLETIM' && (
-            <BulletinSection bulletins={bulletins} onAddBulletin={async (b) => { await PersonnelService.addBulletin(b); loadBulletins(); toast.success('Boletim criado!'); }} onUpdateBulletin={async (id, u) => { await PersonnelService.updateBulletin(id, u); loadBulletins(); toast.success('Boletim atualizado!'); }} onGetNotes={PersonnelService.getBulletinNotes} onAddNote={async (n) => { await PersonnelService.addBulletinNote(n); toast.success('Nota adicionada!'); }} onGetVersions={PersonnelService.getBulletinVersions} isEditor={true} />
-          )}
-
-          {/* TAB: DISCIPLINA */}
-          {tab === 'DISCIPLINA' && (
-            <DisciplinarySection records={disciplinaryRecords} personnelList={personnelList} onAdd={async (r) => { await PersonnelService.addDisciplinaryRecord(r); loadDisciplinary(); toast.success('Registro adicionado!'); }} onDelete={async (id) => { if (confirm('Remover registro?')) { await PersonnelService.deleteDisciplinaryRecord(id); loadDisciplinary(); toast.success('Removido!'); } }} isEditor={true} />
-          )}
-
-          {/* TAB: PRONTIDAO */}
-          {tab === 'PRONTIDAO' && <ReadinessReport personnelList={personnelList} vacations={vacations} />}
-
-          {/* TAB: PERFIL */}
-          {tab === 'PERFIL' && profilePerson && (
-            <PersonnelProfile person={profilePerson} rankHistory={profileRankHistory} swaps={profileSwaps} disciplinary={profileDisciplinary} vacations={profileVacations} documents={profileDocs} onClose={() => { setProfilePerson(null); setTab('EFETIVO'); }} />
-          )}
-          {tab === 'PERFIL' && !profilePerson && <div className="text-center py-12 text-gray-300"><p>Selecione um militar na aba Efetivo para ver o perfil completo.</p></div>}
-
-          {/* TAB: EXPORTAR */}
-          {tab === 'EXPORTAR' && (
-            <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
-          )}
-
-          {/* TAB: DASHBOARD */}
-          {tab === 'DASHBOARD' && (
-            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-              <DashboardComandante personnelList={personnelList} vacations={vacations} courses={courses} epiDeliveries={epiDeliveries} notifications={notifications} alerts={alerts} onNavigate={(t) => setTab(t as Tab)} />
-            </div>
-          )}
-
-          {/* TAB: CURSOS */}
-          {tab === 'CURSOS' && (
-            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-              <CursosB1 personnelList={personnelList} />
-            </div>
-          )}
-
-          {/* TAB: EPI */}
-          {tab === 'EPI' && (
-            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-              <EpiB1 personnelList={personnelList} />
-            </div>
-          )}
-
-          {/* TAB: DISPONIBILIDADE */}
-          {tab === 'DISPONIBILIDADE' && (
-            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-              <DisponibilidadeB1 personnelList={personnelList} vacations={vacations} escalas={escalas} />
-            </div>
-          )}
-
-          {/* TAB: NOTIFICACOES */}
-          {tab === 'NOTIFICACOES' && (
-            <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-              <NotificacoesB1 />
-            </div>
-          )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 };

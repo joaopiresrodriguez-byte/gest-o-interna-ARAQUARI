@@ -149,7 +149,7 @@ export interface VacationLeave {
     end_date: string;
     day_count: number;
     leave_type: 'ferias' | 'licenca_medica' | 'licenca_especial' | 'afastamento' | 'cedido' | 'outros';
-    status?: 'planejado' | 'aprovado' | 'em_andamento' | 'concluido';
+    status?: 'planejado' | 'aprovado' | 'em_andamento' | 'concluido' | 'cancelado';
     notes?: string;
 }
 
@@ -333,7 +333,7 @@ export interface Vacation {
     end_date: string;
     day_count: number;
     leave_type?: string;
-    status?: 'planejado' | 'aprovado' | 'em_andamento' | 'concluido';
+    status?: 'planejado' | 'aprovado' | 'em_andamento' | 'concluido' | 'cancelado';
     notes?: string;
 }
 
