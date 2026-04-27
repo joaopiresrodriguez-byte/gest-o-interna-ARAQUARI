@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification, Escala } from './types';
+import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification, Escala, ScaleRotationConfig, TeamConfig } from './types';
 import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
 
@@ -666,5 +666,49 @@ export const PersonnelService = {
             .single();
         if (error) throw error;
         return data;
+    },
+
+    // ===== SCALE CONFIGS =====
+    getScaleConfigs: async (): Promise<ScaleRotationConfig[]> => {
+        try {
+            const { data, error } = await supabase
+                .from('scale_configs')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            return (data || []).map(d => ({
+                id: d.id,
+                anchorDate: d.start_date,
+                teams: d.turmas as TeamConfig[],
+                shiftStartTime: '07:30', // Default
+                is_active: true
+            }));
+        } catch (error) {
+            console.error('Error fetching scale configs:', error);
+            return [];
+        }
+    },
+
+    saveScaleConfig: async (config: ScaleRotationConfig): Promise<ScaleRotationConfig> => {
+        const payload = {
+            id: config.id,
+            start_date: config.anchorDate,
+            turmas: config.teams,
+            shift_hours: 24,
+            rest_hours: 72,
+            name: 'Padrão 24x72'
+        };
+        const { data, error } = await supabase
+            .from('scale_configs')
+            .upsert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        return {
+            id: data.id,
+            anchorDate: data.start_date,
+            teams: data.turmas as TeamConfig[],
+            shiftStartTime: '07:30'
+        };
     },
 };

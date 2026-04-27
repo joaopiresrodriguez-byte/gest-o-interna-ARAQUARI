@@ -6,15 +6,23 @@ interface ScaleCalendarProps {
     escalas: Escala[];
     personnelList: Personnel[];
     vacations: Vacation[];
+    onDayClick?: (date: string, personId: number) => void;
 }
 
-const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations }) => {
+const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, onDayClick }) => {
     const [year, monthNum] = month.split('-').map(Number);
     const daysInMonth = new Date(year, monthNum, 0).getDate();
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    const getStatusForDay = (day: number, personId: number) => {
-        const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const getStatusForDay = (dayNum: number, personId: number) => {
+        const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+
+        // Find if scaled
+        const dayEscala = escalas.find(e => e.data === dateStr);
+        const isScaled = dayEscala?.militares?.includes(personId);
+
+        // Find warnings for this specific person on this day
+        const warning = dayEscala?.warnings?.find(w => w.personnel_id === personId);
 
         // Check vacation
         const isVacation = vacations.some(v =>
@@ -22,14 +30,18 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
             dateStr >= v.start_date &&
             dateStr <= v.end_date
         );
-        if (isVacation) return { label: 'Férias', cls: 'bg-amber-100 text-amber-700' };
 
-        // Check scale
-        const escala = escalas.find(e => e.data === dateStr && e.militares?.includes(personId));
-        if (escala) {
-            if (escala.is_folga) return { label: 'Folga', cls: 'bg-stone-100 text-stone-400' };
-            return { label: 'Serviço', cls: 'bg-primary/10 text-primary font-bold border border-primary/20' };
+        if (isScaled) {
+            const teamColor = dayEscala?.color || '#primary';
+            return {
+                label: 'Serviço',
+                cls: 'text-white font-bold border-none',
+                style: { backgroundColor: teamColor },
+                warning: warning || (isVacation ? { type: 'VACATION', message: 'Militar em férias/licença' } : null)
+            };
         }
+
+        if (isVacation) return { label: 'Férias', cls: 'bg-amber-100 text-amber-700' };
 
         return null;
     };
@@ -57,13 +69,31 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                         {person.graduation || ''} {person.war_name || person.name}
                                     </td>
                                     {days.map(d => {
+                                        const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                                         const status = getStatusForDay(d, person.id!);
                                         return (
-                                            <td key={d} className="p-1 border-r border-stone-50 h-10 text-center">
+                                            <td
+                                                key={d}
+                                                className="p-1 border-r border-stone-50 h-10 text-center cursor-pointer hover:bg-stone-50 transition-colors"
+                                                onClick={() => onDayClick?.(dateStr, person.id!)}
+                                            >
                                                 {status && (
-                                                    <div className={`w-full h-full flex items-center justify-center rounded-lg ${status.cls}`}>
+                                                    <div
+                                                        className={`w-full h-full flex items-center justify-center rounded-lg ${status.cls}`}
+                                                        style={status.style}
+                                                    >
                                                         {status.label === 'Serviço' ? (
-                                                            <span className="material-symbols-outlined text-[14px]">military_tech</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[14px]">military_tech</span>
+                                                                {status.warning && (
+                                                                    <span
+                                                                        className="material-symbols-outlined text-[14px] text-amber-300 animate-pulse"
+                                                                        title={status.warning.message}
+                                                                    >
+                                                                        warning
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         ) : (
                                                             <span className="uppercase font-black text-[7px]">{status.label}</span>
                                                         )}

@@ -422,11 +422,43 @@ export interface Escala {
     shift_type?: '24x72' | '12x36' | 'administrative';
     turma?: string;
     is_folga?: boolean;
+    color?: string;
+    start_time?: string;
+    end_time?: string;
     manual_override?: boolean;
     override_reason?: string;
     override_by?: string;
     override_at?: string;
     created_at?: string;
+    warnings?: ScaleWarning[];
+}
+
+export interface ScaleWarning {
+    personnel_id: number;
+    type: 'VACATION' | 'DOCUMENT_EXPIRED' | 'REST_PERIOD';
+    message: string;
+    severity: 'warning' | 'critical';
+}
+
+export interface ScaleException {
+    id?: string;
+    personnel_id: number;
+    date: string;
+    type: 'ADD' | 'REMOVE';
+    reason: string;
+    performed_by: string;
+    created_at?: string;
+}
+
+export interface ScaleAudit {
+    id?: string;
+    action_type: string;
+    scale_date: string;
+    personnel_id: number;
+    personnel_name: string;
+    reason: string;
+    performed_by: string;
+    performed_at?: string;
 }
 
 export interface B1Course {
@@ -477,4 +509,19 @@ export interface InternalNotification {
     archived_at?: string;
     // Derived
     time_ago?: string;
+}
+
+export interface TeamConfig {
+    name: string;
+    color: string;
+    personnelIds: number[];
+}
+
+export interface ScaleRotationConfig {
+    id?: string;
+    anchorDate: string;
+    teams: TeamConfig[];
+    shiftStartTime: string;
+    created_at?: string;
+    is_active?: boolean;
 }

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification, ScaleRotationConfig, TeamConfig, ScaleException } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
+import { RotationEngine } from '../services/RotationEngine';
+import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
 import DisciplinarySection from '../components/b1/DisciplinarySection';
 import BulletinSection from '../components/b1/BulletinSection';
@@ -17,6 +19,7 @@ import DashboardComandante from '../components/b1/DashboardComandante';
 import ScaleConfigPanel from '../components/b1/ScaleConfigPanel';
 import ScaleCalendar from '../components/b1/ScaleCalendar';
 import { GoogleCalendarService } from '../services/googleCalendarService';
+import { ScaleReportingService } from '../services/scaleReportingService';
 
 type Tab = 'ALERTAS_AVISOS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DISPONIBILIDADE' | 'DASHBOARD';
 
@@ -81,10 +84,10 @@ const PessoalB1: React.FC = () => {
   const [vacNotes, setVacNotes] = useState('');
 
   // Scale state
+  const [scaleTeams, setScaleTeams] = useState<TeamConfig[]>([]);
+  const [scaleAnchorDate, setScaleAnchorDate] = useState('2024-01-01');
+  const [scaleConfigId, setScaleConfigId] = useState<string | undefined>(undefined);
   const [scaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
-  const [scaleTeams, setScaleTeams] = useState<Record<string, number[]>>(() => {
-    try { return JSON.parse(localStorage.getItem('b1_scale_teams') || '{}'); } catch { return {}; }
-  });
 
   // Swap form
   const [swapPersonId, setSwapPersonId] = useState<number | ''>('');
@@ -111,6 +114,10 @@ const PessoalB1: React.FC = () => {
   const [epiDeliveries, setEpiDeliveries] = useState<EpiDelivery[]>([]);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [escalas, setEscalas] = useState<Escala[]>([]);
+  const [scaleExceptions, setScaleExceptions] = useState<ScaleException[]>([]);
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+  const [selectedDayInfo, setSelectedDayInfo] = useState<{ date: string, personId: number } | null>(null);
+  const [exceptionReason, setExceptionReason] = useState('');
 
   // Rank change
   const [rankChangeNewRank, setRankChangeNewRank] = useState('');
@@ -156,6 +163,15 @@ const PessoalB1: React.FC = () => {
       setEpiDeliveries(epiList);
       setNotifications(notifList);
       setEscalas((escalasData.data || []) as Escala[]);
+
+      // Load scale rotation config
+      const configs = await PersonnelService.getScaleConfigs();
+      if (configs && configs.length > 0) {
+        const active = configs[0];
+        setScaleConfigId(active.id);
+        setScaleAnchorDate(active.anchorDate);
+        setScaleTeams(active.teams);
+      }
     } catch (err: any) {
       toast.error('Erro ao carregar dados: ' + (err.message || 'Desconhecido'));
     } finally {
@@ -310,56 +326,57 @@ const PessoalB1: React.FC = () => {
   };
 
   // Scale helpers
-  const saveTeamConfig = (teams: Record<string, number[]>) => {
-    setScaleTeams(teams);
-    localStorage.setItem('b1_scale_teams', JSON.stringify(teams));
+  const saveTeamConfig = async (config: { teams: TeamConfig[], anchorDate: string }) => {
+    try {
+      const newConfig: ScaleRotationConfig = {
+        id: scaleConfigId,
+        anchorDate: config.anchorDate,
+        teams: config.teams,
+        shiftStartTime: '07:30'
+      };
+
+      const saved = await PersonnelService.saveScaleConfig(newConfig);
+      setScaleConfigId(saved.id);
+      setScaleAnchorDate(saved.anchorDate);
+      setScaleTeams(saved.teams);
+      toast.success('Configuração de turmas salva com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao salvar configuração.');
+      console.error(error);
+    }
   };
 
-  const handlePublishScale = async (month: string, shiftType: string, teams: Record<string, number[]>) => {
-    const [year, m] = month.split('-').map(Number);
-    const daysInMonth = new Date(year, m, 0).getDate();
-    const teamKeys = Object.keys(teams).filter(k => teams[k].length > 0);
-    if (teamKeys.length === 0) return toast.error('Configure as turmas antes de publicar!');
-
-    setLoading(true);
-    let saved = 0;
+  const handlePublishScale = async (month: string, shiftType: string, teams: TeamConfig[], anchorDate: string) => {
     try {
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        const teamIdx = (d - 1) % teamKeys.length;
-        const team = teamKeys[teamIdx];
+      setLoading(true);
+      const config: ScaleRotationConfig = {
+        anchorDate,
+        teams,
+        shiftStartTime: '07:30'
+      };
 
-        // Multi-validation before saving
-        const personnels = teams[team].map(id => personnelList.find(p => p.id === id)).filter(Boolean);
-        for (const p of personnels) {
-          const error = PersonnelService.validatePersonnelForScale(p!);
-          if (error) {
-            toast.warning(`Aviso: ${error}`);
-            // We still proceed, but warn the user. High-level rules can be strict if needed.
-          }
-        }
+      const [year, m] = month.split('-').map(Number);
+      const startDate = `${month}-01`;
+      const endDate = `${year}-${String(m).padStart(2, '0')}-${new Date(year, m, 0).getDate()}`;
 
-        const escalaData = {
-          data: dateStr,
-          equipe: team,
-          militares: teams[team],
-          shift_type: shiftType as any,
-          turma: team,
-          is_folga: false // Standard service day
-        };
+      // 1. Gerar rotação base
+      const baseRotation = RotationEngine.generateRotation(startDate, endDate, config);
 
-        await PersonnelService.saveEscala(escalaData);
+      // 2. Aplicar exceções e trocas
+      const withExceptions = RotationEngine.applyExceptions(baseRotation, profileSwaps, scaleExceptions);
 
-        // Sync to Sheets
-        const names = personnels.map(p => p!.name).join(', ');
-        GoogleSheetsService.syncEscala(escalaData, names).catch(() => { });
+      // 3. Validar conflitos (Férias e Documentos)
+      const finalRotation = RotationEngine.validateScale(withExceptions, vacations, personnelList);
 
-        saved++;
+      // 4. Salvar no banco
+      for (const entry of finalRotation) {
+        await PersonnelService.saveEscala(entry);
       }
-      toast.success(`Escala publicada: ${saved} dias gerados para ${month}!`);
+
       loadData();
-    } catch (err: any) {
-      toast.error('Erro ao publicar escala: ' + err.message);
+      toast.success(`Escala de ${month} publicada usando motor determinístico!`);
+    } catch (error: any) {
+      toast.error('Erro na publicação: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -369,7 +386,7 @@ const PessoalB1: React.FC = () => {
     // This would require a valid token. In a real app, you'd trigger oauth flow.
     toast.info('Iniciando sincronização com Google Calendar...');
     // GoogleCalendarService.initAuth(); // Uncomment for real flow
-    const success = await GoogleCalendarService.syncToGoogleCalendar(escalas, 'TOKEN_HERE');
+    const success = await GoogleCalendarService.syncToGoogleCalendar(escalas, personnelList, 'TOKEN_HERE');
     if (success) toast.success('Sincronizado!');
     else toast.error('Falha na sincronização (Verifique credenciais)');
   };
@@ -465,7 +482,7 @@ const PessoalB1: React.FC = () => {
                     <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('CADASTRO'); }} className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">add</span> NOVO</button>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Militar</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
+                    <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Militar</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">E-mail</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
                       <tbody className="divide-y">{filteredPersonnel.map(p => {
                         const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-purple-100 text-purple-700' };
                         return (
@@ -473,7 +490,7 @@ const PessoalB1: React.FC = () => {
                             <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
                             <td className="px-4 py-3 text-center font-bold">{p.graduation || p.rank}</td>
                             <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
-                            <td className="px-4 py-3 text-center">{p.type}</td>
+                            <td className="px-4 py-3 text-center text-[10px] text-gray-500">{p.email || '—'}</td>
                             <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={new Date(p.cve_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cve_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
                             <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={new Date(p.cnh_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cnh_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
                             <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
@@ -601,17 +618,42 @@ const PessoalB1: React.FC = () => {
                       <ScaleConfigPanel
                         personnelList={personnelList}
                         initialTeams={scaleTeams}
-                        onSave={(t) => saveTeamConfig(t)}
+                        initialAnchorDate={scaleAnchorDate}
+                        onSave={saveTeamConfig}
                         onPublish={handlePublishScale}
                       />
 
                       <div className="pt-6 border-t border-stone-100">
-                        <h3 className="font-black text-sm mb-4 uppercase text-stone-400">Escala Publicada — {scaleMonth}</h3>
+                        <div className="flex justify-between items-center mb-6">
+                          <h3 className="font-black text-sm uppercase text-stone-400">Escala Publicada — {scaleMonth}</h3>
+                          <button
+                            onClick={async () => {
+                              const ok = await GoogleSheetsService.syncMonthlyScale(scaleMonth, escalas, personnelList);
+                              if (ok) toast.success('Planilha mestre sincronizada!');
+                              else toast.error('Falha ao sincronizar planilha.');
+                            }}
+                            className="flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white font-black rounded-xl text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">table_chart</span>
+                            SINCRONIZAR PLANILHA
+                          </button>
+                          <button
+                            onClick={() => ScaleReportingService.generateMonthlyScalePDF(scaleMonth, escalas, personnelList, vacations)}
+                            className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-black rounded-xl text-xs hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                            GERAR PDF OFICIAL
+                          </button>
+                        </div>
                         <ScaleCalendar
                           month={scaleMonth}
                           escalas={escalas}
                           personnelList={personnelList}
                           vacations={vacations}
+                          onDayClick={(date, personId) => {
+                            setSelectedDayInfo({ date, personId });
+                            setShowAdjustmentModal(true);
+                          }}
                         />
                       </div>
                     </div>
@@ -760,6 +802,61 @@ const PessoalB1: React.FC = () => {
               )}
 
 
+            </div>
+          )}
+
+          {/* Manual Adjustment Modal */}
+          {showAdjustmentModal && selectedDayInfo && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-rustic-border">
+                <div className="bg-stone-50 p-6 border-b border-stone-200">
+                  <h3 className="font-black text-lg flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">edit_calendar</span>
+                    Ajuste Manual de Escala
+                  </h3>
+                  <p className="text-[10px] text-stone-400 font-bold uppercase mt-1">
+                    {new Date(selectedDayInfo.date + 'T12:00:00').toLocaleDateString('pt-BR')} • {personnelList.find(p => p.id === selectedDayInfo.personId)?.war_name || personnelList.find(p => p.id === selectedDayInfo.personId)?.name}
+                  </p>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-stone-400 block mb-1">Justificativa / Motivo</label>
+                    <textarea
+                      value={exceptionReason}
+                      onChange={e => setExceptionReason(e.target.value)}
+                      className="w-full h-24 p-3 rounded-xl border border-stone-200 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                      placeholder="Ex: Reforço de escala, Permuta administrativa..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleManualAdjustment('ADD')}
+                      className="py-3 bg-green-600 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-green-700 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                      ADICIONAR
+                    </button>
+                    <button
+                      onClick={() => handleManualAdjustment('REMOVE')}
+                      className="py-3 bg-red-600 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-red-700 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">do_not_disturb_on</span>
+                      REMOVER
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-stone-50 border-t border-stone-100 flex justify-end">
+                  <button
+                    onClick={() => { setShowAdjustmentModal(false); setExceptionReason(''); }}
+                    className="px-6 py-2 text-stone-500 font-bold text-xs uppercase"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

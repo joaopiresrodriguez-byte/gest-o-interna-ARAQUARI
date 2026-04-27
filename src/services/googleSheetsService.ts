@@ -181,4 +181,26 @@ export const GoogleSheetsService = {
         ];
         return sendToSheets('Contador_Trocas', row);
     },
+
+    syncMonthlyScale: async (month: string, escalas: Escala[], personnel: Personnel[]): Promise<boolean> => {
+        const [year, monthNum] = month.split('-').map(Number);
+        const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+        console.log(`[GoogleSheets] Starting batch sync for ${month}...`);
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const dayScales = escalas.filter(e => e.data === dateStr);
+
+            for (const escala of dayScales) {
+                const names = escala.militares.map(id => {
+                    const p = personnel.find(pers => pers.id === id);
+                    return p ? `${p.graduation || ''} ${p.war_name || p.name}` : id.toString();
+                }).join(', ');
+
+                await GoogleSheetsService.syncEscala(escala, names);
+            }
+        }
+        return true;
+    },
 };

@@ -1,4 +1,4 @@
-import { Escala } from './types';
+import { Escala, Personnel } from './types';
 
 // OAUTH2 Flow would typically be handled via a popup or redirect.
 // This service provides the logic to sync scales to events.
@@ -7,32 +7,52 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const CALENDAR_ID = import.meta.env.VITE_GOOGLE_CALENDAR_ID;
 
 export const GoogleCalendarService = {
-    syncToGoogleCalendar: async (escalas: Escala[], accessToken: string) => {
+    syncToGoogleCalendar: async (escalas: Escala[], personnel: Personnel[], accessToken: string) => {
         if (!CLIENT_ID || !CALENDAR_ID) {
             console.warn('Google Calendar credentials not configured.');
             return false;
         }
 
         try {
-            // For each day in the scale, create or update a calendar event
+            const personnelMap = new Map((personnel || []).map(p => [p.id, p]));
+
             for (const escala of escalas) {
                 if (escala.is_folga) continue;
 
+                const attendees = escala.militares
+                    .map(id => personnelMap.get(id))
+                    .filter(p => p?.email)
+                    .map(p => ({ email: p!.email, displayName: p!.name }));
+
+                // Google Calendar API V3: Use full ISO strings for start/end
+                // We assume 24h shift starting at start_time
+                const startDateTime = `${escala.data}T${escala.start_time || '07:30'}:00`;
+                const endDateObj = new Date(escala.data);
+                endDateObj.setDate(endDateObj.getDate() + 1);
+                const endDateTime = `${endDateObj.toISOString().split('T')[0]}T${escala.start_time || '07:30'}:00`;
+
                 const event = {
-                    summary: `[ESCALA BM] Equipe ${escala.equipe}`,
-                    description: `Pessoal escalado: ${escala.militares.length} militares`,
+                    summary: `[ESCALA B1] Turma ${escala.turma || escala.equipe}`,
+                    description: `Serviço 24x72 - 7ºBBM\nMilitares: ${escala.militares.map(id => personnelMap.get(id)?.name).join(', ')}`,
                     start: {
-                        date: escala.data,
+                        dateTime: startDateTime,
                         timeZone: 'America/Sao_Paulo',
                     },
                     end: {
-                        date: escala.data,
+                        dateTime: endDateTime,
                         timeZone: 'America/Sao_Paulo',
                     },
+                    attendees,
+                    extendedProperties: {
+                        private: {
+                            system: 'gestao-araquari',
+                            date: escala.data
+                        }
+                    }
                 };
 
-                // Call Google Calendar API v3
-                await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events`, {
+                // Create event
+                await fetch(`https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events?sendUpdates=all`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${accessToken}`,
