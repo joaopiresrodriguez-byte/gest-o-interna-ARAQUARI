@@ -37,10 +37,10 @@ export default function DashboardComandante({ personnelList, vacations, courses,
     }, [personnelList, vacations, courses, epiDeliveries, notifications, alerts, today]);
 
     const kpis: KpiCard[] = [
-        { title: 'Efetivo Total', value: stats.totalPessoal, subtitle: 'militares cadastrados', icon: 'groups', color: 'border-cbm-red/30 bg-cbm-red/5', tab: 'EFETIVO' },
+        { title: 'Efetivo Total', value: stats.totalPessoal, subtitle: 'militares cadastrados', icon: 'groups', color: 'border-gray-400/30 bg-gray-400/5', tab: 'EFETIVO' },
         { title: 'Disponíveis Hoje', value: stats.disponiveis, subtitle: `${stats.emFerias} em férias · ${stats.afastados} afastados`, icon: 'check_circle', color: 'border-emerald-500/30 bg-emerald-500/5', tab: 'DISPONIBILIDADE' },
-        { title: 'Alertas Críticos', value: stats.criticalAlerts, subtitle: `${stats.warningAlerts} avisos`, icon: 'warning', color: `border-${stats.criticalAlerts > 0 ? 'red' : 'amber'}-500/30 bg-${stats.criticalAlerts > 0 ? 'red' : 'amber'}-500/5`, tab: 'ALERTAS' },
-        { title: 'Notificações', value: stats.unreadNotifications, subtitle: `${notifications.length} total · ${stats.unreadNotifications} não lidas`, icon: 'notifications', color: `border-${stats.unreadNotifications > 0 ? 'cbm-red' : 'rustic-border'}/30`, tab: 'NOTIFICACOES' },
+        { title: 'Alertas Críticos', value: stats.criticalAlerts, subtitle: `${stats.warningAlerts} avisos`, icon: 'warning', color: `border-gray-500/30 bg-gray-500/5`, tab: 'ALERTAS' },
+        { title: 'Notificações', value: stats.unreadNotifications, subtitle: `${notifications.length} total · ${stats.unreadNotifications} não lidas`, icon: 'notifications', color: `border-gray-400/30`, tab: 'NOTIFICACOES' },
         { title: 'Qualificações', value: courses.length, subtitle: `${stats.expiredCourses} expiradas`, icon: 'school', color: `border-${stats.expiredCourses > 0 ? 'amber' : 'emerald'}-500/30 bg-${stats.expiredCourses > 0 ? 'amber' : 'emerald'}-500/5`, tab: 'CURSOS' },
         { title: 'EPIs / Uniformes', value: epiDeliveries.length, subtitle: `${stats.overdueEpi} com reposição vencida`, icon: 'checkroom', color: `border-${stats.overdueEpi > 0 ? 'amber' : 'emerald'}-500/30 bg-${stats.overdueEpi > 0 ? 'amber' : 'emerald'}-500/5`, tab: 'EPI' },
     ];
@@ -81,7 +81,7 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                             <span className="material-symbols-outlined text-base text-red-400">emergency</span>
                             <h4 className="text-sm font-semibold text-primary-text">Alertas Críticos</h4>
                         </div>
-                        <button onClick={() => onNavigate('ALERTAS')} className="text-xs text-cbm-red hover:underline">Ver todos</button>
+                        <button onClick={() => onNavigate('ALERTAS')} className="text-xs text-gray-500 hover:underline">Ver todos</button>
                     </div>
                     {criticalAlertsList.length === 0 ? (
                         <div className="text-center py-4 text-secondary-text">
@@ -91,8 +91,8 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                     ) : (
                         <div className="space-y-2">
                             {criticalAlertsList.map((a, i) => (
-                                <div key={i} className="flex items-start gap-2 p-2 bg-red-500/5 border border-red-500/20 rounded-lg">
-                                    <span className="material-symbols-outlined text-sm text-red-400 shrink-0 mt-0.5">report</span>
+                                <div key={i} className="flex items-start gap-2 p-2 bg-gray-100 border border-gray-300 rounded-lg">
+                                    <span className="material-symbols-outlined text-sm text-gray-500 shrink-0 mt-0.5">report</span>
                                     <div className="min-w-0">
                                         <p className="text-xs font-semibold text-primary-text truncate">{a.personnelName}</p>
                                         <p className="text-xs text-secondary-text">{a.message}</p>
@@ -107,13 +107,13 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                 <div className="bg-primary border border-rustic-border rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-base text-cbm-red">notifications_active</span>
+                            <span className="material-symbols-outlined text-base text-gray-500">notifications_active</span>
                             <h4 className="text-sm font-semibold text-primary-text">Notificações Recentes</h4>
                             {stats.unreadNotifications > 0 && (
-                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-cbm-red text-white font-medium">{stats.unreadNotifications}</span>
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-600 text-white font-medium">{stats.unreadNotifications}</span>
                             )}
                         </div>
-                        <button onClick={() => onNavigate('NOTIFICACOES')} className="text-xs text-cbm-red hover:underline">Ver todas</button>
+                        <button onClick={() => onNavigate('NOTIFICACOES')} className="text-xs text-gray-500 hover:underline">Ver todas</button>
                     </div>
                     {recentNotifs.length === 0 ? (
                         <div className="text-center py-4 text-secondary-text">
@@ -123,7 +123,7 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                     ) : (
                         <div className="space-y-2">
                             {recentNotifs.map(n => (
-                                <div key={n.id} className="p-2 bg-cbm-red/5 border border-cbm-red/20 rounded-lg">
+                                <div key={n.id} className="p-2 bg-gray-100 border border-gray-300 rounded-lg">
                                     <p className="text-xs font-semibold text-primary-text truncate">{n.title}</p>
                                     <p className="text-xs text-secondary-text line-clamp-2">{n.message}</p>
                                     <p className="text-xs text-secondary-text/60 mt-0.5">{n.time_ago}</p>

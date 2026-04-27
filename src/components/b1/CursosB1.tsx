@@ -31,6 +31,8 @@ const emptyForm = (): Omit<B1Course, 'id'> => ({
     expiry_date: undefined,
     category: 'Operacional',
     certificate_url: '',
+    is_retroactive: false,
+    retroactive_notes: '',
 });
 
 export default function CursosB1({ personnelList }: Props) {
@@ -167,6 +169,24 @@ export default function CursosB1({ personnelList }: Props) {
                                 placeholder="https://..." className="w-full bg-secondary border border-rustic-border rounded-lg px-3 py-2 text-sm text-primary-text focus:outline-none focus:border-cbm-red" />
                         </div>
                     </div>
+
+                    {/* Retroactive toggle */}
+                    <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <input type="checkbox" id="is_retroactive" checked={!!form.is_retroactive}
+                            onChange={e => setForm(f => ({ ...f, is_retroactive: e.target.checked, retroactive_notes: e.target.checked ? f.retroactive_notes : '' }))}
+                            className="h-4 w-4 accent-amber-500" />
+                        <label htmlFor="is_retroactive" className="text-sm font-medium text-amber-700 cursor-pointer">
+                            Registro retroativo (curso já possuído antes do sistema)
+                        </label>
+                    </div>
+                    {form.is_retroactive && (
+                        <div className="space-y-1">
+                            <label className="text-xs text-secondary-text">Observações do registro retroativo *</label>
+                            <textarea value={form.retroactive_notes || ''} onChange={e => setForm(f => ({ ...f, retroactive_notes: e.target.value }))}
+                                placeholder="Ex: Registro de curso realizado em 2018 no CEBM. Certificado digitalizado." rows={2}
+                                className="w-full bg-secondary border border-rustic-border rounded-lg px-3 py-2 text-sm text-primary-text focus:outline-none focus:border-cbm-red" />
+                        </div>
+                    )}
                     <div className="flex justify-end">
                         <button type="submit" disabled={saving} className="px-4 py-2 bg-cbm-red text-white rounded-lg text-sm font-medium hover:bg-opacity-90 transition-opacity disabled:opacity-50">
                             {saving ? 'Salvando...' : 'Salvar Curso'}
@@ -211,6 +231,7 @@ export default function CursosB1({ personnelList }: Props) {
                                 </div>
                                 <p className="text-xs text-secondary-text mt-0.5">{c.personnel_rank} {c.personnel_name} · {c.institution}{c.workload_hours ? ` · ${c.workload_hours}h` : ''}</p>
                                 <p className="text-xs text-secondary-text">Conclusão: {new Date(c.completion_date).toLocaleDateString('pt-BR')}{c.expiry_date ? ` · Validade: ${new Date(c.expiry_date).toLocaleDateString('pt-BR')}` : ''}</p>
+                                {c.is_retroactive && <p className="text-xs text-amber-600 mt-0.5">&#x26EF; Retroativo{c.retroactive_notes ? ` — ${c.retroactive_notes}` : ''}</p>}
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                                 {c.certificate_url && (

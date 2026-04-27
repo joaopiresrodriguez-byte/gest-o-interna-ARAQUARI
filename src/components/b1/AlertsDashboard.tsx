@@ -7,7 +7,7 @@ interface Props {
 }
 
 const severityConfig = {
-    critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', badge: 'bg-red-600 text-white', icon: 'error' },
+    critical: { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-700', badge: 'bg-gray-700 text-white', icon: 'error' },
     warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', badge: 'bg-amber-500 text-white', icon: 'warning' },
     info: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-blue-500 text-white', icon: 'info' },
 };
@@ -21,13 +21,13 @@ const AlertsDashboard: React.FC<Props> = ({ alerts, onNavigateToProfile }) => {
         <div className="space-y-6">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-xl bg-red-600 text-white flex items-center justify-center">
+                <div className="bg-gray-100 border border-gray-300 rounded-2xl p-5 flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-xl bg-gray-700 text-white flex items-center justify-center">
                         <span className="material-symbols-outlined text-2xl">error</span>
                     </div>
                     <div>
-                        <p className="text-3xl font-black text-red-700">{criticalCount}</p>
-                        <p className="text-[10px] font-bold uppercase text-red-500 tracking-wider">Críticos / Expirados</p>
+                        <p className="text-3xl font-black text-gray-700">{criticalCount}</p>
+                        <p className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Críticos / Expirados</p>
                     </div>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">

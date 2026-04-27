@@ -19,7 +19,7 @@ const statusConfig: Record<AvailabilityStatus, { label: string; color: string; d
     'disponível': { label: 'Disponível', color: 'text-emerald-400', dot: 'bg-emerald-400', icon: 'check_circle' },
     'de_serviço': { label: 'De Serviço', color: 'text-amber-400', dot: 'bg-amber-400 animate-pulse', icon: 'emergency' },
     'férias': { label: 'Férias', color: 'text-blue-400', dot: 'bg-blue-400', icon: 'beach_access' },
-    'afastado': { label: 'Afastado', color: 'text-red-400', dot: 'bg-red-400', icon: 'person_off' },
+    'afastado': { label: 'Afastado', color: 'text-gray-500', dot: 'bg-gray-500', icon: 'person_off' },
 };
 
 export default function DisponibilidadeB1({ personnelList, vacations, escalas }: Props) {
@@ -94,7 +94,7 @@ export default function DisponibilidadeB1({ personnelList, vacations, escalas }:
                     { label: 'De Serviço', value: summary.deServico, color: 'border-amber-500/30 bg-amber-500/5', textColor: 'text-amber-400' },
                     { label: 'Disponíveis', value: summary.disponiveis, color: 'border-emerald-500/30 bg-emerald-500/5', textColor: 'text-emerald-400' },
                     { label: 'Em Férias', value: summary.ferias, color: 'border-blue-500/30 bg-blue-500/5', textColor: 'text-blue-400' },
-                    { label: 'Afastados', value: summary.afastados, color: 'border-red-500/30 bg-red-500/5', textColor: 'text-red-400' },
+                    { label: 'Afastados', value: summary.afastados, color: 'border-gray-400/30 bg-gray-400/10', textColor: 'text-gray-500' },
                 ].map(kpi => (
                     <div key={kpi.label} className={`bg-primary border rounded-xl p-3 ${kpi.color}`}>
                         <p className={`text-2xl font-bold ${kpi.textColor}`}>{kpi.value}</p>

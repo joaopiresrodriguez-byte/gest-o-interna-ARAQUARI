@@ -6,7 +6,7 @@ import { PAGINATION } from '../config/constants';
 // Field selectors for optimized queries
 const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cnh_expiry_date, cpf, emergency_phone, emergency_contact_name, cve_active, cve_issue_date, cve_expiry_date, toxicological_date, toxicological_expiry_date, graduation, last_cadastro_review';
 const DOCUMENT_FIELDS = 'id, file_name, document_type, file_url, size_kb, uploaded_by, upload_date, notes, personnel_id';
-const VACATION_FIELDS = 'id, personnel_id, full_name, start_date, end_date, day_count, status, notes';
+const VACATION_FIELDS = 'id, personnel_id, full_name, start_date, end_date, day_count, leave_type, status, notes';
 
 const personnelBase = new BaseService<Personnel>('personnel', PERSONNEL_FIELDS);
 const documentsBase = new BaseService<DocumentB1>('personnel_documents', DOCUMENT_FIELDS);
@@ -110,7 +110,7 @@ export const PersonnelService = {
     deleteDocumentB1: async (id: string, path: string): Promise<void> => {
         try {
             const { error: storageError } = await supabase.storage
-                .from('personnel-documents')
+                .from('documentos-b1')
                 .remove([path]);
             if (storageError) throw new ServiceError('Erro ao remover arquivo do storage', storageError);
             await documentsBase.delete(id);
@@ -284,8 +284,14 @@ export const PersonnelService = {
     },
 
     addServiceSwap: async (swap: Omit<ServiceSwap, 'id'>): Promise<ServiceSwap> => {
-        const count = await PersonnelService.getSwapCountThisMonth(swap.personnel_id, swap.month_ref);
-        if (count >= 2) throw new Error(`Limite de 2 trocas/mês atingido para este militar (${count} registradas).`);
+        const [countA, countB] = await Promise.all([
+            PersonnelService.getSwapCountThisMonth(swap.personnel_id, swap.month_ref),
+            swap.swap_with_personnel_id
+                ? PersonnelService.getSwapCountThisMonth(swap.swap_with_personnel_id, swap.month_ref)
+                : Promise.resolve(0),
+        ]);
+        if (countA >= 2) throw new Error('Este efetivo já atingiu o limite de 2 trocas de serviço para o mês atual.');
+        if (countB >= 2) throw new Error('O efetivo selecionado para troca já atingiu o limite de 2 trocas de serviço para o mês atual.');
         const { data, error } = await supabase
             .from('service_swaps')
             .insert(swap)
@@ -293,6 +299,19 @@ export const PersonnelService = {
             .single();
         if (error) throw error;
         return data;
+    },
+
+    validatePersonnelForScale: (person: Personnel): string | null => {
+        if (!person) return 'Militar não encontrado.';
+        if (person.status !== 'Ativo') return `${person.name} está com status "${person.status}" e não pode ser escalado.`;
+        const today = new Date().toISOString().split('T')[0];
+        if (person.cve_active === 'Sim' && person.cve_expiry_date && person.cve_expiry_date < today) {
+            return `CVE de ${person.name} está expirado. Regularize antes de escalar.`;
+        }
+        if (person.cnh_category?.includes('D') && person.toxicological_expiry_date && person.toxicological_expiry_date < today) {
+            return `Exame toxicológico de ${person.name} (CNH D) está expirado. Não pode operar veículo.`;
+        }
+        return null;
     },
 
     // ===== DISCIPLINARY RECORDS =====
@@ -645,8 +664,8 @@ export const PersonnelService = {
             }
         }
 
-        const severityOrder = { critical: 0, warning: 1, info: 2 };
-        alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+        const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+        alerts.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
         return alerts;
     },
 };

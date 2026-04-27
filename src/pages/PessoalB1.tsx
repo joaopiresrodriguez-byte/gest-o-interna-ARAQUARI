@@ -11,14 +11,13 @@ import ReadinessReport from '../components/b1/ReadinessReport';
 import PersonnelProfile from '../components/b1/PersonnelProfile';
 import ExportSection from '../components/b1/ExportSection';
 import CursosB1 from '../components/b1/CursosB1';
-import EpiB1 from '../components/b1/EpiB1';
 import DisponibilidadeB1 from '../components/b1/DisponibilidadeB1';
 import NotificacoesB1 from '../components/b1/NotificacoesB1';
 import DashboardComandante from '../components/b1/DashboardComandante';
 
-type Tab = 'ALERTAS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'EPI' | 'DISPONIBILIDADE' | 'NOTIFICACOES' | 'DASHBOARD';
+type Tab = 'ALERTAS_AVISOS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DISPONIBILIDADE' | 'DASHBOARD';
 
-const tabIcons: Record<Tab, string> = { ALERTAS: 'notifications_active', EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', BOLETIM: 'article', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', EPI: 'checkroom', DISPONIBILIDADE: 'location_on', NOTIFICACOES: 'notifications', DASHBOARD: 'dashboard' };
+const tabIcons: Record<Tab, string> = { ALERTAS_AVISOS: 'notifications_active', EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', BOLETIM: 'article', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DISPONIBILIDADE: 'location_on', DASHBOARD: 'dashboard' };
 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
 const STATUS_OPTIONS = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
@@ -45,6 +44,13 @@ const calcExpiry = (issueDate: string, years: number): string => {
   return d.toISOString().split('T')[0];
 };
 
+const calcToxExpiry = (issueDate: string): string => {
+  const d = new Date(issueDate);
+  d.setFullYear(d.getFullYear() + 2);
+  d.setMonth(d.getMonth() + 6);
+  return d.toISOString().split('T')[0];
+};
+
 const emptyForm = (): Partial<Personnel> => ({
   name: '', war_name: '', rank: 'Sd', role: '', status: 'Ativo' as const, type: 'BM' as const,
   address: '', email: '', birth_date: '', phone: '', blood_type: '', cnh: '', weapon_permit: false,
@@ -54,7 +60,7 @@ const emptyForm = (): Partial<Personnel> => ({
 });
 
 const PessoalB1: React.FC = () => {
-  const [tab, setTab] = useState<Tab>('ALERTAS');
+  const [tab, setTab] = useState<Tab>('ALERTAS_AVISOS');
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   const [documents, setDocuments] = useState<DocumentB1[]>([]);
   const [vacations, setVacations] = useState<Vacation[]>([]);
@@ -180,7 +186,7 @@ const PessoalB1: React.FC = () => {
     // Auto-calculate expiry dates
     const cleanedData = { ...formData };
     if (cleanedData.cve_issue_date) cleanedData.cve_expiry_date = calcExpiry(cleanedData.cve_issue_date, 5);
-    if (cleanedData.toxicological_date) cleanedData.toxicological_expiry_date = calcExpiry(cleanedData.toxicological_date, 2);
+    if (cleanedData.toxicological_date) cleanedData.toxicological_expiry_date = calcToxExpiry(cleanedData.toxicological_date);
     cleanedData.last_cadastro_review = new Date().toISOString().split('T')[0];
 
     // Remove empty strings for DB
@@ -291,9 +297,9 @@ const PessoalB1: React.FC = () => {
     if (!docFile || !docType || !docPersonId) return toast.error('Preencha todos os campos!');
     try {
       const path = `b1/${docPersonId}/${Date.now()}_${docFile.name}`;
-      const { error: uploadError } = await supabase.storage.from('personnel-documents').upload(path, docFile);
+      const { error: uploadError } = await supabase.storage.from('documentos-b1').upload(path, docFile);
       if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('personnel-documents').getPublicUrl(path);
+      const { data: urlData } = supabase.storage.from('documentos-b1').getPublicUrl(path);
       await PersonnelService.addDocumentB1({ file_name: docFile.name, document_type: docType, file_url: urlData.publicUrl, size_kb: Math.round(docFile.size / 1024), personnel_id: docPersonId as number, upload_date: new Date().toISOString() });
       toast.success('Documento anexado!');
       setDocFile(null); setDocType(''); setDocNotes('');
@@ -385,17 +391,16 @@ const PessoalB1: React.FC = () => {
             <div className="flex items-center gap-4 text-xs">
               <div className="text-center"><span className="text-2xl font-black text-primary block">{personnelList.length}</span><span className="text-gray-400">Total</span></div>
               <div className="text-center"><span className="text-2xl font-black text-green-600 block">{personnelList.filter(p => p.status === 'Ativo').length}</span><span className="text-gray-400">Ativos</span></div>
-              {alerts.filter(a => a.severity === 'critical').length > 0 && <div className="text-center"><span className="text-2xl font-black text-red-600 block">{alerts.filter(a => a.severity === 'critical').length}</span><span className="text-gray-400">⚠ Alertas</span></div>}
+              {alerts.filter(a => a.severity === 'critical').length > 0 && <div className="text-center"><span className="text-2xl font-black text-gray-600 block">{alerts.filter(a => a.severity === 'critical').length}</span><span className="text-gray-400">⚠ Alertas</span></div>}
             </div>
           </div>
 
           {/* Tabs */}
           <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
-            {(['DASHBOARD', 'ALERTAS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS', 'EPI', 'DISPONIBILIDADE', 'NOTIFICACOES'] as Tab[]).map(t => (
+            {(['DASHBOARD', 'ALERTAS_AVISOS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS', 'DISPONIBILIDADE'] as Tab[]).map(t => (
               <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
-                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DISPONIBILIDADE', 'DISPON.').replace('NOTIFICACOES', 'AVISOS').replace('DASHBOARD', 'DASHBOARD')}
-                {t === 'ALERTAS' && alerts.filter(a => a.severity === 'critical').length > 0 && <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length}</span>}
-                {t === 'NOTIFICACOES' && notifications.filter(n => !n.is_read).length > 0 && <span className="w-5 h-5 rounded-full bg-cbm-red text-white text-[9px] flex items-center justify-center ml-1">{notifications.filter(n => !n.is_read).length}</span>}
+                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('ALERTAS_AVISOS', 'ALERTAS & AVISOS').replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DISPONIBILIDADE', 'DISPON.').replace('DASHBOARD', 'DASHBOARD')}
+                {t === 'ALERTAS_AVISOS' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
               </button>
             ))}
           </div>
@@ -413,8 +418,22 @@ const PessoalB1: React.FC = () => {
 
           {!loading && (
             <div className="space-y-6">
-              {/* TAB: ALERTAS */}
-              {tab === 'ALERTAS' && <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />}
+              {/* TAB: ALERTAS & AVISOS (unificado) */}
+              {tab === 'ALERTAS_AVISOS' && (
+                <div className="space-y-6">
+                  <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                    <h3 className="font-black text-base mb-4 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-gray-500">notifications</span>
+                      Avisos Internos
+                      {notifications.filter(n => !n.is_read).length > 0 && (
+                        <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center">{notifications.filter(n => !n.is_read).length}</span>
+                      )}
+                    </h3>
+                    <NotificacoesB1 />
+                  </div>
+                </div>
+              )}
 
               {/* TAB: EFETIVO */}
               {tab === 'EFETIVO' && (
@@ -484,8 +503,8 @@ const PessoalB1: React.FC = () => {
                     {formField('Validade CNH', 'cnh_expiry_date', 'date')}
                     {formField('Data Toxicológico', 'toxicological_date', 'date')}
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade Toxicológico (auto: +2 anos)</label>
-                      <input type="date" value={formData.toxicological_date ? calcExpiry(formData.toxicological_date, 2) : formData.toxicological_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade Toxicológico (auto: +2a6m)</label>
+                      <input type="date" value={formData.toxicological_date ? calcToxExpiry(formData.toxicological_date) : formData.toxicological_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
                     </div>
                     {formField('Porte de Arma', 'weapon_permit', 'checkbox')}
                   </div>
@@ -657,13 +676,6 @@ const PessoalB1: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB: EPI */}
-              {tab === 'EPI' && (
-                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                  <EpiB1 personnelList={personnelList} />
-                </div>
-              )}
-
               {/* TAB: DISPONIBILIDADE */}
               {tab === 'DISPONIBILIDADE' && (
                 <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
@@ -671,12 +683,7 @@ const PessoalB1: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB: NOTIFICACOES */}
-              {tab === 'NOTIFICACOES' && (
-                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                  <NotificacoesB1 />
-                </div>
-              )}
+
             </div>
           )}
         </div>

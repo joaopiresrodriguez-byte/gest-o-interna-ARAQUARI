@@ -430,6 +430,8 @@ export interface B1Course {
     category: 'Operacional' | 'Administrativo' | 'Saúde' | 'Liderança' | 'Especialização Técnica' | 'Outros';
     certificate_url?: string;
     created_at?: string;
+    is_retroactive?: boolean;
+    retroactive_notes?: string;
     // Joined
     personnel_name?: string;
     personnel_rank?: string;
