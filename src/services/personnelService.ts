@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification } from './types';
+import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification, Escala } from './types';
 import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
 
@@ -185,47 +185,7 @@ export const PersonnelService = {
         }
     },
 
-    // ===== ESCALA =====
-    getEscalaByDate: async (date: string): Promise<any> => {
-        try {
-            const { data, error } = await supabase
-                .from('escalas')
-                .select('*')
-                .eq('data', date)
-                .single();
-            if (error && error.code !== 'PGRST116') throw error;
-            return data;
-        } catch (error) {
-            return null;
-        }
-    },
-
-    saveEscala: async (escala: { data: string, equipe: string, militares: number[], shift_type?: string }): Promise<any> => {
-        try {
-            const existing = await PersonnelService.getEscalaByDate(escala.data);
-            if (existing) {
-                const { data, error } = await supabase
-                    .from('escalas')
-                    .update({ equipe: escala.equipe, militares: escala.militares, shift_type: escala.shift_type })
-                    .eq('id', existing.id)
-                    .select()
-                    .single();
-                if (error) throw error;
-                return data;
-            } else {
-                const { data, error } = await supabase
-                    .from('escalas')
-                    .insert(escala)
-                    .select()
-                    .single();
-                if (error) throw error;
-                return data;
-            }
-        } catch (error) {
-            console.error('Error saving escala:', error);
-            throw error;
-        }
-    },
+    // Scale methods consolidated at the end of file
 
     // ===== RANK HISTORY =====
     getRankHistory: async (personnelId: number): Promise<RankHistory[]> => {
@@ -667,5 +627,44 @@ export const PersonnelService = {
         const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
         alerts.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
         return alerts;
+    },
+
+    // ===== ESCALAS =====
+    getEscalas: async (month?: string): Promise<Escala[]> => {
+        try {
+            let query = supabase.from('escalas').select('*').order('data', { ascending: true });
+            if (month) {
+                const startDate = `${month}-01`;
+                const [year, m] = month.split('-').map(Number);
+                const endDate = `${year}-${String(m).padStart(2, '0')}-${new Date(year, m, 0).getDate()}`;
+                query = query.gte('data', startDate).lte('data', endDate);
+            }
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching escalas:', error);
+            return [];
+        }
+    },
+
+    getEscalaByDate: async (date: string): Promise<Escala | null> => {
+        const { data, error } = await supabase
+            .from('escalas')
+            .select('*')
+            .eq('data', date)
+            .maybeSingle();
+        if (error) return null;
+        return data;
+    },
+
+    saveEscala: async (escala: Omit<Escala, 'id' | 'created_at'>): Promise<Escala> => {
+        const { data, error } = await supabase
+            .from('escalas')
+            .upsert(escala, { onConflict: 'data' })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
     },
 };

@@ -81,6 +81,10 @@ export interface ServiceSwap {
     reason: string;
     swap_date: string;
     month_ref: string;
+    approval_status?: 'Pendente' | 'Aprovado' | 'Rejeitado';
+    approving_officer?: string;
+    date_a_gives_to_b?: string;
+    date_b_gives_to_a?: string;
     created_at?: string;
     // Joined fields
     personnel_name?: string;
@@ -416,6 +420,12 @@ export interface Escala {
     equipe: string;
     militares: number[]; // IDs dos militares
     shift_type?: '24x72' | '12x36' | 'administrative';
+    turma?: string;
+    is_folga?: boolean;
+    manual_override?: boolean;
+    override_reason?: string;
+    override_by?: string;
+    override_at?: string;
     created_at?: string;
 }
 

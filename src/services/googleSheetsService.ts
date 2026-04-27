@@ -1,4 +1,4 @@
-import { Personnel, Vehicle, Occurrence, B1Course, EpiDelivery } from './types';
+import { Personnel, Vehicle, Occurrence, B1Course, EpiDelivery, Escala, ServiceSwap } from './types';
 
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 
@@ -144,5 +144,41 @@ export const GoogleSheetsService = {
             epi.patrimonio_number || '',
         ];
         return sendToSheets('Uniformes EPIs', row);
+    },
+
+    syncEscala: async (escala: Partial<Escala>, names: string): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),
+            formatDate(escala.data),
+            escala.equipe || '',
+            names,
+            escala.shift_type || '',
+            escala.is_folga ? 'Sim' : 'Não'
+        ];
+        return sendToSheets('Escalas', row);
+    },
+
+    syncServiceSwap: async (swap: Partial<ServiceSwap>, milA: string, milB: string, approver?: string): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),
+            milA,
+            milB,
+            formatDate(swap.new_date),
+            formatDate(swap.original_date),
+            swap.reason || '',
+            swap.approval_status || 'Pendente',
+            approver || ''
+        ];
+        return sendToSheets('Trocas_Servico', row);
+    },
+
+    syncSwapCounter: async (personnelName: string, month: string, count: number): Promise<boolean> => {
+        const row = [
+            new Date().toLocaleDateString('pt-BR'),
+            personnelName,
+            month,
+            count.toString()
+        ];
+        return sendToSheets('Contador_Trocas', row);
     },
 };

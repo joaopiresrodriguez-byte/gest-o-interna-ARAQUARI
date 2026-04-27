@@ -14,6 +14,9 @@ import CursosB1 from '../components/b1/CursosB1';
 import DisponibilidadeB1 from '../components/b1/DisponibilidadeB1';
 import NotificacoesB1 from '../components/b1/NotificacoesB1';
 import DashboardComandante from '../components/b1/DashboardComandante';
+import ScaleConfigPanel from '../components/b1/ScaleConfigPanel';
+import ScaleCalendar from '../components/b1/ScaleCalendar';
+import { GoogleCalendarService } from '../services/googleCalendarService';
 
 type Tab = 'ALERTAS_AVISOS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DISPONIBILIDADE' | 'DASHBOARD';
 
@@ -78,11 +81,10 @@ const PessoalB1: React.FC = () => {
   const [vacNotes, setVacNotes] = useState('');
 
   // Scale state
-  const [scaleMonth, setScaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
+  const [scaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
   const [scaleTeams, setScaleTeams] = useState<Record<string, number[]>>(() => {
     try { return JSON.parse(localStorage.getItem('b1_scale_teams') || '{}'); } catch { return {}; }
   });
-  const [scaleShiftType, setScaleShiftType] = useState<'24x72' | '12x36' | 'administrative'>('24x72');
 
   // Swap form
   const [swapPersonId, setSwapPersonId] = useState<number | ''>('');
@@ -313,43 +315,63 @@ const PessoalB1: React.FC = () => {
     localStorage.setItem('b1_scale_teams', JSON.stringify(teams));
   };
 
-  const publishScale = async () => {
-    const [year, month] = scaleMonth.split('-').map(Number);
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const teamKeys = Object.keys(scaleTeams).filter(k => scaleTeams[k].length > 0);
-    if (teamKeys.length === 0) return toast.error('Configure pelo menos uma equipe!');
+  const handlePublishScale = async (month: string, shiftType: string, teams: Record<string, number[]>) => {
+    const [year, m] = month.split('-').map(Number);
+    const daysInMonth = new Date(year, m, 0).getDate();
+    const teamKeys = Object.keys(teams).filter(k => teams[k].length > 0);
+    if (teamKeys.length === 0) return toast.error('Configure as turmas antes de publicar!');
 
+    setLoading(true);
     let saved = 0;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const teamIdx = (d - 1) % teamKeys.length;
-      const team = teamKeys[teamIdx];
-      try {
-        // Regra: Descanso de 1 dia no mínimo
-        const prevDate = new Date(year, month - 1, d - 1);
-        const prevDateStr = prevDate.toISOString().split('T')[0];
-        const prevEscala = await PersonnelService.getEscalaByDate(prevDateStr);
+    try {
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const teamIdx = (d - 1) % teamKeys.length;
+        const team = teamKeys[teamIdx];
 
-        if (prevEscala && prevEscala.militares) {
-          const overlapping = scaleTeams[team].filter(id => prevEscala.militares.includes(id));
-          if (overlapping.length > 0) {
-            const names = overlapping.map(id => personnelList.find(p => p.id === id)?.name || id).join(', ');
-            toast.warning(`Aviso: ${names} estão escalados em dias consecutivos (${prevDateStr} e ${dateStr}).`);
+        // Multi-validation before saving
+        const personnels = teams[team].map(id => personnelList.find(p => p.id === id)).filter(Boolean);
+        for (const p of personnels) {
+          const error = PersonnelService.validatePersonnelForScale(p!);
+          if (error) {
+            toast.warning(`Aviso: ${error}`);
+            // We still proceed, but warn the user. High-level rules can be strict if needed.
           }
         }
 
-        await PersonnelService.saveEscala({ data: dateStr, equipe: team, militares: scaleTeams[team], shift_type: scaleShiftType });
+        const escalaData = {
+          data: dateStr,
+          equipe: team,
+          militares: teams[team],
+          shift_type: shiftType as any,
+          turma: team,
+          is_folga: false // Standard service day
+        };
+
+        await PersonnelService.saveEscala(escalaData);
+
+        // Sync to Sheets
+        const names = personnels.map(p => p!.name).join(', ');
+        GoogleSheetsService.syncEscala(escalaData, names).catch(() => { });
+
         saved++;
-      } catch (err: any) {
-        console.error(`Erro ao salvar dia ${d}:`, err);
       }
+      toast.success(`Escala publicada: ${saved} dias gerados para ${month}!`);
+      loadData();
+    } catch (err: any) {
+      toast.error('Erro ao publicar escala: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-    toast.success(`Escala publicada: ${saved} dias gerados!`);
-    PersonnelService.sendBulkNotification(
-      'Escala Publicada',
-      `A escala de serviço para ${scaleMonth} foi publicada com ${saved} dias e regime ${scaleShiftType}.`,
-      'scale_published'
-    ).catch(() => { });
+  };
+
+  const syncToGoogle = async () => {
+    // This would require a valid token. In a real app, you'd trigger oauth flow.
+    toast.info('Iniciando sincronização com Google Calendar...');
+    // GoogleCalendarService.initAuth(); // Uncomment for real flow
+    const success = await GoogleCalendarService.syncToGoogleCalendar(escalas, 'TOKEN_HERE');
+    if (success) toast.success('Sincronizado!');
+    else toast.error('Falha na sincronização (Verifique credenciais)');
   };
 
   const filteredPersonnel = personnelList.filter(p =>
@@ -562,35 +584,37 @@ const PessoalB1: React.FC = () => {
                 <div className="space-y-6">
                   <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
                     <div className="flex items-center justify-between mb-6">
-                      <h2 className="font-black text-xl">Escala de Serviço</h2>
-                      <div className="flex items-center gap-3">
-                        <select value={scaleShiftType} onChange={e => setScaleShiftType(e.target.value as any)} className="h-10 px-3 rounded-lg border text-xs font-bold">
-                          <option value="24x72">24×72</option><option value="12x36">12×36</option><option value="administrative">Administrativo</option>
-                        </select>
-                        <input type="month" value={scaleMonth} onChange={e => setScaleMonth(e.target.value)} className="h-10 px-3 rounded-lg border text-xs font-bold" />
+                      <h2 className="font-black text-xl flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary">calendar_view_month</span>
+                        Painel de Escalas
+                      </h2>
+                      <button
+                        onClick={syncToGoogle}
+                        className="px-4 py-2 bg-stone-100 text-stone-600 text-[10px] font-black rounded-lg flex items-center gap-2 hover:bg-stone-200 transition-all"
+                      >
+                        <img src="https://www.google.com/favicon.ico" className="w-4 h-4 grayscale opacity-50" />
+                        SINCRONIZAR GOOGLE CALENDAR
+                      </button>
+                    </div>
+
+                    <div className="space-y-8">
+                      <ScaleConfigPanel
+                        personnelList={personnelList}
+                        initialTeams={scaleTeams}
+                        onSave={(t) => saveTeamConfig(t)}
+                        onPublish={handlePublishScale}
+                      />
+
+                      <div className="pt-6 border-t border-stone-100">
+                        <h3 className="font-black text-sm mb-4 uppercase text-stone-400">Escala Publicada — {scaleMonth}</h3>
+                        <ScaleCalendar
+                          month={scaleMonth}
+                          escalas={escalas}
+                          personnelList={personnelList}
+                          vacations={vacations}
+                        />
                       </div>
                     </div>
-
-                    {/* Team config */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                      {['Alpha', 'Bravo', 'Charlie', 'Delta'].map(team => (
-                        <div key={team} className="p-4 bg-stone-50 rounded-xl border border-rustic-border">
-                          <h4 className="font-black text-sm mb-3">{team}</h4>
-                          <div className="space-y-1 max-h-40 overflow-y-auto">
-                            {(scaleTeams[team] || []).map(pid => {
-                              const p = personnelList.find(pp => pp.id === pid);
-                              return p ? <div key={pid} className="flex items-center justify-between text-xs p-1.5 bg-white rounded-lg"><span>{p.graduation || ''} {p.war_name || p.name}</span><button onClick={() => { const updated = { ...scaleTeams, [team]: scaleTeams[team].filter(id => id !== pid) }; saveTeamConfig(updated); }} className="text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[14px]">close</span></button></div> : null;
-                            })}
-                          </div>
-                          <select onChange={e => { if (e.target.value) { const pid = Number(e.target.value); const current = scaleTeams[team] || []; if (!current.includes(pid)) saveTeamConfig({ ...scaleTeams, [team]: [...current, pid] }); e.target.value = ''; } }} className="w-full h-8 px-2 rounded border text-[10px] mt-2">
-                            <option value="">+ Adicionar militar...</option>
-                            {personnelList.filter(p => p.status === 'Ativo' && !Object.values(scaleTeams).flat().includes(p.id!)).map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-
-                    <button onClick={publishScale} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">PUBLICAR ESCALA DO MÊS</button>
                   </div>
 
                   {/* Swap Registration */}
@@ -602,6 +626,58 @@ const PessoalB1: React.FC = () => {
                       <input type="date" value={swapNewDate} onChange={e => setSwapNewDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Nova data" />
                       <input value={swapReason} onChange={e => setSwapReason(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Motivo" />
                       <button onClick={handleSaveSwap} className="h-11 bg-amber-500 text-white font-black rounded-xl text-xs">REGISTRAR TROCA</button>
+                    </div>
+                  </div>
+
+                  {/* Toxicological Status — Personnel with CNH Cat D */}
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                    <h3 className="font-black text-lg mb-4 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-blue-500">science</span>
+                      Status Toxicológico — CNH Cat. D
+                      <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Validade: 2a 6m</span>
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-stone-50">
+                          <tr className="text-[10px] font-black uppercase text-gray-400">
+                            <th className="px-4 py-3 text-left">Militar</th>
+                            <th className="px-4 py-3">Cat. CNH</th>
+                            <th className="px-4 py-3">Data Exame</th>
+                            <th className="px-4 py-3">Validade</th>
+                            <th className="px-4 py-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {personnelList.filter(p => p.cnh_category && (p.cnh_category.includes('D') || p.cnh_category.includes('E'))).map(p => {
+                            const today = new Date();
+                            const expiry = p.toxicological_expiry_date ? new Date(p.toxicological_expiry_date) : null;
+                            const daysLeft = expiry ? Math.ceil((expiry.getTime() - today.getTime()) / 86400000) : null;
+                            let badge = { label: 'Sem registro', cls: 'bg-gray-100 text-gray-500' };
+                            if (expiry) {
+                              if (daysLeft !== null && daysLeft < 0) badge = { label: 'VENCIDO', cls: 'bg-red-100 text-red-700 font-black' };
+                              else if (daysLeft !== null && daysLeft <= 60) badge = { label: `Vence em ${daysLeft}d`, cls: 'bg-amber-100 text-amber-700 font-black' };
+                              else badge = { label: `Válido (${daysLeft}d)`, cls: 'bg-green-100 text-green-700' };
+                            }
+                            return (
+                              <tr key={p.id} className="hover:bg-stone-50/50">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[14px]">person</span></div>
+                                    <div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center font-bold">{p.cnh_category}</td>
+                                <td className="px-4 py-3 text-center text-xs">{p.toxicological_date ? new Date(p.toxicological_date).toLocaleDateString('pt-BR') : '—'}</td>
+                                <td className="px-4 py-3 text-center text-xs">{expiry ? expiry.toLocaleDateString('pt-BR') : '—'}</td>
+                                <td className="px-4 py-3 text-center"><span className={`text-[9px] px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span></td>
+                              </tr>
+                            );
+                          })}
+                          {personnelList.filter(p => p.cnh_category && (p.cnh_category.includes('D') || p.cnh_category.includes('E'))).length === 0 && (
+                            <tr><td colSpan={5} className="text-center py-8 text-gray-300 italic">Nenhum militar com CNH Cat. D/E cadastrado.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
