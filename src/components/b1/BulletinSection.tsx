@@ -29,11 +29,12 @@ const BulletinSection: React.FC<Props> = ({ bulletins, onAddBulletin, onUpdateBu
     const [editContent, setEditContent] = React.useState('');
     const [searchTerm, setSearchTerm] = React.useState('');
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!weekStart || !weekEnd) return;
-        onAddBulletin({ week_start: weekStart, week_end: weekEnd, status: 'rascunho', content: '' });
+        await onAddBulletin({ week_start: weekStart, week_end: weekEnd, status: 'rascunho', content: '' });
         setWeekStart('');
         setWeekEnd('');
+        // Painel direito ficará visível após o refetch em onAddBulletin
     };
 
     const handleSelect = async (b: Bulletin) => {

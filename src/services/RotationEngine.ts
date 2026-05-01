@@ -6,18 +6,19 @@ export class RotationEngine {
      * Baseado em um ciclo de 4 turmas (A, B, C, D) em regime 24x72.
      */
     static getTeamForDate(date: Date, config: ScaleRotationConfig): number {
-        const anchor = new Date(config.anchorDate);
-        anchor.setHours(0, 0, 0, 0);
+        // Parse anchor as UTC date to avoid timezone offset shifting the day
+        const [ay, am, ad] = config.anchorDate.split('-').map(Number);
+        const anchorMs = Date.UTC(ay, am - 1, ad);
 
-        const target = new Date(date);
-        target.setHours(0, 0, 0, 0);
+        const [ty, tm, td] = [
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate()
+        ];
+        const targetMs = Date.UTC(ty, tm, td);
 
-        // Diferença em dias
-        const diffTime = target.getTime() - anchor.getTime();
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-        // Ciclo de 4 dias (A trabalha dia 0, B dia 1, C dia 2, D dia 3)
-        // O operador % pode retornar negativo em JS para números negativos, por isso ( (n % 4) + 4) % 4
+        const diffDays = Math.floor((targetMs - anchorMs) / (1000 * 60 * 60 * 24));
+        // Ciclo 4 dias: turma A=0, B=1, C=2, D=3. Suporta datas anteriores à âncora.
         const cycleIndex = ((diffDays % 4) + 4) % 4;
 
         return cycleIndex;
@@ -27,8 +28,18 @@ export class RotationEngine {
      * Gera a escala projetada para um intervalo de datas.
      */
     static generateRotation(startDate: string, endDate: string, config: ScaleRotationConfig): Escala[] {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        console.log('[RotationEngine] generateRotation chamado:', { startDate, endDate, anchorDate: config.anchorDate, teams: config.teams.map(t => ({ name: t.name, members: t.personnelIds.length })) });
+
+        const allTeamsEmpty = config.teams.every(t => t.personnelIds.length === 0);
+        if (allTeamsEmpty) {
+            console.warn('[RotationEngine] AVISO: Todas as turmas estão sem militares. Atribua militares às turmas antes de publicar.');
+        }
+
+        // Parse dates as local date parts to avoid UTC offset shifting the day
+        const [sy, sm, sd] = startDate.split('-').map(Number);
+        const [ey, em, ed] = endDate.split('-').map(Number);
+        const start = new Date(sy, sm - 1, sd);
+        const end   = new Date(ey, em - 1, ed);
         const results: Escala[] = [];
 
         const current = new Date(start);
@@ -37,7 +48,8 @@ export class RotationEngine {
             const team = config.teams[teamIdx];
 
             if (team) {
-                const dateStr = current.toISOString().split('T')[0];
+                const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+                console.log(`[RotationEngine] Dia ${dateStr}: Turma ${team.name} (idx=${teamIdx}, ${team.personnelIds.length} militares)`);
                 results.push({
                     data: dateStr,
                     equipe: team.name,
@@ -46,13 +58,14 @@ export class RotationEngine {
                     color: team.color,
                     shift_type: '24x72',
                     start_time: config.shiftStartTime || '07:30',
-                    end_time: config.shiftStartTime || '07:30' // Próximo dia mesmo horário
+                    end_time: config.shiftStartTime || '07:30'
                 });
             }
 
             current.setDate(current.getDate() + 1);
         }
 
+        console.log(`[RotationEngine] Total de entradas geradas: ${results.length}`);
         return results;
     }
 

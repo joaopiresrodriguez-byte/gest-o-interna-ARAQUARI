@@ -36,13 +36,14 @@ export default function DashboardComandante({ personnelList, vacations, courses,
         return { totalPessoal, emFerias, afastados, disponiveis, criticalAlerts, warningAlerts, expiredCourses, overdueEpi, unreadNotifications };
     }, [personnelList, vacations, courses, epiDeliveries, notifications, alerts, today]);
 
+    // Cores fixas por card — não usar bg-primary (vermelho CBMSC)
     const kpis: KpiCard[] = [
-        { title: 'Efetivo Total', value: stats.totalPessoal, subtitle: 'militares cadastrados', icon: 'groups', color: 'border-gray-400/30 bg-gray-400/5', tab: 'EFETIVO' },
-        { title: 'Disponíveis Hoje', value: stats.disponiveis, subtitle: `${stats.emFerias} em férias · ${stats.afastados} afastados`, icon: 'check_circle', color: 'border-emerald-500/30 bg-emerald-500/5', tab: 'DISPONIBILIDADE' },
-        { title: 'Alertas Críticos', value: stats.criticalAlerts, subtitle: `${stats.warningAlerts} avisos`, icon: 'warning', color: `border-gray-500/30 bg-gray-500/5`, tab: 'ALERTAS' },
-        { title: 'Notificações', value: stats.unreadNotifications, subtitle: `${notifications.length} total · ${stats.unreadNotifications} não lidas`, icon: 'notifications', color: `border-gray-400/30`, tab: 'NOTIFICACOES' },
-        { title: 'Qualificações', value: courses.length, subtitle: `${stats.expiredCourses} expiradas`, icon: 'school', color: `border-${stats.expiredCourses > 0 ? 'amber' : 'emerald'}-500/30 bg-${stats.expiredCourses > 0 ? 'amber' : 'emerald'}-500/5`, tab: 'CURSOS' },
-        { title: 'EPIs / Uniformes', value: epiDeliveries.length, subtitle: `${stats.overdueEpi} com reposição vencida`, icon: 'checkroom', color: `border-${stats.overdueEpi > 0 ? 'amber' : 'emerald'}-500/30 bg-${stats.overdueEpi > 0 ? 'amber' : 'emerald'}-500/5`, tab: 'EPI' },
+        { title: 'Efetivo Total',     value: stats.totalPessoal,        subtitle: 'militares cadastrados',                                           icon: 'groups',         color: 'kpi-slate',   tab: 'EFETIVO' },
+        { title: 'Disponíveis Hoje', value: stats.disponiveis,          subtitle: `${stats.emFerias} em férias · ${stats.afastados} afastados`,       icon: 'check_circle',   color: 'kpi-green',   tab: 'DISPONIBILIDADE' },
+        { title: 'Alertas Críticos', value: stats.criticalAlerts,       subtitle: `${stats.warningAlerts} avisos`,                                    icon: 'warning',        color: 'kpi-red',     tab: 'ALERTAS' },
+        { title: 'Notificações',     value: stats.unreadNotifications,  subtitle: `${notifications.length} total · ${stats.unreadNotifications} não lidas`, icon: 'notifications',  color: 'kpi-blue',    tab: 'NOTIFICACOES' },
+        { title: 'Qualificações',    value: courses.length,             subtitle: `${stats.expiredCourses} expiradas`,                               icon: 'school',         color: stats.expiredCourses > 0 ? 'kpi-amber' : 'kpi-slate', tab: 'CURSOS' },
+        { title: 'BMs e Licenças',   value: stats.emFerias + stats.afastados, subtitle: `${stats.emFerias} férias · ${stats.afastados} afastados`,   icon: 'beach_access',   color: 'kpi-orange',  tab: 'FERIAS' },
     ];
 
     const criticalAlertsList = alerts.filter(a => a.severity === 'critical').slice(0, 5);
@@ -59,23 +60,35 @@ export default function DashboardComandante({ personnelList, vacations, courses,
 
             {/* KPI grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {kpis.map(kpi => (
-                    <button key={kpi.title}
-                        onClick={() => kpi.tab && onNavigate(kpi.tab)}
-                        className={`bg-primary border rounded-xl p-3 text-left hover:opacity-90 transition-opacity ${kpi.color}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="material-symbols-outlined text-base text-secondary-text">{kpi.icon}</span>
-                            <span className="text-xs text-secondary-text font-medium">{kpi.title}</span>
-                        </div>
-                        <p className="text-2xl font-bold text-primary-text">{kpi.value}</p>
-                        <p className="text-xs text-secondary-text mt-0.5">{kpi.subtitle}</p>
-                    </button>
-                ))}
+                {kpis.map(kpi => {
+                    const colorMap: Record<string, { bg: string; border: string; text: string; icon: string }> = {
+                        'kpi-slate':  { bg: '#1e293b', border: '#334155', text: '#f1f5f9', icon: '#94a3b8' },
+                        'kpi-green':  { bg: '#15803d', border: '#16a34a', text: '#f0fdf4', icon: '#86efac' },
+                        'kpi-red':    { bg: '#dc2626', border: '#ef4444', text: '#fff1f2', icon: '#fca5a5' },
+                        'kpi-blue':   { bg: '#1d4ed8', border: '#2563eb', text: '#eff6ff', icon: '#93c5fd' },
+                        'kpi-amber':  { bg: '#b45309', border: '#d97706', text: '#fffbeb', icon: '#fcd34d' },
+                        'kpi-orange': { bg: '#c2410c', border: '#ea580c', text: '#fff7ed', icon: '#fdba74' },
+                    };
+                    const c = colorMap[kpi.color] || colorMap['kpi-slate'];
+                    return (
+                        <button key={kpi.title}
+                            onClick={() => kpi.tab && onNavigate(kpi.tab)}
+                            style={{ backgroundColor: c.bg, borderColor: c.border }}
+                            className="border rounded-xl p-3 text-left hover:brightness-110 transition-all">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="material-symbols-outlined text-base" style={{ color: c.icon }}>{kpi.icon}</span>
+                                <span className="text-xs font-medium" style={{ color: c.text, opacity: 0.85 }}>{kpi.title}</span>
+                            </div>
+                            <p className="text-2xl font-bold" style={{ color: c.text }}>{kpi.value}</p>
+                            <p className="text-xs mt-0.5" style={{ color: c.text, opacity: 0.7 }}>{kpi.subtitle}</p>
+                        </button>
+                    );
+                })}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Critical alerts panel */}
-                <div className="bg-primary border border-rustic-border rounded-2xl p-4">
+                <div className="bg-white border border-gray-200 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-base text-red-400">emergency</span>
@@ -91,11 +104,11 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                     ) : (
                         <div className="space-y-2">
                             {criticalAlertsList.map((a, i) => (
-                                <div key={i} className="flex items-start gap-2 p-2 bg-gray-100 border border-gray-300 rounded-lg">
-                                    <span className="material-symbols-outlined text-sm text-gray-500 shrink-0 mt-0.5">report</span>
+                                <div key={i} className="flex items-start gap-2 p-2 bg-white rounded-lg border-l-4" style={{ borderLeftColor: '#dc2626', borderTop: '1px solid #fee2e2', borderRight: '1px solid #fee2e2', borderBottom: '1px solid #fee2e2' }}>
+                                    <span className="material-symbols-outlined text-sm shrink-0 mt-0.5" style={{ color: '#dc2626' }}>report</span>
                                     <div className="min-w-0">
-                                        <p className="text-xs font-semibold text-primary-text truncate">{a.personnelName}</p>
-                                        <p className="text-xs text-secondary-text">{a.message}</p>
+                                        <p className="text-xs font-semibold text-gray-800 truncate">{a.personnelName}</p>
+                                        <p className="text-xs text-gray-500">{a.message}</p>
                                     </div>
                                 </div>
                             ))}
@@ -104,7 +117,7 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                 </div>
 
                 {/* Recent unread notifications */}
-                <div className="bg-primary border border-rustic-border rounded-2xl p-4">
+                <div className="bg-white border border-gray-200 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-base text-gray-500">notifications_active</span>
@@ -123,10 +136,10 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                     ) : (
                         <div className="space-y-2">
                             {recentNotifs.map(n => (
-                                <div key={n.id} className="p-2 bg-gray-100 border border-gray-300 rounded-lg">
-                                    <p className="text-xs font-semibold text-primary-text truncate">{n.title}</p>
-                                    <p className="text-xs text-secondary-text line-clamp-2">{n.message}</p>
-                                    <p className="text-xs text-secondary-text/60 mt-0.5">{n.time_ago}</p>
+                                <div key={n.id} className="p-2 bg-white rounded-lg border-l-4" style={{ borderLeftColor: '#2563eb', borderTop: '1px solid #dbeafe', borderRight: '1px solid #dbeafe', borderBottom: '1px solid #dbeafe' }}>
+                                    <p className="text-xs font-semibold text-gray-800 truncate">{n.title}</p>
+                                    <p className="text-xs text-gray-500 line-clamp-2">{n.message}</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">{n.time_ago}</p>
                                 </div>
                             ))}
                         </div>

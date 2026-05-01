@@ -143,6 +143,12 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({ personnelList, init
                 ))}
             </div>
 
+            {teams.every(t => t.personnelIds.length === 0) && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                    <span className="material-symbols-outlined text-[16px] text-amber-500">warning</span>
+                    <span><strong>Atenção:</strong> Nenhuma turma possui militares. Adicione militares às turmas antes de publicar a escala.</span>
+                </div>
+            )}
             <div className="flex justify-end gap-3 pt-4 border-t border-stone-100">
                 <button
                     onClick={() => onSave({ teams, anchorDate })}
@@ -151,7 +157,14 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({ personnelList, init
                     Salvar Configuração
                 </button>
                 <button
-                    onClick={() => onPublish(month, shiftType, teams, anchorDate)}
+                    onClick={() => {
+                        const totalMembers = teams.reduce((acc, t) => acc + t.personnelIds.length, 0);
+                        if (totalMembers === 0) {
+                            alert('⚠️ Adicione militares às turmas antes de publicar!');
+                            return;
+                        }
+                        onPublish(month, shiftType, teams, anchorDate);
+                    }}
                     className="px-8 py-3 bg-primary text-white font-black text-xs rounded-xl hover:shadow-lg transition-all uppercase tracking-widest"
                 >
                     Projetar e Publicar Escala
