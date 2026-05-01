@@ -13,29 +13,43 @@
  *   VITE_SHEETS_EFETIVO_ABA         ← nome da aba (ex: CadastroEfetivo)
  */
 
-const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL as string | undefined;
-const ABA_EFETIVO = (import.meta.env.VITE_SHEETS_EFETIVO_ABA as string | undefined) || 'CadastroEfetivo';
-const ABA_FERIAS  = (import.meta.env.VITE_SHEETS_FERIAS_ABA  as string | undefined) || 'FeriasLicencas';
-const ABA_ESCALA  = (import.meta.env.VITE_SHEETS_ESCALA_ABA  as string | undefined) || 'EscalaMensal';
+const WEBHOOK_URL    = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL as string | undefined;
+const ABA_EFETIVO    = (import.meta.env.VITE_SHEETS_EFETIVO_ABA as string | undefined) || 'CadastroEfetivo';
+const ABA_FERIAS     = (import.meta.env.VITE_SHEETS_FERIAS_ABA  as string | undefined) || 'FeriasLicencas';
+const ABA_ESCALA     = (import.meta.env.VITE_SHEETS_ESCALA_ABA  as string | undefined) || 'EscalaMensal';
+// ID real da planilha de efetivo — sobrescreve a planilha padrão do webhook
+const SHEETS_EFETIVO_ID = import.meta.env.VITE_SHEETS_EFETIVO_ID as string | undefined;
 
 const formatDate = (dateStr?: string | null): string => {
     if (!dateStr) return '';
     try { return new Date(dateStr).toLocaleDateString('pt-BR'); } catch { return dateStr; }
 };
 
-async function sendToSheets(sheet: string, data: (string | number | null)[]): Promise<boolean> {
+/**
+ * Envia dados ao webhook do Google Apps Script.
+ * Passa opcionalmente `spreadsheetId` para que o Apps Script
+ * escreva em uma planilha específica em vez da planilha padrão.
+ */
+async function sendToSheets(
+    sheet: string,
+    data: (string | number | null)[],
+    spreadsheetId?: string
+): Promise<boolean> {
     if (!WEBHOOK_URL) {
         console.warn('[driveSync] VITE_GOOGLE_SHEETS_WEBHOOK_URL não configurado. Sync ignorado.');
         return false;
     }
     try {
+        const body: Record<string, unknown> = { sheet, data };
+        if (spreadsheetId) body.spreadsheetId = spreadsheetId; // roteamento dinâmico
+
         await fetch(WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sheet, data }),
+            body: JSON.stringify(body),
             mode: 'no-cors', // Google Apps Script exige no-cors
         });
-        console.log(`✅ [driveSync] Dados enviados para aba "${sheet}"`);
+        console.log(`✅ [driveSync] Dados enviados para aba "${sheet}"${ spreadsheetId ? ' (planilha: ' + spreadsheetId.slice(0,8) + '...)' : '' }`);
         return true;
     } catch (error) {
         console.warn(`⚠️ [driveSync] Falha ao enviar para "${sheet}":`, error);
@@ -62,6 +76,7 @@ export async function syncMilitarDrive(militar: {
     [key: string]: unknown;
 }): Promise<void> {
     try {
+        // SHEETS_EFETIVO_ID garante que o Apps Script escreva na planilha correta
         await sendToSheets(ABA_EFETIVO, [
             militar.id?.toString()              || '',
             militar.name                        || '',
@@ -73,7 +88,7 @@ export async function syncMilitarDrive(militar: {
             militar.email                       || '',
             militar.phone                       || '',
             new Date().toLocaleDateString('pt-BR'),
-        ]);
+        ], SHEETS_EFETIVO_ID); // <-- roteamento dinâmico para planilha correta
     } catch (e) {
         console.warn('⚠️ [driveSync] syncMilitarDrive falhou (não bloqueia):', e);
     }
