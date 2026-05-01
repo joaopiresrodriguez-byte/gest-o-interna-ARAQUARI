@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification, ScaleRotationConfig, TeamConfig, ScaleException } from '../services/types';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification, ScaleRotationConfig } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
-import { RotationEngine } from '../services/RotationEngine';
+
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
 import DisciplinarySection from '../components/b1/DisciplinarySection';
@@ -84,7 +84,7 @@ const PessoalB1: React.FC = () => {
   const [vacNotes, setVacNotes] = useState('');
 
   // Scale state
-  const [scaleTeams, setScaleTeams] = useState<TeamConfig[]>([]);
+
   const [scaleAnchorDate, setScaleAnchorDate] = useState('2024-01-01');
   const [scaleConfigId, setScaleConfigId] = useState<string | undefined>(undefined);
   const [scaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
@@ -114,7 +114,7 @@ const PessoalB1: React.FC = () => {
   const [epiDeliveries, setEpiDeliveries] = useState<EpiDelivery[]>([]);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [escalas, setEscalas] = useState<Escala[]>([]);
-  const [scaleExceptions, setScaleExceptions] = useState<ScaleException[]>([]);
+
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [selectedDayInfo, setSelectedDayInfo] = useState<{ date: string, personId: number } | null>(null);
   const [exceptionReason, setExceptionReason] = useState('');
@@ -328,25 +328,6 @@ const PessoalB1: React.FC = () => {
   };
 
   // Scale helpers
-  const saveTeamConfig = async (config: { teams: TeamConfig[], anchorDate: string }) => {
-    try {
-      const newConfig: ScaleRotationConfig = {
-        id: scaleConfigId,
-        anchorDate: config.anchorDate,
-        teams: config.teams,
-        shiftStartTime: '07:30'
-      };
-
-      const saved = await PersonnelService.saveScaleConfig(newConfig);
-      setScaleConfigId(saved.id);
-      setScaleAnchorDate(saved.anchorDate);
-      setScaleTeams(saved.teams);
-      toast.success('Configuração de turmas salva com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao salvar configuração.');
-      console.error(error);
-    }
-  };
 
   const handlePublishScale = async (month: string, _shiftType: string, anchorDate: string) => {
     try {
@@ -404,7 +385,7 @@ const PessoalB1: React.FC = () => {
           data: dStr,
           equipe: `Turma ${guarnicaoDaVez.codigo}`,
           militares: guarnicaoDaVez.membrosIds,
-          shift_type: _shiftType,
+          shift_type: _shiftType as "24x72" | "12x36" | "administrative" | undefined,
           is_folga: false,
           manual_override: false,
           turma: guarnicaoDaVez.codigo
