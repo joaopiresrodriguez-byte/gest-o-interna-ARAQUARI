@@ -2,7 +2,6 @@ import { supabase } from './supabase';
 import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification, Escala, ScaleRotationConfig, TeamConfig } from './types';
 import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
-import { syncMilitarDrive, syncFeriasDrive } from './driveSync';
 
 // Field selectors for optimized queries
 const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cnh_expiry_date, cpf, emergency_phone, emergency_contact_name, cve_active, cve_issue_date, cve_expiry_date, toxicological_date, toxicological_expiry_date, graduation, last_cadastro_review';
@@ -43,10 +42,7 @@ export const PersonnelService = {
         const error = PersonnelService.validateCondutor(person);
         if (error) throw new Error(error);
         try {
-            const result = await personnelBase.create(person);
-            // Sync com Google Drive (assíncrono — não bloqueia cadastro local)
-            syncMilitarDrive(result).catch(console.warn);
-            return result;
+            return await personnelBase.create(person);
         } catch (error) {
             console.error('Error adding personnel:', error);
             throw error;
@@ -144,16 +140,7 @@ export const PersonnelService = {
 
     addVacation: async (vacation: Omit<Vacation, 'id'>): Promise<Vacation> => {
         try {
-            const result = await vacationsBase.create(vacation);
-            // Sync com Google Drive (assíncrono — não bloqueia cadastro local)
-            syncFeriasDrive({
-                full_name: vacation.full_name,
-                leave_type: vacation.leave_type,
-                start_date: vacation.start_date,
-                end_date: vacation.end_date,
-                notes: vacation.notes,
-            }).catch(console.warn);
-            return result;
+            return await vacationsBase.create(vacation);
         } catch (error) {
             console.error('Error adding vacation:', error);
             throw error;
