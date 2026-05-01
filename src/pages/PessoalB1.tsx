@@ -153,16 +153,18 @@ const PessoalB1: React.FC = () => {
       setAlerts(PersonnelService.generateAlerts(pList, vList, swapCounts));
 
       // Load new module data in parallel
-      const [courseList, epiList, notifList, escalasData] = await Promise.all([
+      const [courseList, epiList, notifList, escalasData, excList] = await Promise.all([
         PersonnelService.getCourses(),
         PersonnelService.getEpiDeliveries(),
         PersonnelService.getNotifications(),
         supabase.from('escalas').select('*').order('data', { ascending: false }).limit(90),
+        ScaleAdjustmentService.getExceptions()
       ]);
       setCourses(courseList);
       setEpiDeliveries(epiList);
       setNotifications(notifList);
       setEscalas((escalasData.data || []) as Escala[]);
+      setScaleExceptions(excList);
 
       // Load scale rotation config
       const configs = await PersonnelService.getScaleConfigs();
@@ -346,30 +348,68 @@ const PessoalB1: React.FC = () => {
     }
   };
 
-  const handlePublishScale = async (month: string, shiftType: string, teams: TeamConfig[], anchorDate: string) => {
+  const handlePublishScale = async (month: string, _shiftType: string, anchorDate: string) => {
     try {
       setLoading(true);
-      const config: ScaleRotationConfig = {
-        anchorDate,
-        teams,
-        shiftStartTime: '07:30'
+
+      const { data: gData, error } = await supabase
+        .from('guarnicoes')
+        .select(`
+          id, nome,
+          guarnicao_membros(
+            personnel(id, name, war_name, rank)
+          )
+        `)
+        .order('nome');
+
+      if (error || !gData) throw new Error('Não foi possível carregar as guarnições.');
+
+      const mapNomeToCodigo = (nome: string) => {
+        if (nome === 'Alpha') return 'A';
+        if (nome === 'Bravo') return 'B';
+        if (nome === 'Charlie') return 'C';
+        if (nome === 'Delta') return 'D';
+        return nome.charAt(0);
+      };
+
+      const guarnicoesFormatadas = gData.map(g => ({
+        id: g.id,
+        codigo: mapNomeToCodigo(g.nome),
+        membrosIds: g.guarnicao_membros?.map((m: any) => m.personnel?.id).filter(Boolean) || []
+      })).sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+      if (guarnicoesFormatadas.length === 0) throw new Error('Nenhuma guarnição encontrada no banco.');
+
+      const getDiaServico = (dataAlvo: Date, dataAncora: Date): number => {
+        const ms = 1000 * 60 * 60 * 24;
+        const diff = Math.floor((dataAlvo.getTime() - dataAncora.getTime()) / ms);
+        return ((diff % 4) + 4) % 4; // 0=A, 1=B, 2=C, 3=D
       };
 
       const [year, m] = month.split('-').map(Number);
-      const startDate = `${month}-01`;
-      const endDate = `${year}-${String(m).padStart(2, '0')}-${new Date(year, m, 0).getDate()}`;
+      const start = new Date(year, m - 1, 1);
+      const end = new Date(year, m, 0);
+      const anchor = new Date(anchorDate + 'T00:00:00');
 
-      // 1. Gerar rotação base
-      const baseRotation = RotationEngine.generateRotation(startDate, endDate, config);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dStr = d.toISOString().split('T')[0];
+        // O algoritmo: A, B, C, D corresponde aos índices 0, 1, 2, 3
+        const servicoIdx = getDiaServico(d, anchor);
+        const guarnicaoDaVez = guarnicoesFormatadas.find(g => {
+            const codigos = ['A', 'B', 'C', 'D'];
+            return g.codigo === codigos[servicoIdx];
+        }) || guarnicoesFormatadas[servicoIdx % guarnicoesFormatadas.length];
 
-      // 2. Aplicar exceções e trocas
-      const withExceptions = RotationEngine.applyExceptions(baseRotation, profileSwaps, scaleExceptions);
+        const entry = {
+          data: dStr,
+          equipe: `Turma ${guarnicaoDaVez.codigo}`,
+          militares: guarnicaoDaVez.membrosIds,
+          shift_type: _shiftType,
+          is_folga: false,
+          manual_override: false,
+          turma: guarnicaoDaVez.codigo
+        };
 
-      // 3. Validar conflitos (Férias e Documentos)
-      const finalRotation = RotationEngine.validateScale(withExceptions, vacations, personnelList);
-
-      // 4. Salvar no banco
-      for (const entry of finalRotation) {
         await PersonnelService.saveEscala(entry);
       }
 
@@ -379,6 +419,32 @@ const PessoalB1: React.FC = () => {
       toast.error('Erro na publicação: ' + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManualAdjustment = async (type: 'ADD' | 'REMOVE') => {
+    if (!selectedDayInfo || !exceptionReason) {
+      return toast.error('Selecione o dia/militar e informe a justificativa.');
+    }
+
+    try {
+      await ScaleAdjustmentService.addException({
+        date: selectedDayInfo.date,
+        personnel_id: selectedDayInfo.personId,
+        type: type,
+        reason: exceptionReason,
+        performed_by: 'B1 Admin'
+      });
+
+      toast.success('Ajuste manual registrado com sucesso!');
+
+      const updatedExceptions = await ScaleAdjustmentService.getExceptions();
+      setScaleExceptions(updatedExceptions);
+
+      setShowAdjustmentModal(false);
+      setExceptionReason('');
+    } catch (err: any) {
+      toast.error('Erro ao registrar ajuste: ' + err.message);
     }
   };
 
@@ -617,9 +683,7 @@ const PessoalB1: React.FC = () => {
                     <div className="space-y-8">
                       <ScaleConfigPanel
                         personnelList={personnelList}
-                        initialTeams={scaleTeams}
                         initialAnchorDate={scaleAnchorDate}
-                        onSave={saveTeamConfig}
                         onPublish={handlePublishScale}
                       />
 

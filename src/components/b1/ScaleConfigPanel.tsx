@@ -1,46 +1,21 @@
 import React, { useState } from 'react';
 import { Personnel, TeamConfig } from '../../services/types';
+import { GuarnicoesConfig } from './GuarnicoesConfig';
 
 interface ScaleConfigPanelProps {
     personnelList: Personnel[];
-    initialTeams?: TeamConfig[];
     initialAnchorDate?: string;
-    onSave: (config: { teams: TeamConfig[], anchorDate: string }) => void;
-    onPublish: (month: string, shiftType: string, teams: TeamConfig[], anchorDate: string) => void;
+    onPublish: (month: string, shiftType: string, anchorDate: string) => void;
 }
 
-const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({ personnelList, initialTeams, initialAnchorDate, onSave, onPublish }) => {
+const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({ personnelList, initialAnchorDate, onPublish }) => {
     const [month, setMonth] = useState(() => {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     });
     const [anchorDate, setAnchorDate] = useState(initialAnchorDate || '2024-01-01');
     const [shiftType, setShiftType] = useState('24x72');
-    const [teams, setTeams] = useState<TeamConfig[]>(initialTeams || [
-        { name: 'Turma A', color: '#ef4444', personnelIds: [] },
-        { name: 'Turma B', color: '#3b82f6', personnelIds: [] },
-        { name: 'Turma C', color: '#10b981', personnelIds: [] },
-        { name: 'Turma D', color: '#f59e0b', personnelIds: [] }
-    ]);
-
-    const handleAddPersonnel = (teamIdx: number, id: number) => {
-        const newTeams = [...teams];
-        if (newTeams[teamIdx].personnelIds.includes(id)) return;
-        newTeams[teamIdx].personnelIds = [...newTeams[teamIdx].personnelIds, id];
-        setTeams(newTeams);
-    };
-
-    const handleRemovePersonnel = (teamIdx: number, id: number) => {
-        const newTeams = [...teams];
-        newTeams[teamIdx].personnelIds = newTeams[teamIdx].personnelIds.filter((tId: number) => tId !== id);
-        setTeams(newTeams);
-    };
-
-    const handleUpdateTeam = (teamIdx: number, updates: Partial<TeamConfig>) => {
-        const newTeams = [...teams];
-        newTeams[teamIdx] = { ...newTeams[teamIdx], ...updates } as TeamConfig;
-        setTeams(newTeams);
-    };
+    const [stats, setStats] = useState({ guarnicoes: 0, membros: 0 });
 
     return (
         <div className="space-y-6">
@@ -79,93 +54,31 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({ personnelList, init
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {teams.map((team, idx) => (
-                    <div key={idx} className="p-4 bg-stone-50 rounded-2xl border border-stone-200">
-                        <div className="mb-4">
-                            <input
-                                value={team.name}
-                                onChange={e => handleUpdateTeam(idx, { name: e.target.value })}
-                                className="font-black text-sm w-full bg-transparent border-b border-stone-300 focus:border-primary outline-none pb-1"
-                                placeholder="Nome da Turma"
-                            />
-                            <div className="flex items-center gap-2 mt-2">
-                                <input
-                                    type="color"
-                                    value={team.color}
-                                    onChange={e => handleUpdateTeam(idx, { color: e.target.value })}
-                                    className="w-6 h-6 rounded cursor-pointer border-none p-0 bg-transparent"
-                                />
-                                <span className="text-[10px] text-gray-400">Cor Identificação</span>
-                            </div>
-                        </div>
+            <GuarnicoesConfig onDataChange={(g, m) => setStats({ guarnicoes: g, membros: m })} />
 
-                        <div className="space-y-2 mb-4 max-h-48 overflow-y-auto pr-1">
-                            {team.personnelIds.map((pId: number) => {
-                                const p = personnelList.find(mil => mil.id === pId);
-                                return (
-                                    <div key={pId} className="flex items-center justify-between p-2 bg-white rounded-lg border border-stone-100 text-xs shadow-sm">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: team.color }}></div>
-                                            <span className="font-bold truncate max-w-[120px]">{p?.graduation || ''} {p?.war_name || p?.name}</span>
-                                        </div>
-                                        <button
-                                            onClick={() => handleRemovePersonnel(idx, pId)}
-                                            className="text-stone-300 hover:text-red-500 transition-colors"
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">close</span>
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                            {team.personnelIds.length === 0 && (
-                                <p className="text-[10px] text-stone-400 italic text-center py-4">Nenhum militar</p>
-                            )}
-                        </div>
-
-                        <select
-                            value=""
-                            onChange={e => e.target.value && handleAddPersonnel(idx, Number(e.target.value))}
-                            className="w-full h-9 px-3 rounded-lg border border-stone-200 text-[10px] bg-white cursor-pointer"
-                        >
-                            <option value="">+ Adicionar militar...</option>
-                            {personnelList
-                                .filter(p => p.status === 'Ativo' && !teams.some(t => t.personnelIds.includes(p.id!)))
-                                .sort((a, b) => a.name.localeCompare(b.name))
-                                .map(p => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.graduation || ''} {p.war_name || p.name}
-                                    </option>
-                                ))
-                            }
-                        </select>
-                    </div>
-                ))}
-            </div>
-
-            {teams.every(t => t.personnelIds.length === 0) && (
+            {stats.membros === 0 ? (
                 <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
                     <span className="material-symbols-outlined text-[16px] text-amber-500">warning</span>
                     <span><strong>Atenção:</strong> Nenhuma turma possui militares. Adicione militares às turmas antes de publicar a escala.</span>
                 </div>
+            ) : (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-800">
+                    <span className="material-symbols-outlined text-[16px] text-green-500">check_circle</span>
+                    <span><strong>✅ {stats.guarnicoes} guarnições configuradas com {stats.membros} militares</strong></span>
+                </div>
             )}
+            
             <div className="flex justify-end gap-3 pt-4 border-t border-stone-100">
                 <button
-                    onClick={() => onSave({ teams, anchorDate })}
-                    className="px-6 py-3 bg-stone-100 text-stone-600 font-black text-xs rounded-xl hover:bg-stone-200 transition-all uppercase tracking-widest"
-                >
-                    Salvar Configuração
-                </button>
-                <button
                     onClick={() => {
-                        const totalMembers = teams.reduce((acc, t) => acc + t.personnelIds.length, 0);
-                        if (totalMembers === 0) {
+                        if (stats.membros === 0) {
                             alert('⚠️ Adicione militares às turmas antes de publicar!');
                             return;
                         }
-                        onPublish(month, shiftType, teams, anchorDate);
+                        onPublish(month, shiftType, anchorDate);
                     }}
-                    className="px-8 py-3 bg-primary text-white font-black text-xs rounded-xl hover:shadow-lg transition-all uppercase tracking-widest"
+                    disabled={stats.membros === 0}
+                    className={`px-8 py-3 font-black text-xs rounded-xl transition-all uppercase tracking-widest ${stats.membros === 0 ? 'bg-stone-300 text-stone-500 cursor-not-allowed' : 'bg-primary text-white hover:shadow-lg'}`}
                 >
                     Projetar e Publicar Escala
                 </button>

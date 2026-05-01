@@ -9,6 +9,20 @@ interface ScaleCalendarProps {
     onDayClick?: (date: string, personId: number) => void;
 }
 
+const CORES: Record<string, string> = {
+  A: '#1d4ed8',
+  B: '#15803d',
+  C: '#c2410c',
+  D: '#7e22ce',
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, onDayClick }) => {
     const [year, monthNum] = month.split('-').map(Number);
     const daysInMonth = new Date(year, monthNum, 0).getDate();
@@ -31,12 +45,24 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
             dateStr <= v.end_date
         );
 
-        if (isScaled) {
-            const teamColor = dayEscala?.color || '#primary';
+        if (isScaled && dayEscala) {
+            const teamLetter = dayEscala.turma || '?';
+            const teamColor = CORES[teamLetter] || '#1d4ed8';
+            
+            // Build tooltip with names of all members on duty this day
+            const onDutyMembers = dayEscala.militares
+                ?.map((id: number) => {
+                    const p = personnelList.find(mil => mil.id === id);
+                    return p ? `${p.graduation || ''} ${p.war_name || p.name.split(' ')[0]}`.trim() : null;
+                })
+                .filter(Boolean)
+                .join(', ');
+
             return {
-                label: 'Serviço',
-                cls: 'text-white font-bold border-none',
-                style: { backgroundColor: teamColor },
+                label: teamLetter,
+                cls: 'font-bold border-none',
+                style: { backgroundColor: hexToRgba(teamColor, 0.2), color: teamColor },
+                tooltip: `Serviço: ${onDutyMembers}`,
                 warning: warning || (isVacation ? { type: 'VACATION', message: 'Militar em férias/licença' } : null)
             };
         }
@@ -81,21 +107,22 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                     <div
                                                         className={`w-full h-full flex items-center justify-center rounded-lg ${status.cls}`}
                                                         style={status.style}
+                                                        title={status.tooltip}
                                                     >
-                                                        {status.label === 'Serviço' ? (
+                                                        {status.label === 'Férias' ? (
+                                                            <span className="uppercase font-black text-[7px]">{status.label}</span>
+                                                        ) : (
                                                             <div className="flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[14px]">military_tech</span>
+                                                                <span className="text-sm">{status.label}</span>
                                                                 {status.warning && (
                                                                     <span
-                                                                        className="material-symbols-outlined text-[14px] text-amber-300 animate-pulse"
+                                                                        className="material-symbols-outlined text-[12px] text-amber-500 animate-pulse"
                                                                         title={status.warning.message}
                                                                     >
                                                                         warning
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                        ) : (
-                                                            <span className="uppercase font-black text-[7px]">{status.label}</span>
                                                         )}
                                                     </div>
                                                 )}
@@ -110,7 +137,12 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
             </div>
 
             <div className="p-4 bg-stone-50 border-t border-stone-200 flex flex-wrap gap-4 text-[10px] font-bold uppercase text-stone-500">
-                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-primary/20 border border-primary/30"></span> Serviço</div>
+                {Object.entries(CORES).map(([letra, cor]) => (
+                    <div key={letra} className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-sm border" style={{ backgroundColor: hexToRgba(cor, 0.2), borderColor: cor }}></span> 
+                        Guarnição {letra}
+                    </div>
+                ))}
                 <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-stone-100 border border-stone-200"></span> Folga</div>
                 <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-200"></span> Férias/Licença</div>
             </div>

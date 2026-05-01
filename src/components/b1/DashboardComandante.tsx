@@ -42,7 +42,7 @@ export default function DashboardComandante({ personnelList, vacations, courses,
         { title: 'Disponíveis Hoje', value: stats.disponiveis,          subtitle: `${stats.emFerias} em férias · ${stats.afastados} afastados`,       icon: 'check_circle',   color: 'kpi-green',   tab: 'DISPONIBILIDADE' },
         { title: 'Alertas Críticos', value: stats.criticalAlerts,       subtitle: `${stats.warningAlerts} avisos`,                                    icon: 'warning',        color: 'kpi-red',     tab: 'ALERTAS' },
         { title: 'Notificações',     value: stats.unreadNotifications,  subtitle: `${notifications.length} total · ${stats.unreadNotifications} não lidas`, icon: 'notifications',  color: 'kpi-blue',    tab: 'NOTIFICACOES' },
-        { title: 'Qualificações',    value: courses.length,             subtitle: `${stats.expiredCourses} expiradas`,                               icon: 'school',         color: stats.expiredCourses > 0 ? 'kpi-amber' : 'kpi-slate', tab: 'CURSOS' },
+        { title: 'Qualificações',    value: courses.length,             subtitle: `${stats.expiredCourses} expiradas`,                               icon: 'school',         color: 'kpi-slate', tab: 'CURSOS' },
         { title: 'BMs e Licenças',   value: stats.emFerias + stats.afastados, subtitle: `${stats.emFerias} férias · ${stats.afastados} afastados`,   icon: 'beach_access',   color: 'kpi-orange',  tab: 'FERIAS' },
     ];
 
@@ -66,7 +66,6 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                         'kpi-green':  { bg: '#15803d', border: '#16a34a', text: '#f0fdf4', icon: '#86efac' },
                         'kpi-red':    { bg: '#dc2626', border: '#ef4444', text: '#fff1f2', icon: '#fca5a5' },
                         'kpi-blue':   { bg: '#1d4ed8', border: '#2563eb', text: '#eff6ff', icon: '#93c5fd' },
-                        'kpi-amber':  { bg: '#b45309', border: '#d97706', text: '#fffbeb', icon: '#fcd34d' },
                         'kpi-orange': { bg: '#c2410c', border: '#ea580c', text: '#fff7ed', icon: '#fdba74' },
                     };
                     const c = colorMap[kpi.color] || colorMap['kpi-slate'];
@@ -91,7 +90,7 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                 <div className="bg-white border border-gray-200 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-base text-red-400">emergency</span>
+                            <span className="material-symbols-outlined text-base text-red-600">emergency</span>
                             <h4 className="text-sm font-semibold text-primary-text">Alertas Críticos</h4>
                         </div>
                         <button onClick={() => onNavigate('ALERTAS')} className="text-xs text-gray-500 hover:underline">Ver todos</button>
@@ -104,8 +103,8 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                     ) : (
                         <div className="space-y-2">
                             {criticalAlertsList.map((a, i) => (
-                                <div key={i} className="flex items-start gap-2 p-2 bg-white rounded-lg border-l-4" style={{ borderLeftColor: '#dc2626', borderTop: '1px solid #fee2e2', borderRight: '1px solid #fee2e2', borderBottom: '1px solid #fee2e2' }}>
-                                    <span className="material-symbols-outlined text-sm shrink-0 mt-0.5" style={{ color: '#dc2626' }}>report</span>
+                                <div key={i} className="flex items-start gap-2 p-2 bg-white rounded-lg border-l-4" style={{ borderLeftColor: '#dc2626', borderTop: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+                                    <span className="material-symbols-outlined text-sm shrink-0 mt-0.5 text-red-600">report</span>
                                     <div className="min-w-0">
                                         <p className="text-xs font-semibold text-gray-800 truncate">{a.personnelName}</p>
                                         <p className="text-xs text-gray-500">{a.message}</p>
@@ -120,10 +119,10 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                 <div className="bg-white border border-gray-200 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-base text-gray-500">notifications_active</span>
+                            <span className="material-symbols-outlined text-base text-blue-600">notifications_active</span>
                             <h4 className="text-sm font-semibold text-primary-text">Notificações Recentes</h4>
                             {stats.unreadNotifications > 0 && (
-                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-600 text-white font-medium">{stats.unreadNotifications}</span>
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-600 text-white font-medium">{stats.unreadNotifications}</span>
                             )}
                         </div>
                         <button onClick={() => onNavigate('NOTIFICACOES')} className="text-xs text-gray-500 hover:underline">Ver todas</button>
@@ -136,7 +135,7 @@ export default function DashboardComandante({ personnelList, vacations, courses,
                     ) : (
                         <div className="space-y-2">
                             {recentNotifs.map(n => (
-                                <div key={n.id} className="p-2 bg-white rounded-lg border-l-4" style={{ borderLeftColor: '#2563eb', borderTop: '1px solid #dbeafe', borderRight: '1px solid #dbeafe', borderBottom: '1px solid #dbeafe' }}>
+                                <div key={n.id} className="p-2 bg-white rounded-lg border-l-4" style={{ borderLeftColor: '#2563eb', borderTop: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                                     <p className="text-xs font-semibold text-gray-800 truncate">{n.title}</p>
                                     <p className="text-xs text-gray-500 line-clamp-2">{n.message}</p>
                                     <p className="text-xs text-gray-400 mt-0.5">{n.time_ago}</p>
@@ -149,16 +148,16 @@ export default function DashboardComandante({ personnelList, vacations, courses,
 
             {/* Vacations upcoming */}
             {vacations.filter(v => v.start_date > today).slice(0, 3).length > 0 && (
-                <div className="bg-primary border border-rustic-border rounded-2xl p-4">
+                <div className="bg-white border border-gray-200 rounded-2xl p-4">
                     <div className="flex items-center gap-2 mb-3">
-                        <span className="material-symbols-outlined text-base text-blue-400">beach_access</span>
+                        <span className="material-symbols-outlined text-base text-orange-600">beach_access</span>
                         <h4 className="text-sm font-semibold text-primary-text">Próximas Férias</h4>
                     </div>
                     <div className="space-y-1.5">
                         {vacations.filter(v => v.start_date > today && v.status !== 'cancelado').slice(0, 3).map(v => (
-                            <div key={v.id} className="flex items-center justify-between text-sm px-1">
-                                <span className="text-primary-text text-xs font-medium">{v.full_name}</span>
-                                <span className="text-secondary-text text-xs">{new Date(v.start_date).toLocaleDateString('pt-BR')} → {new Date(v.end_date).toLocaleDateString('pt-BR')} ({v.day_count}d)</span>
+                            <div key={v.id} className="flex items-center justify-between text-sm px-1 border-b border-gray-50 pb-1 last:border-0">
+                                <span className="text-gray-800 text-xs font-medium">{v.full_name}</span>
+                                <span className="text-gray-500 text-xs">{new Date(v.start_date).toLocaleDateString('pt-BR')} → {new Date(v.end_date).toLocaleDateString('pt-BR')} ({v.day_count}d)</span>
                             </div>
                         ))}
                     </div>
