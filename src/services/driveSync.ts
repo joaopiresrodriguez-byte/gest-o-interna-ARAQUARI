@@ -1,175 +1,133 @@
 /**
- * driveSync.ts — Sincronização assíncrona com Google Drive / Sheets
+ * driveSync.ts — Sincronização B1 com Google Sheets via Apps Script Webhook
  *
- * IMPORTANTE: Toda sincronização é fire-and-forget.
- * Uma falha no Drive NUNCA deve bloquear o cadastro local no Supabase.
+ * Usa o mesmo padrão do GoogleSheetsService (VITE_GOOGLE_SHEETS_WEBHOOK_URL).
+ * O webhook é um Google Apps Script publicado como Web App que recebe
+ * { sheet, data } e faz append na aba correspondente.
  *
- * Pré-requisitos:
- *  1. npm install googleapis
- *  2. Configurar variáveis no .env (ver abaixo)
- *  3. Compartilhar planilhas com o e-mail da service account
+ * IMPORTANTE: toda sincronização é fire-and-forget.
+ * Uma falha NUNCA bloqueia o cadastro local no Supabase.
  *
- * Variáveis de ambiente necessárias:
- *  VITE_GOOGLE_PROJECT_ID
- *  VITE_GOOGLE_PRIVATE_KEY   (substituir \n literais por quebras de linha)
- *  VITE_GOOGLE_CLIENT_EMAIL
- *  VITE_SHEETS_EFETIVO_ID
- *  VITE_SHEETS_ESCALA_ID
- *  VITE_SHEETS_FERIAS_ID
- *  VITE_DRIVE_DOCS_FOLDER_ID
- *  VITE_DRIVE_BOL_FOLDER_ID
+ * Variáveis de ambiente (adicionar no .env):
+ *   VITE_GOOGLE_SHEETS_WEBHOOK_URL  ← já existente no projeto
+ *   VITE_SHEETS_EFETIVO_ABA         ← nome da aba (ex: CadastroEfetivo)
  */
 
-// NOTE: googleapis é uma lib Node.js — em produção (Vite/browser) use um
-// backend proxy (Edge Function Supabase ou Cloud Function) para chamar a API.
-// Este módulo está estruturado para ser usado num ambiente Node ou via proxy.
+const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL as string | undefined;
+const ABA_EFETIVO = (import.meta.env.VITE_SHEETS_EFETIVO_ABA as string | undefined) || 'CadastroEfetivo';
+const ABA_FERIAS  = (import.meta.env.VITE_SHEETS_FERIAS_ABA  as string | undefined) || 'FeriasLicencas';
+const ABA_ESCALA  = (import.meta.env.VITE_SHEETS_ESCALA_ABA  as string | undefined) || 'EscalaMensal';
 
-const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
-const DRIVE_API  = 'https://www.googleapis.com/drive/v3/files';
-
-const IDS = {
-    efetivo:    import.meta.env.VITE_SHEETS_EFETIVO_ID    as string | undefined,
-    escala:     import.meta.env.VITE_SHEETS_ESCALA_ID     as string | undefined,
-    ferias:     import.meta.env.VITE_SHEETS_FERIAS_ID     as string | undefined,
-    pastaDocumentos: import.meta.env.VITE_DRIVE_DOCS_FOLDER_ID as string | undefined,
-    pastaBoletins:   import.meta.env.VITE_DRIVE_BOL_FOLDER_ID  as string | undefined,
+const formatDate = (dateStr?: string | null): string => {
+    if (!dateStr) return '';
+    try { return new Date(dateStr).toLocaleDateString('pt-BR'); } catch { return dateStr; }
 };
 
-// Token OAuth2 — deve ser obtido via fluxo de autenticação do servidor.
-// Em produção, chame um endpoint seguro que retorne o access_token.
-async function getAccessToken(): Promise<string | null> {
+async function sendToSheets(sheet: string, data: (string | number | null)[]): Promise<boolean> {
+    if (!WEBHOOK_URL) {
+        console.warn('[driveSync] VITE_GOOGLE_SHEETS_WEBHOOK_URL não configurado. Sync ignorado.');
+        return false;
+    }
     try {
-        const endpoint = import.meta.env.VITE_GOOGLE_TOKEN_ENDPOINT as string | undefined;
-        if (!endpoint) return null;
-        const res = await fetch(endpoint);
-        if (!res.ok) return null;
-        const json = await res.json();
-        return json.access_token ?? null;
-    } catch {
-        return null;
+        await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sheet, data }),
+            mode: 'no-cors', // Google Apps Script exige no-cors
+        });
+        console.log(`✅ [driveSync] Dados enviados para aba "${sheet}"`);
+        return true;
+    } catch (error) {
+        console.warn(`⚠️ [driveSync] Falha ao enviar para "${sheet}":`, error);
+        return false;
     }
 }
 
-async function appendToSheet(
-    spreadsheetId: string | undefined,
-    range: string,
-    values: (string | number | null)[][]
-): Promise<void> {
-    if (!spreadsheetId) {
-        console.warn('[driveSync] ID da planilha não configurado. Verifique o .env.');
-        return;
-    }
-
-    const token = await getAccessToken();
-    if (!token) {
-        console.warn('[driveSync] Sem token OAuth2. Configure VITE_GOOGLE_TOKEN_ENDPOINT.');
-        return;
-    }
-
-    const url = `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ values }),
-    });
-
-    if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Sheets API error ${res.status}: ${err}`);
-    }
-}
-
-// ─────────────────────────────────────────────────────────────
-// SINCRONIZAR MILITAR (tabela Efetivo)
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SINCRONIZAR MILITAR → aba CadastroEfetivo
+// Colunas: Matrícula | Nome Completo | Nome de Guerra | Posto/Graduação |
+//          Tipo | Status | CPF | Email | Telefone | Data Cadastro
+// ─────────────────────────────────────────────────────────────────────────────
 export async function syncMilitarDrive(militar: {
-    matricula?: string;
-    nome_completo?: string;
+    id?: number;
     name?: string;
     war_name?: string;
-    posto_graduacao?: string;
     graduation?: string;
-    tipo?: string;
+    rank?: string;
     type?: string;
     status?: string;
     cpf?: string;
     email?: string;
-    telefone?: string;
     phone?: string;
+    [key: string]: unknown;
 }): Promise<void> {
     try {
-        await appendToSheet(IDS.efetivo, 'A:J', [[
-            militar.matricula || '',
-            militar.nome_completo || militar.name || '',
-            militar.war_name || '',
-            militar.posto_graduacao || militar.graduation || '',
-            militar.tipo || militar.type || '',
-            militar.status || '',
-            militar.cpf || '',
-            militar.email || '',
-            militar.telefone || militar.phone || '',
+        await sendToSheets(ABA_EFETIVO, [
+            militar.id?.toString()              || '',
+            militar.name                        || '',
+            militar.war_name                    || '',
+            militar.graduation || militar.rank  || '',
+            militar.type                        || '',
+            militar.status                      || 'Ativo',
+            militar.cpf                         || '',
+            militar.email                       || '',
+            militar.phone                       || '',
             new Date().toLocaleDateString('pt-BR'),
-        ]]);
-        console.log('✅ [driveSync] Militar sincronizado no Drive');
+        ]);
     } catch (e) {
-        // Falha no Drive NÃO bloqueia o cadastro local
-        console.warn('⚠️ [driveSync] Falha ao sincronizar militar:', e);
+        console.warn('⚠️ [driveSync] syncMilitarDrive falhou (não bloqueia):', e);
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-// SINCRONIZAR FÉRIAS / LICENÇA
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SINCRONIZAR FÉRIAS/LICENÇA → aba FeriasLicencas
+// Colunas: Nome | Tipo | Início | Fim | Dias | Observações | Data Registro
+// ─────────────────────────────────────────────────────────────────────────────
 export async function syncFeriasDrive(ferias: {
-    militar_nome?: string;
     full_name?: string;
-    tipo?: string;
     leave_type?: string;
-    data_inicio?: string;
     start_date?: string;
-    data_fim?: string;
     end_date?: string;
-    observacoes?: string;
+    day_count?: number;
     notes?: string;
 }): Promise<void> {
     try {
-        await appendToSheet(IDS.ferias, 'A:F', [[
-            ferias.militar_nome || ferias.full_name || '',
-            ferias.tipo || ferias.leave_type || '',
-            ferias.data_inicio || ferias.start_date || '',
-            ferias.data_fim || ferias.end_date || '',
-            ferias.observacoes || ferias.notes || '',
+        await sendToSheets(ABA_FERIAS, [
+            ferias.full_name                  || '',
+            ferias.leave_type                 || 'ferias',
+            formatDate(ferias.start_date),
+            formatDate(ferias.end_date),
+            ferias.day_count?.toString()      || '',
+            ferias.notes                      || '',
             new Date().toLocaleDateString('pt-BR'),
-        ]]);
-        console.log('✅ [driveSync] Férias sincronizadas no Drive');
+        ]);
     } catch (e) {
-        console.warn('⚠️ [driveSync] Falha ao sincronizar férias:', e);
+        console.warn('⚠️ [driveSync] syncFeriasDrive falhou (não bloqueia):', e);
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-// SINCRONIZAR ESCALA PUBLICADA
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SINCRONIZAR ESCALA PUBLICADA → aba EscalaMensal
+// Colunas: Nome Militar | Data Serviço | Guarnição | Tipo | Ref. Mês
+// ─────────────────────────────────────────────────────────────────────────────
 export async function syncEscalaDrive(
     mes: string,
     ano: string,
     dadosEscala: { militar_nome?: string; data_servico?: string; guarnicao?: string; tipo?: string }[]
 ): Promise<void> {
+    const refMes = `${mes}/${ano}`;
     try {
-        const linhas = dadosEscala.map(item => [
-            item.militar_nome || '',
-            item.data_servico  || '',
-            item.guarnicao     || '',
-            item.tipo          || 'serviço',
-        ]);
-
-        const sheetName = `${mes}_${ano}`;
-        await appendToSheet(IDS.escala, `${sheetName}!A:D`, linhas);
-        console.log(`✅ [driveSync] Escala ${sheetName} sincronizada no Drive`);
+        for (const item of dadosEscala) {
+            await sendToSheets(ABA_ESCALA, [
+                item.militar_nome || '',
+                formatDate(item.data_servico),
+                item.guarnicao    || '',
+                item.tipo         || 'serviço',
+                refMes,
+            ]);
+        }
+        console.log(`✅ [driveSync] Escala ${refMes} sincronizada (${dadosEscala.length} linhas)`);
     } catch (e) {
-        console.warn('⚠️ [driveSync] Falha ao sincronizar escala:', e);
+        console.warn('⚠️ [driveSync] syncEscalaDrive falhou (não bloqueia):', e);
     }
 }
