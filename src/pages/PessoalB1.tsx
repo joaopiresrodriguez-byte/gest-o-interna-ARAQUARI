@@ -153,18 +153,16 @@ const PessoalB1: React.FC = () => {
       setAlerts(PersonnelService.generateAlerts(pList, vList, swapCounts));
 
       // Load new module data in parallel
-      const [courseList, epiList, notifList, escalasData, excList] = await Promise.all([
+      const [courseList, epiList, notifList, escalasData] = await Promise.all([
         PersonnelService.getCourses(),
         PersonnelService.getEpiDeliveries(),
         PersonnelService.getNotifications(),
-        supabase.from('escalas').select('*').order('data', { ascending: false }).limit(90),
-        ScaleAdjustmentService.getExceptions()
+        supabase.from('escalas').select('*').order('data', { ascending: false }).limit(90)
       ]);
       setCourses(courseList);
       setEpiDeliveries(epiList);
       setNotifications(notifList);
       setEscalas((escalasData.data || []) as Escala[]);
-      setScaleExceptions(excList);
 
       // Load scale rotation config
       const configs = await PersonnelService.getScaleConfigs();
@@ -172,7 +170,6 @@ const PessoalB1: React.FC = () => {
         const active = configs[0];
         setScaleConfigId(active.id);
         setScaleAnchorDate(active.anchorDate);
-        setScaleTeams(active.teams);
       }
     } catch (err: any) {
       toast.error('Erro ao carregar dados: ' + (err.message || 'Desconhecido'));

@@ -43,7 +43,7 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
     setCarregando(true);
     try {
       // Buscar guarnições com seus membros
-      const { data: gData } = await supabase
+      const { data: gData, error: gError } = await supabase
         .from('guarnicoes')
         .select(`
           id, nome,
@@ -57,12 +57,20 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
         `)
         .order('nome');
 
+      if (gError) {
+        console.error('Supabase gError:', gError);
+      }
+
       // Buscar todos os militares ativos
-      const { data: mData } = await supabase
+      const { data: mData, error: mError } = await supabase
         .from('personnel')
         .select('id, name, war_name, rank')
         .eq('status', 'Ativo')
         .order('name');
+
+      if (mError) {
+        console.error('Supabase mError:', mError);
+      }
 
       if (gData) {
         const formatadas = gData.map((g: any) => ({
