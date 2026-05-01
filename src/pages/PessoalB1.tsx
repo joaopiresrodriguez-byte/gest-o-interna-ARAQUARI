@@ -188,6 +188,35 @@ const PessoalB1: React.FC = () => {
   };
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    // Handle Google OAuth callback
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const token = params.get('access_token');
+      if (token) {
+        // Remove hash from URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        const performSync = async () => {
+          toast.loading('Iniciando sincronização...', { id: 'g-sync' });
+          try {
+            // Need to make sure data is loaded first
+            if (escalas.length === 0 || personnelList.length === 0) {
+              await loadData();
+            }
+            const count = await GoogleCalendarService.syncToGoogleCalendar(escalas, personnelList, token);
+            toast.success(`${count} eventos sincronizados com sucesso!`, { id: 'g-sync' });
+          } catch (error: any) {
+            toast.error('Erro na sincronização: ' + error.message, { id: 'g-sync' });
+          }
+        };
+        performSync();
+      }
+    }
+  }, [escalas, personnelList, loadData]);
+
   useEffect(() => {
     if (tab === 'DISCIPLINA') loadDisciplinary();
     if (tab === 'BOLETIM') loadBulletins();
@@ -425,13 +454,9 @@ const PessoalB1: React.FC = () => {
     }
   };
 
-  const syncToGoogle = async () => {
-    // This would require a valid token. In a real app, you'd trigger oauth flow.
-    toast.info('Iniciando sincronização com Google Calendar...');
-    // GoogleCalendarService.initAuth(); // Uncomment for real flow
-    const success = await GoogleCalendarService.syncToGoogleCalendar(escalas, personnelList, 'TOKEN_HERE');
-    if (success) toast.success('Sincronizado!');
-    else toast.error('Falha na sincronização (Verifique credenciais)');
+  const syncToGoogle = () => {
+    toast.info('Redirecionando para autenticação Google...');
+    GoogleCalendarService.initAuth();
   };
 
   const filteredPersonnel = personnelList.filter(p =>
