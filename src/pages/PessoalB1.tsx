@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification, ScaleRotationConfig } from '../services/types';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
@@ -86,7 +86,7 @@ const PessoalB1: React.FC = () => {
   // Scale state
 
   const [scaleAnchorDate, setScaleAnchorDate] = useState('2024-01-01');
-  const [scaleConfigId, setScaleConfigId] = useState<string | undefined>(undefined);
+
   const [scaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
 
   // Swap form
@@ -416,8 +416,8 @@ const PessoalB1: React.FC = () => {
 
       toast.success('Ajuste manual registrado com sucesso!');
 
-      const updatedExceptions = await ScaleAdjustmentService.getExceptions();
-      setScaleExceptions(updatedExceptions);
+      // updatedExceptions not used since state was removed
+      // setScaleExceptions(updatedExceptions);
 
       setShowAdjustmentModal(false);
       setExceptionReason('');
