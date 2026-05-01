@@ -168,7 +168,6 @@ const PessoalB1: React.FC = () => {
       const configs = await PersonnelService.getScaleConfigs();
       if (configs && configs.length > 0) {
         const active = configs[0];
-        setScaleConfigId(active.id);
         setScaleAnchorDate(active.anchorDate);
       }
     } catch (err: any) {
