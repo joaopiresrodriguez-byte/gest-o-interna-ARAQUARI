@@ -245,7 +245,7 @@ const PessoalB1: React.FC = () => {
         await PersonnelService.addPersonnel(cleanedData as Personnel);
         toast.success('Militar cadastrado!');
       }
-      GoogleSheetsService.syncPersonnel(cleanedData).then(ok => { if (ok) toast.info('📊 Sincronizado com Google Sheets.'); });
+      GoogleSheetsService.syncPersonnel({ ...formData, ...cleanedData }).then(ok => { if (ok) toast.info('📊 Sincronizado com Google Sheets.'); });
       setFormData(emptyForm());
       setEditId(null);
       loadData();

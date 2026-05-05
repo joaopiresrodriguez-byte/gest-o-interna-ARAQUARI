@@ -1,6 +1,7 @@
 import { Personnel, Vehicle, Occurrence, B1Course, EpiDelivery, Escala, ServiceSwap } from './types';
 
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
+const SHEET_EFETIVO = import.meta.env.VITE_SHEETS_EFETIVO_ABA || 'CadastroEfetivo';
 
 async function sendToSheets(sheet: string, data: (string | number | boolean)[]): Promise<boolean> {
     if (!WEBHOOK_URL) {
@@ -30,36 +31,34 @@ const formatDate = (dateStr?: string): string => {
 export const GoogleSheetsService = {
     syncPersonnel: async (person: Partial<Personnel>): Promise<boolean> => {
         const row = [
-            new Date().toLocaleDateString('pt-BR'),
-            person.name || '',
-            person.war_name || '',
-            person.rank || '',
-            person.type || '',
-            person.status || '',
-            person.role || '',
-            person.email || '',
-            person.phone || '',
-            formatDate(person.birth_date),
-            person.blood_type || '',
-            person.cnh || '',
-            person.weapon_permit ? 'Sim' : 'Não',
-            person.address || '',
-            person.education_level || '',
-            person.cnh_category || '',
-            person.cnh_number || '',
-            person.cpf || '',
-            person.emergency_phone || '',
-            person.emergency_contact_name || '',
-            person.cve_active || '',
-            person.graduation || '',
-            // New B1 fields
-            formatDate(person.cve_issue_date),
-            formatDate(person.cve_expiry_date),
-            formatDate(person.toxicological_date),
-            formatDate(person.toxicological_expiry_date),
-            formatDate(person.cnh_expiry_date),
+            new Date().toLocaleDateString('pt-BR'),           // A: Data do Registro
+            person.name || '',                                // B: Nome Completo
+            person.war_name || '',                            // C: Nome de Guerra
+            person.graduation || person.rank || '',           // D: Posto / Graduação
+            person.type || '',                                // E: Tipo (BM/BC)
+            person.status || '',                              // F: Status
+            person.role || '',                                // G: Função
+            person.cpf || '',                                 // H: CPF
+            formatDate(person.birth_date),                    // I: Data Nascimento
+            person.email || '',                               // J: Email
+            person.phone || '',                               // K: Telefone
+            person.education_level || '',                     // L: Nível Instrução
+            person.blood_type || '',                          // M: Tipo Sanguíneo
+            person.address || '',                             // N: Endereço
+            person.emergency_contact_name || '',              // O: Contato Emergência
+            person.emergency_phone || '',                     // P: Tel. Emergência
+            person.cve_active || '',                          // Q: CVE Ativo
+            formatDate(person.cve_issue_date),                // R: Data Emissão CVE
+            formatDate(person.cve_expiry_date),               // S: Validade CVE
+            person.cnh_category || '',                        // T: Cat. CNH
+            person.cnh_number || '',                          // U: Nº CNH
+            formatDate(person.cnh_expiry_date),               // V: Validade CNH
+            formatDate(person.toxicological_date),            // W: Data Toxicológico
+            formatDate(person.toxicological_expiry_date),     // X: Validade Toxicológico
+            person.weapon_permit ? 'Sim' : 'Não',            // Y: Porte de Arma
+            formatDate(person.last_cadastro_review),          // Z: Última Revisão Cadastro
         ];
-        return sendToSheets('Efetivo', row);
+        return sendToSheets(SHEET_EFETIVO, row);
     },
 
     syncVehicle: async (vehicle: Partial<Vehicle>): Promise<boolean> => {
