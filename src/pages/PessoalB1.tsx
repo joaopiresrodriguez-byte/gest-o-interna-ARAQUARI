@@ -234,8 +234,10 @@ const PessoalB1: React.FC = () => {
     if (cleanedData.toxicological_date) cleanedData.toxicological_expiry_date = calcToxExpiry(cleanedData.toxicological_date);
     cleanedData.last_cadastro_review = new Date().toISOString().split('T')[0];
 
-    // Remove empty strings for DB
+    // Remove empty strings and non-updatable fields for DB
     Object.keys(cleanedData).forEach(k => { if ((cleanedData as any)[k] === '') delete (cleanedData as any)[k]; });
+    delete (cleanedData as any).id;
+    delete (cleanedData as any).created_at;
 
     try {
       if (editId) {
