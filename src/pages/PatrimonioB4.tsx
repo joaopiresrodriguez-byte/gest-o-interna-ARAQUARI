@@ -4,10 +4,11 @@ import { GoogleSheetsService } from '../services/googleSheetsService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 import { useAuth } from '../context/AuthContext';
+import RelatoriosMensais from '../components/b4/RelatoriosMensais';
 
 const PatrimonioB4: React.FC = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes' | 'conferencias'>('missoes');
+  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes' | 'conferencias' | 'relatorios'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
   const [initialNotices, setInitialNotices] = useState<PendingNotice[]>([]);
@@ -332,14 +333,14 @@ const PatrimonioB4: React.FC = () => {
           {/* Tabs */}
           <div className="bg-surface rounded-xl shadow-sm border border-rustic-border overflow-hidden">
             <div className="border-b border-rustic-border bg-stone-50/50 px-6 pt-4 flex gap-8 overflow-x-auto">
-              {(['missoes', 'listagem', 'cadastro', 'compras', 'conferencias'] as const).map(tab => (
+              {(['missoes', 'listagem', 'cadastro', 'compras', 'conferencias', 'relatorios'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
                 >
-                  <span className="material-symbols-outlined">{tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : 'checklist'}</span>
-                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'conferencias' ? 'Conferências' : tab}
+                  <span className="material-symbols-outlined">{tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'relatorios' ? 'analytics' : 'checklist'}</span>
+                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'conferencias' ? 'Conferências' : tab === 'relatorios' ? 'Relatórios' : tab}
                 </button>
               ))}
             </div>
@@ -861,6 +862,10 @@ const PatrimonioB4: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {activeTab === 'relatorios' && (
+                <RelatoriosMensais />
               )}
 
             </div>

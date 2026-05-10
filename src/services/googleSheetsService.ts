@@ -1,4 +1,5 @@
 import { Personnel, Vehicle, Occurrence, B1Course, EpiDelivery, Escala, ServiceSwap } from './types';
+import type { RelatorioMensal } from './b4RelatorioService';
 
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 const SHEET_EFETIVO = import.meta.env.VITE_SHEETS_EFETIVO_ABA || 'CadastroEfetivo';
@@ -201,5 +202,24 @@ export const GoogleSheetsService = {
             }
         }
         return true;
+    },
+
+    syncRelatorioB4: async (relatorio: RelatorioMensal): Promise<boolean> => {
+        const row = [
+            relatorio.titulo,
+            `${relatorio.mes}/${relatorio.ano}`,
+            relatorio.totalPatrimonio,
+            relatorio.totalViaturas,
+            relatorio.viaturasOperacionais,
+            relatorio.viaturasManutencao,
+            relatorio.totalManutencoes,
+            relatorio.custoManutencoes,
+            relatorio.totalCombustivel,
+            relatorio.custoCombustivel,
+            relatorio.ocorrenciasAtendidas,
+            relatorio.kmRodados,
+            new Date().toLocaleDateString('pt-BR'),
+        ];
+        return sendToSheets('RelatoriosB4', row);
     },
 };
