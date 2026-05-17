@@ -3,7 +3,7 @@ import { ChecklistItem } from './SupabaseService';
 
 const CONTACTS = {
     whatsapp: '554734817549',
-    email: '16_22sgt@cbm.sc.gov.br'
+    email: 'b1araquari@gmail.com'
 };
 
 export const NotificationService = {
