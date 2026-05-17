@@ -119,6 +119,10 @@ const PessoalB1: React.FC = () => {
   const [selectedDayInfo, setSelectedDayInfo] = useState<{ date: string, personId: number } | null>(null);
   const [exceptionReason, setExceptionReason] = useState('');
 
+  // Google Calendar sync state
+  const [calendarSyncing, setCalendarSyncing] = useState(false);
+  const [calendarProgress, setCalendarProgress] = useState('');
+
   // Rank change
   const [rankChangeNewRank, setRankChangeNewRank] = useState('');
   const [rankChangeLegalBasis, setRankChangeLegalBasis] = useState('');
@@ -190,32 +194,12 @@ const PessoalB1: React.FC = () => {
   useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
-    // Handle Google OAuth callback
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const token = params.get('access_token');
-      if (token) {
-        // Remove hash from URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
-        const performSync = async () => {
-          toast.loading('Iniciando sincronização...', { id: 'g-sync' });
-          try {
-            // Need to make sure data is loaded first
-            if (escalas.length === 0 || personnelList.length === 0) {
-              await loadData();
-            }
-            const count = await GoogleCalendarService.syncToGoogleCalendar(escalas, personnelList, token);
-            toast.success(`${count} eventos sincronizados com sucesso!`, { id: 'g-sync' });
-          } catch (error: any) {
-            toast.error('Erro na sincronização: ' + error.message, { id: 'g-sync' });
-          }
-        };
-        performSync();
-      }
+    // Handle Google OAuth callback — extract and store token
+    const token = GoogleCalendarService.extractTokenFromHash();
+    if (token) {
+      toast.success('✅ Google Calendar autorizado! Use o botão de sincronização para publicar.');
     }
-  }, [escalas, personnelList, loadData]);
+  }, []);
 
   useEffect(() => {
     if (tab === 'DISCIPLINA') loadDisciplinary();
@@ -456,9 +440,41 @@ const PessoalB1: React.FC = () => {
     }
   };
 
-  const syncToGoogle = () => {
-    toast.info('Redirecionando para autenticação Google...');
-    GoogleCalendarService.initAuth();
+  const handleSyncCalendar = async (months: { mes: number; ano: number }[]) => {
+    const token = GoogleCalendarService.getToken();
+    if (!token) {
+      toast.info('Redirecionando para autenticação Google...');
+      GoogleCalendarService.initAuth();
+      return;
+    }
+
+    setCalendarSyncing(true);
+    setCalendarProgress('Preparando...');
+
+    try {
+      const { totalSucesso, totalErros } = await GoogleCalendarService.publicarMultiplosMeses(
+        months,
+        escalas,
+        personnelList,
+        token,
+        (current, total, label) => {
+          setCalendarProgress(`Publicando ${label}... (${current}/${total})`);
+        },
+      );
+
+      if (totalErros === 0) {
+        toast.success(`✅ ${totalSucesso} eventos criados no Google Calendar!`);
+      } else {
+        toast.warning(`${totalSucesso} eventos criados, ${totalErros} erros.`);
+      }
+      setCalendarProgress(`✅ ${months.length} mês(es) publicado(s) com sucesso!`);
+    } catch (error: any) {
+      toast.error('Erro na sincronização: ' + error.message);
+      setCalendarProgress('');
+    } finally {
+      setCalendarSyncing(false);
+      setTimeout(() => setCalendarProgress(''), 5000);
+    }
   };
 
   const filteredPersonnel = personnelList.filter(p =>
@@ -675,13 +691,6 @@ const PessoalB1: React.FC = () => {
                         <span className="material-symbols-outlined text-primary">calendar_view_month</span>
                         Painel de Escalas
                       </h2>
-                      <button
-                        onClick={syncToGoogle}
-                        className="px-4 py-2 bg-stone-100 text-stone-600 text-[10px] font-black rounded-lg flex items-center gap-2 hover:bg-stone-200 transition-all"
-                      >
-                        <img src="https://www.google.com/favicon.ico" className="w-4 h-4 grayscale opacity-50" />
-                        SINCRONIZAR GOOGLE CALENDAR
-                      </button>
                     </div>
 
                     <div className="space-y-8">
@@ -689,6 +698,9 @@ const PessoalB1: React.FC = () => {
                         personnelList={personnelList}
                         initialAnchorDate={scaleAnchorDate}
                         onPublish={handlePublishScale}
+                        onSyncCalendar={handleSyncCalendar}
+                        calendarSyncing={calendarSyncing}
+                        calendarProgress={calendarProgress}
                       />
 
                       <div className="pt-6 border-t border-stone-100">
