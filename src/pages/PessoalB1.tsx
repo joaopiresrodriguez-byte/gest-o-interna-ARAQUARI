@@ -452,7 +452,7 @@ const PessoalB1: React.FC = () => {
     setCalendarProgress('Preparando...');
 
     try {
-      const { totalSucesso, totalErros } = await GoogleCalendarService.publicarMultiplosMeses(
+      const { totalSucesso, totalErros, todosErros } = await GoogleCalendarService.publicarMultiplosMeses(
         months,
         escalas,
         personnelList,
@@ -469,8 +469,9 @@ const PessoalB1: React.FC = () => {
         toast.success(`✅ ${totalSucesso} eventos criados no Google Calendar!`);
         setCalendarProgress(`✅ ${months.length} mês(es) publicado(s) com sucesso!`);
       } else {
-        toast.success(`${totalSucesso} eventos criados, ${totalErros} erros.`);
+        toast.error(`${totalSucesso} eventos criados, ${totalErros} erros. Detalhe: ${todosErros[0]}`);
         setCalendarProgress(`${totalSucesso} eventos criados com ${totalErros} erros.`);
+        console.error("Erros do GCal:", todosErros);
       }
     } catch (error: any) {
       toast.error('Erro na sincronização: ' + error.message);

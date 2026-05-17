@@ -241,7 +241,7 @@ export const GoogleCalendarService = {
         escalas: Escala[],
         personnel: Personnel[],
         accessToken: string,
-    ): Promise<{ sucesso: number; erros: number }> => {
+    ): Promise<{ sucesso: number; erros: number; mensagensErro: string[] }> => {
         const personnelMap = new Map((personnel || []).map(p => [p.id, p]));
         const monthStr = `${ano}-${String(mes).padStart(2, '0')}`;
         const monthEscalas = escalas.filter(e => e.data.startsWith(monthStr) && !e.is_folga);
@@ -252,6 +252,7 @@ export const GoogleCalendarService = {
 
         let sucesso = 0;
         let erros = 0;
+        let mensagensErro: string[] = [];
 
         for (const escala of monthEscalas) {
             const turmaLetter = escala.turma || escala.equipe?.replace('Turma ', '') || '?';
@@ -304,16 +305,24 @@ export const GoogleCalendarService = {
                     accessToken,
                     { method: 'POST', body: JSON.stringify(event) },
                 );
-                if (res.ok) sucesso++;
-                else erros++;
-            } catch {
+                if (res.ok) {
+                    sucesso++;
+                } else {
+                    erros++;
+                    const errorData = await res.json().catch(() => ({}));
+                    mensagensErro.push(`Dia ${escala.data}: ${errorData.error?.message || res.statusText}`);
+                    console.error(`Erro GCal API dia ${escala.data}:`, errorData);
+                }
+            } catch (e: any) {
                 erros++;
+                mensagensErro.push(`Exceção dia ${escala.data}: ${e.message}`);
+                console.error(`Exceção GCal API dia ${escala.data}:`, e);
             }
             await delay(200);
         }
 
         console.log(`✅ Google Calendar ${NOMES_MESES[mes]}/${ano}: ${sucesso} criados, ${erros} erros`);
-        return { sucesso, erros };
+        return { sucesso, erros, mensagensErro };
     },
 
     /**
@@ -326,9 +335,10 @@ export const GoogleCalendarService = {
         personnel: Personnel[],
         accessToken: string,
         onProgress?: (current: number, total: number, label: string) => void,
-    ): Promise<{ totalSucesso: number; totalErros: number }> => {
+    ): Promise<{ totalSucesso: number; totalErros: number; todosErros: string[] }> => {
         let totalSucesso = 0;
         let totalErros = 0;
+        let todosErros: string[] = [];
 
         for (let i = 0; i < meses.length; i++) {
             const { mes, ano } = meses[i];
@@ -345,8 +355,9 @@ export const GoogleCalendarService = {
             );
             totalSucesso += result.sucesso;
             totalErros += result.erros;
+            todosErros = [...todosErros, ...result.mensagensErro];
         }
 
-        return { totalSucesso, totalErros };
+        return { totalSucesso, totalErros, todosErros };
     },
 };
