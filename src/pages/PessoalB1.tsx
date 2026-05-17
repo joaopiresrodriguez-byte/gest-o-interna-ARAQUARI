@@ -462,12 +462,16 @@ const PessoalB1: React.FC = () => {
         },
       );
 
-      if (totalErros === 0) {
+      if (totalSucesso === 0 && totalErros === 0) {
+        toast.error('⚠️ Nenhuma escala encontrada para esse período. Clique em "Projetar e Publicar Escala" primeiro!');
+        setCalendarProgress('⚠️ Nenhuma escala publicada para sincronizar.');
+      } else if (totalErros === 0) {
         toast.success(`✅ ${totalSucesso} eventos criados no Google Calendar!`);
+        setCalendarProgress(`✅ ${months.length} mês(es) publicado(s) com sucesso!`);
       } else {
-        toast.warning(`${totalSucesso} eventos criados, ${totalErros} erros.`);
+        toast.success(`${totalSucesso} eventos criados, ${totalErros} erros.`);
+        setCalendarProgress(`${totalSucesso} eventos criados com ${totalErros} erros.`);
       }
-      setCalendarProgress(`✅ ${months.length} mês(es) publicado(s) com sucesso!`);
     } catch (error: any) {
       toast.error('Erro na sincronização: ' + error.message);
       setCalendarProgress('');

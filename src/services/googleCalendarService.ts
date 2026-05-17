@@ -1,7 +1,8 @@
 import { Escala, Personnel } from './types';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const CALENDAR_ID = import.meta.env.VITE_GOOGLE_CALENDAR_ID;
+// Use 'primary' as default — writes to the authenticated user's main calendar
+const CALENDAR_ID = import.meta.env.VITE_GOOGLE_CALENDAR_ID || 'primary';
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
@@ -241,11 +242,13 @@ export const GoogleCalendarService = {
         personnel: Personnel[],
         accessToken: string,
     ): Promise<{ sucesso: number; erros: number }> => {
-        if (!CALENDAR_ID) throw new Error('VITE_GOOGLE_CALENDAR_ID não configurado');
-
         const personnelMap = new Map((personnel || []).map(p => [p.id, p]));
         const monthStr = `${ano}-${String(mes).padStart(2, '0')}`;
         const monthEscalas = escalas.filter(e => e.data.startsWith(monthStr) && !e.is_folga);
+
+        if (monthEscalas.length === 0) {
+            console.warn(`⚠️ Nenhuma escala encontrada para ${monthStr}. Publique a escala primeiro.`);
+        }
 
         let sucesso = 0;
         let erros = 0;
