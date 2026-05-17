@@ -75,7 +75,7 @@ export const GoogleCalendarService = {
             return;
         }
         const scope = 'https://www.googleapis.com/auth/calendar.events';
-        const redirectUri = window.location.origin + window.location.pathname;
+        const redirectUri = window.location.origin + '/';
         const url =
             `https://accounts.google.com/o/oauth2/v2/auth` +
             `?client_id=${CLIENT_ID}` +
