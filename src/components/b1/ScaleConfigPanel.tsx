@@ -14,7 +14,7 @@ interface ScaleConfigPanelProps {
 }
 
 const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
-    personnelList,
+    personnelList: _personnelList,
     initialAnchorDate,
     onPublish,
     onSyncCalendar,

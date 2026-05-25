@@ -16,6 +16,9 @@ const SocialB5 = lazy(() => import('./pages/SocialB5'));
 const SSCI = lazy(() => import('./pages/SSCI'));
 const Login = lazy(() => import('./pages/Login'));
 const GestaoUsuarios = lazy(() => import('./pages/GestaoUsuarios'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+
+import ChangePasswordModal from './components/ChangePasswordModal';
 
 
 
@@ -72,6 +75,7 @@ SidebarLink.displayName = 'SidebarLink';
 
 const AppLayout: React.FC = () => {
   const { signOut, user, profile, profileError } = useAuth();
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = React.useState(false);
   const userName = user?.email?.split('@')[0] || 'Usuário';
 
   // Prevent infinite redirect loop if profile fails to load
@@ -140,7 +144,15 @@ const AppLayout: React.FC = () => {
           {profile?.p_social && <SidebarLink to="/social" icon="campaign" label="B5 - REL. PÚBLICAS" />}
         </nav>
 
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-4 border-t border-gray-700 flex flex-col gap-2">
+          <button onClick={() => setIsChangePasswordOpen(true)} className="w-full flex items-center gap-3 text-gray-400 hover:text-white cursor-pointer transition-colors px-2 py-2 rounded-lg hover:bg-white/5">
+            <span className="material-symbols-outlined text-gray-400">lock</span>
+            <div className="flex flex-col items-start">
+              <span className="text-sm font-bold">Alterar Senha</span>
+              <span className="text-[10px] opacity-50">Segurança da conta</span>
+            </div>
+          </button>
+
           <button onClick={signOut} className="w-full flex items-center gap-3 text-gray-400 hover:text-white cursor-pointer transition-colors px-2 py-2 rounded-lg hover:bg-white/5">
             <span className="material-symbols-outlined">logout</span>
             <div className="flex flex-col items-start">
@@ -173,13 +185,15 @@ const AppLayout: React.FC = () => {
           </Suspense>
         </RouteErrorBoundary>
       </main>
+
+      <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
     </div>
   );
 };
 
 // Component to handle Auth state logic
 const ProtectedApp: React.FC = () => {
-  const { session, loading } = useAuth();
+  const { session, loading, isPasswordRecovery } = useAuth();
 
   if (loading) {
     return (
@@ -189,6 +203,14 @@ const ProtectedApp: React.FC = () => {
           <p className="text-white font-bold animate-pulse">Carregando Sistema...</p>
         </div>
       </div>
+    );
+  }
+
+  if (isPasswordRecovery) {
+    return (
+      <Suspense fallback={<LoadingFallback message="Carregando recuperação..." />}>
+        <ResetPassword />
+      </Suspense>
     );
   }
 
