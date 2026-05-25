@@ -43,6 +43,7 @@ const PatrimonioB4: React.FC = () => {
   // Common patrimônio fields
   const [newItemPatrimonioNumber, setNewItemPatrimonioNumber] = useState("");
   const [newItemPatrimonioType, setNewItemPatrimonioType] = useState("");
+  const [newItemAtividades, setNewItemAtividades] = useState<string[]>([]);
 
   // Plate mask (AAA-0A00 Mercosul format)
   const applyPlateMask = (value: string) => {
@@ -97,7 +98,7 @@ const PatrimonioB4: React.FC = () => {
       await SupabaseService.resolveNotice(id);
       toast.success("Pendência marcada como resolvida!");
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao resolver pendência.");
     }
   };
@@ -115,7 +116,7 @@ const PatrimonioB4: React.FC = () => {
       toast.success("Solicitação de compra criada!");
       setActiveTab('compras');
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao criar solicitação.");
     }
   };
@@ -136,7 +137,7 @@ const PatrimonioB4: React.FC = () => {
       setManualPurchaseReason("");
       setShowManualPurchase(false);
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao criar solicitação manual.");
     }
   };
@@ -163,6 +164,7 @@ const PatrimonioB4: React.FC = () => {
       nf_number: newItemNfNumber || undefined,
       patrimonio_number: newItemPatrimonioNumber || undefined,
       patrimonio_type: newItemPatrimonioType || undefined,
+      atividades: newItemAtividades,
     };
 
     try {
@@ -203,6 +205,7 @@ const PatrimonioB4: React.FC = () => {
       setNewItemNfNumber("");
       setNewItemPatrimonioNumber("");
       setNewItemPatrimonioType("");
+      setNewItemAtividades([]);
       setActiveTab('listagem');
       loadData();
     } catch (error: any) {
@@ -254,7 +257,7 @@ const PatrimonioB4: React.FC = () => {
       await SupabaseService.updateDailyMission(id, { status });
       toast.success(`Status atualizado para ${status.replace('_', ' ')}.`);
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao atualizar status.");
     }
   };
@@ -265,7 +268,7 @@ const PatrimonioB4: React.FC = () => {
       await SupabaseService.deleteDailyMission(id);
       toast.success('Missão excluída.');
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao excluir missão.");
     }
   };
@@ -276,7 +279,7 @@ const PatrimonioB4: React.FC = () => {
       await SupabaseService.deleteVehicle(id);
       toast.success('Item removido do patrimônio.');
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao remover item.");
     }
   };
@@ -287,7 +290,7 @@ const PatrimonioB4: React.FC = () => {
       await SupabaseService.deletePurchase(id);
       toast.success('Registro de compra excluído.');
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao excluir compra.");
     }
   };
@@ -505,6 +508,24 @@ const PatrimonioB4: React.FC = () => {
                           </div>
                           <h3 className="text-lg font-bold mb-1">{item.name}</h3>
                           <p className="text-xs text-rustic-brown/60 mb-2 line-clamp-2">{item.details}</p>
+                          {/* Atividades badges */}
+                          {item.atividades && item.atividades.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2 items-center">
+                              {item.atividades.slice(0, 2).map((at, idx) => (
+                                <span key={idx} className="text-[9px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                                  {at}
+                                </span>
+                              ))}
+                              {item.atividades.length > 2 && (
+                                <span 
+                                  className="text-[9px] font-bold bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full cursor-help border border-stone-200"
+                                  title={item.atividades.slice(2).join(', ')}
+                                >
+                                  +{item.atividades.length - 2} mais
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {/* Extra info for items */}
                           <div className="flex flex-wrap gap-1.5 mb-3">
                             {item.plate && <span className="text-[9px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{item.plate}</span>}
@@ -666,6 +687,36 @@ const PatrimonioB4: React.FC = () => {
                         <p className="text-[10px] text-gray-400 italic">O item aparecerá na conferência diária da viatura selecionada.</p>
                       </div>
                     )}
+
+                    {/* Atividades checkboxes */}
+                    <div className="space-y-1 p-3 bg-white border border-rustic-border/50 rounded-xl shadow-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-primary text-sm">construction</span>
+                        <label className="text-xs font-bold text-rustic-brown">Atividades Operacionais</label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['Incêndio Urbano', 'Incêndio Florestal', 'Salvamento Terrestre', 'Salvamento em Altura', 'Salvamento Aquático', 'APH', 'Produtos Perigosos', 'Defesa Civil', 'Administrativo'].map(at => {
+                          const hasAt = newItemAtividades.includes(at);
+                          return (
+                            <label key={at} className="flex items-center gap-2 text-xs font-medium cursor-pointer hover:text-primary transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={hasAt}
+                                onChange={e => {
+                                  if (e.target.checked) {
+                                    setNewItemAtividades(prev => [...prev, at]);
+                                  } else {
+                                    setNewItemAtividades(prev => prev.filter(x => x !== at));
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-rustic-border text-primary focus:ring-primary/20"
+                              />
+                              {at}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
 
                     <textarea value={newItemDetails} onChange={e => setNewItemDetails(e.target.value)} className="w-full h-32 p-4 rounded-lg border border-rustic-border" placeholder="Detalhes" />
                     {profile?.p_logistica === 'editor' ? (

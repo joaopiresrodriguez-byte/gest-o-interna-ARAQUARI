@@ -26,6 +26,7 @@ export interface Vehicle {
     nf_number?: string;
     patrimonio_number?: string;
     patrimonio_type?: string;
+    atividades?: string[];
 }
 
 export interface Personnel {
@@ -58,6 +59,10 @@ export interface Personnel {
     toxicological_expiry_date?: string;
     graduation?: string;
     last_cadastro_review?: string;
+    matricula?: string;
+    cidade_residencia?: string;
+    data_inclusao?: string;
+    data_ultima_promocao?: string;
     created_at?: string;
 }
 
@@ -465,6 +470,7 @@ export interface B1Course {
     id?: string;
     personnel_id: number;
     course_name: string;
+    sigla_curso?: string;
     institution: string;
     workload_hours?: number;
     completion_date: string;

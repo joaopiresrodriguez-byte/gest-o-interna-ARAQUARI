@@ -146,3 +146,29 @@ export async function syncEscalaDrive(
         console.warn('⚠️ [driveSync] syncEscalaDrive falhou (não bloqueia):', e);
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SINCRONIZAR CURSO → aba CursosEfetivo
+// Colunas: Militar | Graduação | Curso | Sigla | Instituição | Carga Horária | Conclusão | Validade | Categoria
+// ─────────────────────────────────────────────────────────────────────────────
+export async function syncCursoDrive(
+    militar: { name: string; rank?: string },
+    curso: { course_name: string; sigla_curso?: string; institution: string; workload_hours?: number; completion_date: string; expiry_date?: string; category?: string }
+): Promise<void> {
+    try {
+        await sendToSheets('CursosEfetivo', [
+            militar.name,
+            militar.rank || '',
+            curso.course_name,
+            curso.sigla_curso || '',
+            curso.institution,
+            curso.workload_hours?.toString() || '',
+            formatDate(curso.completion_date),
+            formatDate(curso.expiry_date),
+            curso.category || '',
+            new Date().toLocaleDateString('pt-BR'),
+        ]);
+    } catch (e) {
+        console.warn('⚠️ [driveSync] syncCursoDrive falhou (não bloqueia):', e);
+    }
+}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { SupabaseService, MateriaInstrucao, Training, MateriaApresentacao, MateriaVideo } from '../services/SupabaseService';
+import { SupabaseService, MateriaInstrucao, Training, MateriaApresentacao, MateriaVideo, Personnel } from '../services/SupabaseService';
 import { toast } from 'sonner';
+import { B3CursosService } from '../services/b3CursosService';
 
 const InstrucaoB3: React.FC = () => {
   const [materias, setMaterias] = useState<MateriaInstrucao[]>([]);
@@ -9,7 +10,29 @@ const InstrucaoB3: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
+
+  // Main Tab State
+  const [mainTab, setMainTab] = useState<'acervo' | 'formacao'>('acervo');
+
+  // Formacao State
+  const [cursosList, setCursosList] = useState<any[]>([]);
+  const [cursosResumo, setCursosResumo] = useState<any>(null);
+  const [cursosLoading, setCursosLoading] = useState(false);
+  const [filtroMatricula, setFiltroMatricula] = useState("");
+  const [filtroSiglaCurso, setFiltroSiglaCurso] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+
+  const [personnel, setPersonnel] = useState<Personnel[]>([]);
+
+  const canViewAllCursos = !!(profile?.is_manager || profile?.p_instrucao === 'editor' || profile?.p_instrucao === 'reader');
+
+  const filteredCursos = cursosList.filter(c => {
+    if (filtroSiglaCurso && !c.sigla_curso?.toLowerCase().includes(filtroSiglaCurso.toLowerCase())) return false;
+    if (filtroCategoria && c.category !== filtroCategoria) return false;
+    if (filtroMatricula && !c.personnel_matricula?.toLowerCase().includes(filtroMatricula.toLowerCase())) return false;
+    return true;
+  });
 
   // Form State - Materia
   const [nome, setNome] = useState("");
@@ -43,12 +66,14 @@ const InstrucaoB3: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [m, t] = await Promise.all([
+      const [m, t, p] = await Promise.all([
         SupabaseService.getMateriasInstrucao(),
-        SupabaseService.getTrainings()
+        SupabaseService.getTrainings(),
+        SupabaseService.getPersonnel()
       ]);
       setMaterias(m);
       setTrainings(t);
+      setPersonnel(p);
     } catch (error) {
       console.error('Error loading B3 data:', error);
       toast.error('Erro ao carregar dados de instrução.');
@@ -56,6 +81,38 @@ const InstrucaoB3: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const loadCursosData = async () => {
+    setCursosLoading(true);
+    try {
+      const filtros: any = {};
+      if (filtroSiglaCurso) filtros.sigla_curso = filtroSiglaCurso;
+      if (filtroCategoria) filtros.category = filtroCategoria;
+      if (filtroMatricula) filtros.matricula = filtroMatricula;
+
+      if (!canViewAllCursos && user?.email) {
+        filtros.email = user.email;
+      }
+
+      const [list, resumo] = await Promise.all([
+        B3CursosService.listarTodosCursos(filtros),
+        B3CursosService.resumoCursos()
+      ]);
+      setCursosList(list);
+      setCursosResumo(resumo);
+    } catch (error) {
+      console.error('Error loading B3 courses data:', error);
+      toast.error('Erro ao carregar dados de formação.');
+    } finally {
+      setCursosLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mainTab === 'formacao') {
+      loadCursosData();
+    }
+  }, [mainTab, filtroSiglaCurso, filtroCategoria, filtroMatricula]);
 
   const handleSaveMateria = async () => {
     if (!nome || !cargaHoraria) {
@@ -139,7 +196,7 @@ const InstrucaoB3: React.FC = () => {
       await SupabaseService.deleteMateriaInstrucao(id);
       toast.success('Matéria excluída com sucesso.');
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao excluir matéria.");
     }
   };
@@ -150,7 +207,7 @@ const InstrucaoB3: React.FC = () => {
       await SupabaseService.deleteTraining(id);
       toast.success('Treinamento removido.');
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao remover treinamento.");
     }
   };
@@ -164,7 +221,7 @@ const InstrucaoB3: React.FC = () => {
         setMateriaApresentacoes(p);
       }
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao excluir apresentação.");
     }
   };
@@ -178,7 +235,7 @@ const InstrucaoB3: React.FC = () => {
         setMateriaVideos(v);
       }
       loadData();
-    } catch (error) {
+    } catch {
       toast.error("Erro ao excluir vídeo.");
     }
   };
@@ -244,7 +301,7 @@ const InstrucaoB3: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#F9F7F5] relative font-sans text-[#4A443F]">
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-[#E5E1DA] bg-white/80 backdrop-blur-md px-8 py-6">
+      <header className="sticky top-0 z-20 border-b border-[#E5E1DA] bg-white/80 backdrop-blur-md px-8 py-6 flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-1">
             <h2 className="text-3xl font-black tracking-tight text-[#2D2926]">Instrução e Treinamento (B3)</h2>
@@ -253,6 +310,24 @@ const InstrucaoB3: React.FC = () => {
           <button onClick={loadData} className="flex items-center gap-2 rounded-lg border border-[#D6CFC7] bg-white px-5 py-2.5 text-sm font-bold text-[#4A443F] hover:bg-[#F2EFE9] transition-all shadow-sm active:scale-95">
             <span className={`material-symbols-outlined text-[20px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
             Atualizar Base
+          </button>
+        </div>
+
+        {/* Main Tabs */}
+        <div className="flex items-center gap-2 border-t border-[#F2EFE9] pt-3">
+          <button 
+            onClick={() => setMainTab('acervo')} 
+            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${mainTab === 'acervo' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+          >
+            <span className="material-symbols-outlined text-base">auto_stories</span>
+            Acervo e Cronograma
+          </button>
+          <button 
+            onClick={() => setMainTab('formacao')} 
+            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${mainTab === 'formacao' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+          >
+            <span className="material-symbols-outlined text-base">school</span>
+            Formação e Treinamentos
           </button>
         </div>
       </header>
@@ -267,7 +342,8 @@ const InstrucaoB3: React.FC = () => {
       )}
 
       <div className="flex-1 p-8">
-        <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-8 xl:grid-cols-12">
+        {mainTab === 'acervo' && (
+          <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-8 xl:grid-cols-12">
 
           {/* Left Column: Cadastro */}
           <div className="xl:col-span-5 space-y-8">
@@ -573,6 +649,193 @@ const InstrucaoB3: React.FC = () => {
             </section>
           </div>
         </div>
+      )}
+
+        {/* TAB: FORMAÇÃO */}
+        {mainTab === 'formacao' && (
+          <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-300">
+            {/* Resumo Cards */}
+            {cursosResumo && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-2xl border border-[#D6CFC7] shadow-md flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-black uppercase text-[#8C8379] tracking-wider">Total de Cursos</span>
+                    <h4 className="text-3xl font-black text-[#2D2926] mt-1">{cursosResumo.total || 0}</h4>
+                  </div>
+                  <div className="size-12 rounded-xl bg-stone-100 flex items-center justify-center text-stone-500">
+                    <span className="material-symbols-outlined text-2xl">school</span>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-[#D6CFC7] shadow-md flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-black uppercase text-[#8C8379] tracking-wider">Qualificações Válidas</span>
+                    <h4 className="text-3xl font-black text-emerald-600 mt-1">{cursosResumo.validos || 0}</h4>
+                  </div>
+                  <div className="size-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <span className="material-symbols-outlined text-2xl">verified</span>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-[#D6CFC7] shadow-md flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-black uppercase text-[#8C8379] tracking-wider">Certificados Expirados</span>
+                    <h4 className="text-3xl font-black text-red-600 mt-1">{cursosResumo.expirados || 0}</h4>
+                  </div>
+                  <div className="size-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600">
+                    <span className="material-symbols-outlined text-2xl">warning</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filters and List */}
+            <div className="bg-white p-6 rounded-2xl border border-[#D6CFC7] shadow-md space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#F2EFE9] pb-4">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#C62828] text-2xl font-black">assignment_ind</span>
+                  <h3 className="text-xl font-black text-[#2D2926]">Registros de Capacitação</h3>
+                </div>
+                {!canViewAllCursos && (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-xs">lock</span>
+                    Visualização Restrita ao seu Perfil
+                  </span>
+                )}
+              </div>
+
+              {/* Filter controls */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rustic-brown/40 material-symbols-outlined text-[18px]">search</span>
+                  <input
+                    value={filtroSiglaCurso}
+                    onChange={(e) => setFiltroSiglaCurso(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[#D6CFC7] bg-[#FAF9F7]/30 text-sm focus:border-[#C62828] outline-none"
+                    placeholder="Buscar por sigla (CFO, CBT...)"
+                    type="text"
+                  />
+                </div>
+                {canViewAllCursos ? (
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rustic-brown/40 material-symbols-outlined text-[18px]">badge</span>
+                    <input
+                      value={filtroMatricula}
+                      onChange={(e) => setFiltroMatricula(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[#D6CFC7] bg-[#FAF9F7]/30 text-sm focus:border-[#C62828] outline-none"
+                      placeholder="Filtrar por matrícula..."
+                      type="text"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-11 px-4 rounded-lg border border-[#D6CFC7] bg-gray-50 text-sm flex items-center text-gray-500 font-medium">
+                    Matrícula: {personnel.find(p => p.email === user?.email)?.matricula || '—'}
+                  </div>
+                )}
+                <select
+                  value={filtroCategoria}
+                  onChange={(e) => setFiltroCategoria(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-[#D6CFC7] bg-[#FAF9F7]/30 text-sm focus:border-[#C62828] outline-none font-medium"
+                >
+                  <option value="">Todas Categorias</option>
+                  <option value="Operacional">Operacional</option>
+                  <option value="Administrativo">Administrativo</option>
+                  <option value="Saúde">Saúde</option>
+                  <option value="Liderança">Liderança</option>
+                  <option value="Especialização Técnica">Especialização Técnica</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+
+              {/* Table */}
+              {cursosLoading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin w-8 h-8 border-4 border-[#C62828] border-t-transparent rounded-full mx-auto mb-2"></div>
+                  <p className="text-xs text-[#8C8379] font-bold">Carregando capacitações...</p>
+                </div>
+              ) : filteredCursos.length === 0 ? (
+                <div className="text-center py-20 text-[#8C8379] font-medium italic border-2 border-dashed border-[#D6CFC7] rounded-3xl">
+                  Nenhum registro de curso encontrado com os filtros aplicados.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-[#D6CFC7]">
+                  <table className="w-full text-sm border-collapse text-left">
+                    <thead className="bg-[#FAF9F7] border-b border-[#D6CFC7] text-xs font-black uppercase text-[#8C8379]">
+                      <tr>
+                        <th className="py-3 px-4">Militar</th>
+                        {canViewAllCursos && <th className="py-3 px-4">Matrícula</th>}
+                        <th className="py-3 px-4">Curso</th>
+                        <th className="py-3 px-4">Categoria</th>
+                        <th className="py-3 px-4">Data Conclusão</th>
+                        <th className="py-3 px-4">Validade</th>
+                        <th className="py-3 px-4 text-center">Certificado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E5E1DA]">
+                      {filteredCursos.map(c => {
+                        const isExpired = c.expiry_date ? new Date(c.expiry_date) < new Date() : false;
+                        return (
+                          <tr key={c.id} className="hover:bg-[#FAF9F7]/50 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-2">
+                                <div className="size-8 rounded-lg bg-stone-100 flex items-center justify-center text-[#2D2926]">
+                                  <span className="material-symbols-outlined text-[16px]">person</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold block text-[#2D2926]">{c.personnel_name}</span>
+                                  {c.personnel_war_name && (
+                                    <span className="text-[10px] text-[#8C8379] font-medium">({c.personnel_rank} {c.personnel_war_name})</span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            {canViewAllCursos && (
+                              <td className="py-3.5 px-4 font-bold text-xs text-[#5C564F]">{c.personnel_matricula || '—'}</td>
+                            )}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-2">
+                                {c.sigla_curso && (
+                                  <span className="text-[10px] font-black bg-[#C62828]/10 text-[#C62828] border border-[#C62828]/20 px-2 py-0.5 rounded-full">{c.sigla_curso}</span>
+                                )}
+                                <span className="font-bold text-[#2D2926]">{c.course_name}</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs font-semibold text-[#5C564F]">{c.category}</td>
+                            <td className="py-3.5 px-4 text-xs text-[#5C564F]">
+                              {new Date(c.completion_date).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="py-3.5 px-4 text-xs">
+                              {c.expiry_date ? (
+                                <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${isExpired ? 'bg-red-100 text-red-700 font-black animate-pulse' : 'bg-green-100 text-green-700'}`}>
+                                  {new Date(c.expiry_date).toLocaleDateString('pt-BR')} {isExpired ? '(EXPIRADO)' : ''}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">Sem validade</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              {c.certificate_url ? (
+                                <a
+                                  href={c.certificate_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex size-8 rounded-lg bg-[#FAF9F7] border border-[#D6CFC7] items-center justify-center text-[#C62828] hover:bg-[#C62828] hover:text-white transition-all shadow-sm"
+                                  title="Baixar ou Ver Certificado"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                                </a>
+                              ) : (
+                                <span className="text-gray-300 text-xs italic">Não enviado</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Details Modal */}

@@ -3,6 +3,7 @@ import { PersonnelService } from '../../services/personnelService';
 import { GoogleSheetsService } from '../../services/googleSheetsService';
 import { B1Course, Personnel } from '../../services/types';
 import { toast } from 'sonner';
+import { syncCursoDrive } from '../../services/driveSync';
 
 const CATEGORIES = ['Operacional', 'Administrativo', 'Saúde', 'Liderança', 'Especialização Técnica', 'Outros'] as const;
 
@@ -25,6 +26,7 @@ function ExpiryBadge({ date }: { date?: string }) {
 const emptyForm = (): Omit<B1Course, 'id'> => ({
     personnel_id: 0,
     course_name: '',
+    sigla_curso: '',
     institution: '',
     workload_hours: undefined,
     completion_date: new Date().toISOString().split('T')[0],
@@ -79,6 +81,7 @@ export default function CursosB1({ personnelList }: Props) {
             await PersonnelService.addCourse({ ...form, personnel_id: Number(form.personnel_id) });
             const person = personnelList.find(p => p.id === Number(form.personnel_id));
             GoogleSheetsService.syncCourse(form, person?.name || '', person?.rank || '').catch(() => { });
+            syncCursoDrive({ name: person?.name || '', rank: person?.rank || person?.graduation }, form).catch(() => { });
             toast.success('Curso registrado com sucesso');
             setShowForm(false);
             setForm(emptyForm());
@@ -142,6 +145,11 @@ export default function CursosB1({ personnelList }: Props) {
                             <label className="text-xs text-secondary-text">Nome do Curso *</label>
                             <input type="text" value={form.course_name} onChange={e => setForm(f => ({ ...f, course_name: e.target.value }))}
                                 placeholder="Ex: Curso de Resgate Veicular" className="w-full bg-secondary border border-rustic-border rounded-lg px-3 py-2 text-sm text-primary-text focus:outline-none focus:border-cbm-red" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-secondary-text">Sigla do Curso</label>
+                            <input type="text" value={form.sigla_curso || ''} onChange={e => setForm(f => ({ ...f, sigla_curso: e.target.value.toUpperCase() }))}
+                                placeholder="Ex: CFO" className="w-full bg-secondary border border-rustic-border rounded-lg px-3 py-2 text-sm text-primary-text focus:outline-none focus:border-cbm-red" maxLength={10} />
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs text-secondary-text">Instituição *</label>
@@ -225,7 +233,7 @@ export default function CursosB1({ personnelList }: Props) {
                         <div key={c.id} className="bg-primary border border-rustic-border rounded-xl p-3 flex items-start justify-between gap-3 hover:border-cbm-red/30 transition-colors">
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-semibold text-primary-text truncate">{c.course_name}</span>
+                                    <span className="text-sm font-semibold text-primary-text truncate">{c.sigla_curso ? `[${c.sigla_curso}] ` : ''}{c.course_name}</span>
                                     <span className="text-xs px-2 py-0.5 rounded-full bg-cbm-red/10 text-cbm-red font-medium">{c.category}</span>
                                     <ExpiryBadge date={c.expiry_date} />
                                 </div>

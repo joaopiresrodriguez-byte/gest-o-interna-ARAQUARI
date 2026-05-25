@@ -4,6 +4,7 @@ import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, D
 import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
+import { syncCursoDrive } from '../services/driveSync';
 
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
@@ -28,6 +29,15 @@ const tabIcons: Record<Tab, string> = { ALERTAS_AVISOS: 'notifications_active', 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
 const STATUS_OPTIONS = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
 const LEAVE_TYPES = [{ value: 'ferias', label: 'Férias' }, { value: 'licenca_medica', label: 'Licença Médica' }, { value: 'licenca_especial', label: 'Licença Especial' }, { value: 'afastamento', label: 'Afastamento' }, { value: 'cedido', label: 'Cedido' }, { value: 'outros', label: 'Outros' }];
+
+const formatCpf = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
 
 const validateCpf = (cpf: string): boolean => {
   const cleaned = cpf.replace(/\D/g, '');
@@ -63,7 +73,16 @@ const emptyForm = (): Partial<Personnel> => ({
   education_level: '', cnh_category: '', cnh_number: '', cnh_expiry_date: '', cpf: '',
   emergency_phone: '', emergency_contact_name: '', cve_active: '', cve_issue_date: '', cve_expiry_date: '',
   toxicological_date: '', toxicological_expiry_date: '', graduation: '',
+  matricula: '', cidade_residencia: '', data_inclusao: '', data_ultima_promocao: '',
 });
+
+interface CursoLocal {
+  id: string;
+  nome_curso: string;
+  sigla_curso: string;
+  data_realizacao: string;
+}
+
 
 const PessoalB1: React.FC = () => {
   const [tab, setTab] = useState<Tab>('ALERTAS_AVISOS');
@@ -123,9 +142,12 @@ const PessoalB1: React.FC = () => {
   const [calendarSyncing, setCalendarSyncing] = useState(false);
   const [calendarProgress, setCalendarProgress] = useState('');
 
-  // Rank change
   const [rankChangeNewRank, setRankChangeNewRank] = useState('');
   const [rankChangeLegalBasis, setRankChangeLegalBasis] = useState('');
+
+  // Course state for registration form
+  const [cursosForm, setCursosForm] = useState<CursoLocal[]>([]);
+  const [novoCurso, setNovoCurso] = useState({ nome_curso: '', sigla_curso: '', data_realizacao: '' });
 
   // Document upload
   const [docFile, setDocFile] = useState<File | null>(null);
@@ -182,13 +204,13 @@ const PessoalB1: React.FC = () => {
   }, []);
 
   const loadDisciplinary = async () => {
-    try { setDisciplinaryRecords(await PersonnelService.getDisciplinaryRecords()); } catch { }
+    try { setDisciplinaryRecords(await PersonnelService.getDisciplinaryRecords()); } catch { /* ignore */ }
   };
   const loadBulletins = async () => {
-    try { setBulletins(await PersonnelService.getBulletins()); } catch { }
+    try { setBulletins(await PersonnelService.getBulletins()); } catch { /* ignore */ }
   };
   const loadExports = async () => {
-    try { setSigrhExports(await PersonnelService.getSigrhExports()); } catch { }
+    try { setSigrhExports(await PersonnelService.getSigrhExports()); } catch { /* ignore */ }
   };
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -224,13 +246,41 @@ const PessoalB1: React.FC = () => {
     delete (cleanedData as any).created_at;
 
     try {
+      let savedId: number | undefined;
       if (editId) {
         await PersonnelService.updatePersonnel(editId, cleanedData);
+        savedId = editId;
         toast.success('Militar atualizado!');
       } else {
-        await PersonnelService.addPersonnel(cleanedData as Personnel);
+        const saved = await PersonnelService.addPersonnel(cleanedData as Personnel);
+        savedId = saved.id;
         toast.success('Militar cadastrado!');
       }
+
+      // Save courses if any were added in the form
+      if (cursosForm.length > 0 && savedId) {
+        const cursosPayload = cursosForm.map(c => ({
+          personnel_id: savedId as number,
+          course_name: c.nome_curso,
+          sigla_curso: c.sigla_curso,
+          institution: 'CBMSC',
+          completion_date: c.data_realizacao,
+          category: 'Operacional' as const,
+        }));
+        const results = await Promise.allSettled(
+          cursosPayload.map(async c => {
+            const res = await PersonnelService.addCourse(c);
+            GoogleSheetsService.syncCourse(c, cleanedData.name || '', cleanedData.rank || cleanedData.graduation || '').catch(() => {});
+            syncCursoDrive({ name: cleanedData.name || '', rank: cleanedData.rank || cleanedData.graduation }, c).catch(() => {});
+            return res;
+          })
+        );
+        const failed = results.filter(r => r.status === 'rejected').length;
+        if (failed > 0) toast.warning(`Militar salvo, mas ${failed} curso(s) falharam.`);
+        else toast.success(`${cursosForm.length} curso(s) registrado(s)!`);
+        setCursosForm([]);
+      }
+
       GoogleSheetsService.syncPersonnel({ ...formData, ...cleanedData }).then(ok => { if (ok) toast.info('📊 Sincronizado com Google Sheets.'); });
       setFormData(emptyForm());
       setEditId(null);
@@ -240,6 +290,7 @@ const PessoalB1: React.FC = () => {
       toast.error('Erro ao salvar: ' + (err.message || ''));
     }
   };
+
 
   const handleDeletePersonnel = async (id: number) => {
     if (!confirm('Remover militar?')) return;
@@ -610,8 +661,32 @@ const PessoalB1: React.FC = () => {
                     {formField('Tipo', 'type', 'text', ['BM', 'BC'])}
                     {formField('Status', 'status', 'text', STATUS_OPTIONS)}
                     {formField('Função', 'role')}
-                    {formField('CPF', 'cpf')}
+                    {/* Matrícula */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Matrícula</label>
+                      <input type="text" value={formData.matricula || ''} onChange={e => setFormData(prev => ({ ...prev, matricula: e.target.value }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: 12345" />
+                    </div>
+                    {/* CPF com máscara */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">CPF</label>
+                      <input type="text" value={formData.cpf || ''} onChange={e => setFormData(prev => ({ ...prev, cpf: formatCpf(e.target.value) }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="000.000.000-00" maxLength={14} />
+                    </div>
                     {formField('Data Nascimento', 'birth_date', 'date')}
+                    {/* Cidade de Residência */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Cidade de Residência</label>
+                      <input type="text" value={formData.cidade_residencia || ''} onChange={e => setFormData(prev => ({ ...prev, cidade_residencia: e.target.value }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Araquari" />
+                    </div>
+                    {/* Data de Inclusão */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Data de Inclusão</label>
+                      <input type="date" value={formData.data_inclusao || ''} onChange={e => setFormData(prev => ({ ...prev, data_inclusao: e.target.value }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm" />
+                    </div>
+                    {/* Última Promoção */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Última Promoção</label>
+                      <input type="date" value={formData.data_ultima_promocao || ''} onChange={e => setFormData(prev => ({ ...prev, data_ultima_promocao: e.target.value }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm" />
+                    </div>
                     {formField('Email', 'email', 'email')}
                     {formField('Telefone', 'phone', 'tel')}
                     {formField('Nível de Instrução', 'education_level', 'text', ['Ensino Fundamental', 'Ensino Médio', 'Ensino Superior', 'Pós-Graduação', 'Mestrado', 'Doutorado'])}
@@ -620,6 +695,7 @@ const PessoalB1: React.FC = () => {
                     {formField('Contato Emergência', 'emergency_contact_name')}
                     {formField('Tel. Emergência', 'emergency_phone', 'tel')}
                   </div>
+
                   <h3 className="font-black text-sm uppercase text-gray-500 mb-4 border-t pt-4">Documentos & Habilitações</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     {formField('Possui CVE Ativo', 'cve_active', 'text', ['Sim', 'Não'])}
@@ -651,12 +727,67 @@ const PessoalB1: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Cursos e Treinamentos CBMSC */}
+                  <div className="mb-6 p-5 bg-blue-50/50 rounded-xl border border-blue-200">
+                    <h3 className="font-black text-sm mb-4 text-blue-800 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px]">school</span>
+                      Cursos e Treinamentos CBMSC
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Nome do Curso</label>
+                        <input type="text" value={novoCurso.nome_curso} onChange={e => setNovoCurso(p => ({ ...p, nome_curso: e.target.value }))} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-sm" placeholder="Ex: Curso de Form. de Oficiais" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Sigla</label>
+                        <input type="text" value={novoCurso.sigla_curso} onChange={e => setNovoCurso(p => ({ ...p, sigla_curso: e.target.value.toUpperCase() }))} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-sm" placeholder="Ex: CFO" maxLength={10} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Data de Realização</label>
+                        <input type="date" value={novoCurso.data_realizacao} onChange={e => setNovoCurso(p => ({ ...p, data_realizacao: e.target.value }))} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-sm" />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!novoCurso.nome_curso || !novoCurso.sigla_curso || !novoCurso.data_realizacao) {
+                          toast.warning('Preencha Nome, Sigla e Data do curso.');
+                          return;
+                        }
+                        setCursosForm(prev => [...prev, { ...novoCurso, id: crypto.randomUUID() }]);
+                        setNovoCurso({ nome_curso: '', sigla_curso: '', data_realizacao: '' });
+                      }}
+                      className="mb-3 px-4 py-2 bg-blue-700 text-white text-xs font-black rounded-lg hover:bg-blue-800 flex items-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-sm">add</span> Adicionar Curso
+                    </button>
+                    {cursosForm.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black uppercase text-gray-400">Cursos adicionados:</p>
+                        {cursosForm.map(c => (
+                          <div key={c.id} className="flex items-center justify-between bg-white border border-blue-200 rounded-lg px-3 py-2">
+                            <span className="text-sm font-semibold">
+                              <span className="text-blue-700 font-black mr-2">{c.sigla_curso}</span>
+                              {c.nome_curso}
+                              <span className="text-gray-400 text-xs ml-2">— {new Date(c.data_realizacao).toLocaleDateString('pt-BR')}</span>
+                            </span>
+                            <button type="button" onClick={() => setCursosForm(prev => prev.filter(x => x.id !== c.id))} className="text-red-400 hover:text-red-600 ml-3">
+                              <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {cursosForm.length === 0 && <p className="text-xs text-gray-400 italic">Nenhum curso adicionado ainda.</p>}
+                  </div>
+
                   <div className="flex gap-3 pt-4 border-t">
                     <button onClick={handleSavePersonnel} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">{editId ? 'ATUALIZAR' : 'CADASTRAR'}</button>
-                    <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('EFETIVO'); }} className="px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">CANCELAR</button>
+                    <button onClick={() => { setFormData(emptyForm()); setEditId(null); setCursosForm([]); setNovoCurso({ nome_curso: '', sigla_curso: '', data_realizacao: '' }); setTab('EFETIVO'); }} className="px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">CANCELAR</button>
                   </div>
                 </div>
               )}
+
 
               {/* TAB: DOCUMENTOS */}
               {tab === 'DOCUMENTOS' && (
