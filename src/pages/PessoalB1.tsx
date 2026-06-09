@@ -408,6 +408,10 @@ const PessoalB1: React.FC = () => {
       if (error || !gData) throw new Error('Não foi possível carregar as guarnições.');
 
       const mapNomeToCodigo = (nome: string) => {
+        if (nome === 'Azul') return 'A';
+        if (nome === 'Vermelha') return 'B';
+        if (nome === 'Amarela') return 'C';
+        if (nome === 'Branca') return 'D';
         if (nome === 'Alpha') return 'A';
         if (nome === 'Bravo') return 'B';
         if (nome === 'Charlie') return 'C';

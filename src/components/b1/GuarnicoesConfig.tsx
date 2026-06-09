@@ -9,20 +9,24 @@ interface Militar {
 }
 
 interface Guarnicao {
-  id: number;
+  id: string;
   nome: string;
   codigo: string; // 'A', 'B', 'C', 'D'
   membros: Militar[];
 }
 
 const CORES: Record<string, string> = {
-  A: '#1d4ed8',
-  B: '#15803d',
-  C: '#c2410c',
-  D: '#7e22ce',
+  A: '#2563EB', // Azul
+  B: '#DC2626', // Vermelha
+  C: '#EAB308', // Amarela
+  D: '#9CA3AF', // Branca
 };
 
 const mapNomeToCodigo = (nome: string) => {
+  if (nome === 'Azul') return 'A';
+  if (nome === 'Vermelha') return 'B';
+  if (nome === 'Amarela') return 'C';
+  if (nome === 'Branca') return 'D';
   if (nome === 'Alpha') return 'A';
   if (nome === 'Bravo') return 'B';
   if (nome === 'Charlie') return 'C';
@@ -110,7 +114,7 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
     }
   }
 
-  async function adicionarMilitar(guarnicaoId: number, militarId: number) {
+  async function adicionarMilitar(guarnicaoId: string, militarId: number) {
     const jaEscalado = guarnicoes.some(g =>
       g.membros.some(m => m.id === militarId)
     );
@@ -131,7 +135,7 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
     else console.error(error);
   }
 
-  async function removerMilitar(guarnicaoId: number, militarId: number) {
+  async function removerMilitar(guarnicaoId: string, militarId: number) {
     const confirmou = window.confirm('Remover este militar da guarnição?');
     if (!confirmou) return;
 
