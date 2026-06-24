@@ -1,0 +1,55 @@
+-- ============================================================
+-- ROLLBACK: Reverter para Fase 0
+-- Data: 2026-06-24
+-- Remove todas as alterações das Fases 1, 2 e 3
+-- ============================================================
+-- ATENÇÃO: Este arquivo documenta o rollback manual executado
+-- via SQL Editor do Supabase Dashboard.
+-- Os comandos abaixo JÁ FORAM executados e NÃO devem ser
+-- re-executados, pois as tabelas/colunas já não existem.
+-- ============================================================
+
+-- FASE 1 removida:
+-- - DROP TRIGGER audit_personnel, audit_escalas, audit_guarnicao_membros, audit_fleet, audit_b1_courses
+-- - DROP FUNCTION log_auditoria() CASCADE
+-- - DROP POLICY militares_workspace ON personnel
+-- - DROP POLICY guarnicoes_workspace ON guarnicoes
+-- - DROP POLICY escalas_workspace ON escalas
+-- - DROP POLICY equipamentos_workspace ON fleet
+-- - DROP POLICY cursos_workspace ON b1_courses
+-- - ALTER TABLE personnel DROP COLUMN workspace_id CASCADE
+-- - ALTER TABLE guarnicoes DROP COLUMN workspace_id CASCADE
+-- - ALTER TABLE escalas DROP COLUMN workspace_id CASCADE
+-- - ALTER TABLE fleet DROP COLUMN workspace_id CASCADE
+-- - ALTER TABLE b1_courses DROP COLUMN workspace_id CASCADE
+-- - DROP TABLE perfis CASCADE
+-- - DROP TABLE workspaces CASCADE
+-- - DROP TABLE audit_logs CASCADE
+-- - CREATE POLICY allow_all_personnel ON personnel FOR ALL USING (true)
+-- - CREATE POLICY allow_all_guarnicoes ON guarnicoes FOR ALL USING (true)
+-- - CREATE POLICY allow_all_escalas ON escalas FOR ALL USING (true)
+-- - CREATE POLICY allow_all_fleet ON fleet FOR ALL USING (true)
+-- - CREATE POLICY allow_all_b1_courses ON b1_courses FOR ALL USING (true)
+
+-- FASE 2 removida:
+-- - ALTER TABLE personnel DROP COLUMN dados_extras CASCADE
+-- - ALTER TABLE fleet DROP COLUMN dados_extras CASCADE
+-- - DROP TABLE workspace_vocabulario CASCADE
+-- - DROP TABLE campos_customizados CASCADE
+-- - DROP TABLE tipos_documento CASCADE
+
+-- FASE 3 removida:
+-- - DROP TABLE regimes_escala CASCADE
+-- - DROP TABLE regime_grupos CASCADE
+-- - DROP TABLE grupo_membros CASCADE
+-- - DROP TABLE excecoes_escala CASCADE
+-- - DROP TABLE workspace_modulos CASCADE
+-- - DROP TABLE modulos_disponiveis CASCADE
+-- - DROP TABLE api_keys CASCADE
+
+-- Estado final verificado:
+-- personnel: 16 registros intactos
+-- guarnicoes: 4 registros intactos
+-- guarnicao_membros: 6 registros intactos
+-- fleet: 1 registro intacto
+-- escalas: intactas
