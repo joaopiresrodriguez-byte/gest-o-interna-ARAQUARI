@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { SupabaseService, ProductReceipt, ChecklistItem, DailyMission } from '../services/SupabaseService';
+import { SupabaseService, ProductReceipt, ChecklistItem, DailyMission, Training } from '../services/SupabaseService';
 import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -173,6 +173,7 @@ const Operacional: React.FC = () => {
 
   // Daily Missions states
   const [missions, setMissions] = useState<DailyMission[]>([]);
+  const [trainings, setTrainings] = useState<Training[]>([]);
   const [missionForm, setMissionForm] = useState({
     title: '', description: '', mission_date: new Date().toISOString().split('T')[0],
     start_time: '', end_time: '', priority: 'media' as DailyMission['priority'],
@@ -189,16 +190,19 @@ const Operacional: React.FC = () => {
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [items, recs, fleetData, missionsData] = await Promise.all([
+      const [items, recs, fleetData, missionsData, trainingsData] = await Promise.all([
         SupabaseService.getChecklistItems(activeChecklistTab, selectedViaturaId),
         SupabaseService.getProductsReceipts(),
         SupabaseService.getFleet(),
         SupabaseService.getDailyMissions({ data: missionForm.mission_date }),
+        SupabaseService.getTrainings(),
       ]);
       setChecklistItems(items);
       setReceipts(recs);
       setFleet(fleetData.filter(v => v.type === 'Viatura'));
       setMissions(missionsData);
+      // Only confirmed/scheduled trainings
+      setTrainings(trainingsData.filter(t => t.status === 'Scheduled'));
 
       const initial: typeof reportStatuses = {};
       items.forEach(it => {
@@ -352,6 +356,22 @@ const Operacional: React.FC = () => {
     return missions.filter(m => m.status === missionFilter);
   }, [missions, missionFilter]);
 
+  // Trainings for the selected mission date
+  const todayTrainings = useMemo(() => {
+    return trainings.filter(t => t.date === missionForm.mission_date);
+  }, [trainings, missionForm.mission_date]);
+
+  // Unified list: missions + trainings for the day, sorted by time
+  const unifiedMissions = useMemo(() => {
+    const missionItems = filteredMissions.map(m => ({ type: 'mission' as const, data: m }));
+    const trainingItems = todayTrainings.map(t => ({ type: 'training' as const, data: t }));
+    return [...missionItems, ...trainingItems].sort((a, b) => {
+      const timeA = a.type === 'mission' ? (a.data.start_time || '99:99') : (a.data as Training).time || '99:99';
+      const timeB = b.type === 'mission' ? (b.data.start_time || '99:99') : (b.data as Training).time || '99:99';
+      return timeA.localeCompare(timeB);
+    });
+  }, [filteredMissions, todayTrainings]);
+
   const dashboardStats = useMemo(() => {
     const totalMissions = missions.length;
     const completedMissions = missions.filter(m => m.status === 'concluida').length;
@@ -478,13 +498,18 @@ const Operacional: React.FC = () => {
               </div>
             </section>
 
-            {/* Active Missions Quick View */}
-            {missions.filter(m => m.status !== 'concluida' && m.status !== 'cancelada').length > 0 && (
+            {/* Active Missions + Trainings Quick View */}
+            {(missions.filter(m => m.status !== 'concluida' && m.status !== 'cancelada').length > 0 || todayTrainings.length > 0) && (
               <section className="bg-white rounded-xl shadow-sm border border-rustic-border overflow-hidden">
                 <div className="p-4 border-b border-rustic-border flex items-center justify-between">
                   <h3 className="text-sm font-black text-[#181111] uppercase tracking-wider flex items-center gap-2">
                     <span className="material-symbols-outlined text-primary text-[18px]">target</span>
                     Missões Ativas
+                    {todayTrainings.length > 0 && (
+                      <span className="bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                        +{todayTrainings.length} instrução
+                      </span>
+                    )}
                   </h3>
                   <button onClick={() => setActiveTab('missoes')} className="text-xs font-bold text-primary hover:underline">Ver todas →</button>
                 </div>
@@ -495,6 +520,17 @@ const Operacional: React.FC = () => {
                       <span className="text-sm font-bold text-[#181111] flex-1">{m.title}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${STATUS_CONFIG[m.status].color}`}>
                         {STATUS_CONFIG[m.status].label}
+                      </span>
+                    </div>
+                  ))}
+                  {todayTrainings.map(t => (
+                    <div key={t.id} className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                      <span className="material-symbols-outlined text-blue-500 text-[18px]">school</span>
+                      <span className="text-sm font-bold text-blue-900 flex-1">
+                        {(t.materia as any)?.name || 'Instrução'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                        {t.time || 'Agendada'}
                       </span>
                     </div>
                   ))}
@@ -594,14 +630,53 @@ const Operacional: React.FC = () => {
               </section>
             )}
 
-            {/* Missions List */}
+            {/* Missions + Trainings List */}
             <div className="space-y-3">
-              {filteredMissions.map(mission => {
+              {unifiedMissions.map((item, idx) => {
+                // Render training item
+                if (item.type === 'training') {
+                  const t = item.data as Training;
+                  const materiaName = (t.materia as any)?.name || t.materia_id || 'Instrução';
+                  return (
+                    <div key={`training-${t.id || idx}`} className="bg-blue-50 rounded-xl border border-blue-200 shadow-sm p-5 transition-all hover:shadow-md">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-100 text-blue-600">
+                            <span className="material-symbols-outlined">school</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-blue-900 text-base truncate">{materiaName}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-blue-100 text-blue-700 border-blue-200">Instrução</span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">Agendada</span>
+                              {t.time && (
+                                <span className="text-[10px] text-gray-500 font-bold">
+                                  <span className="material-symbols-outlined text-[12px] align-middle">schedule</span> {t.time}
+                                </span>
+                              )}
+                              {t.instructor && (
+                                <span className="text-[10px] text-gray-500 font-bold">
+                                  <span className="material-symbols-outlined text-[12px] align-middle">person</span> {t.instructor}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-[10px] text-blue-500 font-bold">Gerenciar em B3</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Render mission item
+                const mission = item.data as DailyMission;
                 const priorityCfg = PRIORITY_CONFIG[mission.priority || 'media'];
                 const statusCfg = STATUS_CONFIG[mission.status];
 
                 return (
-                  <div key={mission.id} className="bg-white rounded-xl border border-rustic-border shadow-sm p-5 transition-all hover:shadow-md">
+                  <div key={`mission-${mission.id}`} className="bg-white rounded-xl border border-rustic-border shadow-sm p-5 transition-all hover:shadow-md">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${statusCfg.color}`}>
@@ -655,10 +730,10 @@ const Operacional: React.FC = () => {
                 );
               })}
 
-              {filteredMissions.length === 0 && (
+              {unifiedMissions.length === 0 && (
                 <div className="text-center py-16">
                   <span className="material-symbols-outlined text-5xl text-gray-200 mb-3">event_busy</span>
-                  <p className="text-sm text-gray-400 font-bold">Nenhuma missão encontrada para este dia.</p>
+                  <p className="text-sm text-gray-400 font-bold">Nenhuma missão ou instrução para este dia.</p>
                   {isEditor && <p className="text-xs text-gray-300 mt-1">Clique em "Nova Missão" para criar.</p>}
                 </div>
               )}

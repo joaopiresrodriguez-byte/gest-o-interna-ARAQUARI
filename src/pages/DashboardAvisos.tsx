@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { SupabaseService, DailyMission, Vehicle, GuReport, Personnel, PendingNotice } from '../services/SupabaseService';
+import { SupabaseService, DailyMission, Vehicle, GuReport, Personnel, PendingNotice, Training } from '../services/SupabaseService';
 import { supabase } from '../services/supabase';
 import { DefesaCivilTicker } from '../components/DefesaCivilTicker';
 import { BirthdayCard } from '../components/BirthdayCard';
@@ -40,6 +40,7 @@ const DashboardAvisos: React.FC = () => {
   const [missions, setMissions] = useState<DailyMission[]>([]);
   const [previousMissions, setPreviousMissions] = useState<DailyMission[]>([]);
   const [fleet, setFleet] = useState<Vehicle[]>([]);
+  const [trainings, setTrainings] = useState<Training[]>([]);
   const [reports, setReports] = useState<GuReport[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [pendingNotices, setPendingNotices] = useState<PendingNotice[]>([]);
@@ -58,12 +59,13 @@ const DashboardAvisos: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [missionsData, prevMissionsData, fleetData, reportsData, personnelData] = await Promise.all([
+      const [missionsData, prevMissionsData, fleetData, reportsData, personnelData, trainingsData] = await Promise.all([
         SupabaseService.getDailyMissions({ data: selectedDate }),
         SupabaseService.getDailyMissions({ data: targetDate }),
         SupabaseService.getFleet(),
         SupabaseService.getGuReports(),
         SupabaseService.getPersonnel(),
+        SupabaseService.getTrainings(),
       ]);
 
       // Try to load pending notices (might not exist)
@@ -79,7 +81,10 @@ const DashboardAvisos: React.FC = () => {
 
       setMissions(missionsData);
       setPreviousMissions(prevMissionsData.filter(m => m.status === 'concluida'));
-      setFleet(fleetData);
+      // Only display vehicles (Viatura type), regardless of status
+      setFleet(fleetData.filter(v => v.type === 'Viatura'));
+      // Only scheduled trainings with confirmation (status Scheduled)
+      setTrainings(trainingsData.filter(t => t.status === 'Scheduled'));
       setReports(reportsData);
       setPersonnel(personnelData);
       setPendingNotices(noticesData);
@@ -137,6 +142,15 @@ const DashboardAvisos: React.FC = () => {
           event: '*',
           schema: 'public',
           table: 'gu_reports',
+        },
+        () => { loadData(); }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'training_schedule',
         },
         () => { loadData(); }
       )
@@ -205,6 +219,23 @@ const DashboardAvisos: React.FC = () => {
   };
 
   const avisoDoDia = reports.find(r => r.report_date === targetDate);
+
+  // Trainings for the selected date merged with missions
+  const todayTrainings = useMemo(() => {
+    return trainings.filter(t => t.date === selectedDate);
+  }, [trainings, selectedDate]);
+
+  // Unified list: missions + today's trainings, sorted by start time
+  const unifiedItems = useMemo(() => {
+    const missionItems = missions.map(m => ({ type: 'mission' as const, data: m }));
+    const trainingItems = todayTrainings.map(t => ({ type: 'training' as const, data: t }));
+    const all = [...missionItems, ...trainingItems];
+    return all.sort((a, b) => {
+      const timeA = a.type === 'mission' ? (a.data.start_time || '99:99') : (a.data as Training).time || '99:99';
+      const timeB = b.type === 'mission' ? (b.data.start_time || '99:99') : (b.data as Training).time || '99:99';
+      return timeA.localeCompare(timeB);
+    });
+  }, [missions, todayTrainings]);
 
   // Stats
   const activeFleet = fleet.filter(v => v.status === 'active').length;
@@ -312,14 +343,19 @@ const DashboardAvisos: React.FC = () => {
               )}
             </section>
 
-            {/* MISSÕES DO DIA */}
+            {/* MISSÕES DO DIA + TREINAMENTOS */}
             <section className="bg-surface rounded-xl border border-rustic-border shadow-sm overflow-hidden">
               <div className="bg-gradient-to-r from-[#2c1810] to-[#4a2c20] px-6 py-4 flex justify-between items-center">
                 <h2 className="text-white font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined">Format_list_bulleted</span>
+                  <span className="material-symbols-outlined">format_list_bulleted</span>
                   Missões do Dia
-                  {missions.length > 0 && (
+                  {unifiedItems.length > 0 && (
                     <span className="text-white/60 text-xs font-normal ml-1">({completedMissions}/{missions.length})</span>
+                  )}
+                  {todayTrainings.length > 0 && (
+                    <span className="bg-blue-500/80 text-white text-[9px] font-bold px-2 py-0.5 rounded-full ml-1">
+                      {todayTrainings.length} instrução{todayTrainings.length > 1 ? 'ões' : ''}
+                    </span>
                   )}
                 </h2>
                 {isEditor && (
@@ -330,67 +366,108 @@ const DashboardAvisos: React.FC = () => {
                 )}
               </div>
               <div className="p-0">
-                {missions.length === 0 ? (
+                {unifiedItems.length === 0 ? (
                   <div className="p-8 text-center text-rustic-brown/40">
                     <span className="material-symbols-outlined text-4xl mb-2">event_available</span>
-                    <p>Nenhuma missão registrada para hoje.</p>
+                    <p>Nenhuma missão ou instrução registrada para hoje.</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-rustic-border/30">
-                    {missions.map((mission) => (
-                      <div key={mission.id} className={`flex items-start gap-4 p-4 hover:bg-gray-50 transition-colors ${mission.status === 'concluida' ? 'bg-gray-50/50' : ''}`}>
-                        <div
-                          onClick={() => mission.id && toggleMission(mission.id, mission.status)}
-                          className={`w-6 h-6 mt-0.5 rounded border-2 flex items-center justify-center transition-all ${isEditor ? 'cursor-pointer' : 'cursor-default'} ${mission.status === 'concluida' ? 'bg-green-600 border-green-600' : 'border-rustic-border hover:border-primary'}`}
-                        >
-                          {mission.status === 'concluida' && <span className="material-symbols-outlined text-white text-[16px]">check</span>}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className={`font-medium text-[#2c1810] ${mission.status === 'concluida' ? 'line-through text-rustic-brown/50' : ''}`}>
-                              {mission.title}
-                            </p>
-                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
-                              mission.priority === 'alta' ? 'bg-orange-100 text-orange-600' :
+                    {unifiedItems.map((item, idx) => {
+                      if (item.type === 'training') {
+                        const t = item.data as Training;
+                        const materiaName = (t.materia as any)?.name || t.materia_id || 'Instrução';
+                        return (
+                          <div key={`training-${t.id || idx}`} className="flex items-start gap-4 p-4 hover:bg-blue-50/40 transition-colors bg-blue-50/20 border-l-2 border-blue-400">
+                            <div className="w-6 h-6 mt-0.5 rounded flex items-center justify-center flex-shrink-0">
+                              <span className="material-symbols-outlined text-blue-500 text-[20px]">school</span>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-medium text-blue-900">{materiaName}</p>
+                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded uppercase bg-blue-100 text-blue-700">
+                                  Instrução Agendada
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                {t.time && (
+                                  <span className="text-[10px] font-bold text-blue-600 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                    {t.time}
+                                  </span>
+                                )}
+                                {t.instructor && (
+                                  <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">person</span>
+                                    {t.instructor}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Regular mission
+                      const mission = item.data as DailyMission;
+                      return (
+                        <div key={`mission-${mission.id}`} className={`flex items-start gap-4 p-4 hover:bg-gray-50 transition-colors ${mission.status === 'concluida' ? 'bg-gray-50/50' : ''}`}>
+                          <div
+                            onClick={() => mission.id && toggleMission(mission.id, mission.status)}
+                            className={`w-6 h-6 mt-0.5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${isEditor ? 'cursor-pointer' : 'cursor-default'} ${mission.status === 'concluida' ? 'bg-green-600 border-green-600' : 'border-rustic-border hover:border-primary'}`}
+                          >
+                            {mission.status === 'concluida' && <span className="material-symbols-outlined text-white text-[16px]">check</span>}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className={`font-medium text-[#2c1810] ${mission.status === 'concluida' ? 'line-through text-rustic-brown/50' : ''}`}>
+                                {mission.title}
+                              </p>
+                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
+                                mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
+                                mission.priority === 'alta' ? 'bg-orange-100 text-orange-600' :
                                 mission.priority === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
                               }`}>
-                              {mission.priority}
-                            </span>
-                          </div>
-                          {mission.description && <p className="text-[11px] text-gray-500 mt-0.5">{mission.description}</p>}
-                          <div className="flex items-center gap-3 mt-1">
-                            {mission.start_time && (
-                              <span className="text-[10px] font-bold text-primary flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[14px]">schedule</span>
-                                {mission.start_time}
+                                {mission.priority}
                               </span>
-                            )}
-                            {mission.responsible_name && (
-                              <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[14px]">person</span>
-                                {mission.responsible_name}
-                              </span>
-                            )}
+                            </div>
+                            {mission.description && <p className="text-[11px] text-gray-500 mt-0.5">{mission.description}</p>}
+                            <div className="flex items-center gap-3 mt-1">
+                              {mission.start_time && (
+                                <span className="text-[10px] font-bold text-primary flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                  {mission.start_time}
+                                </span>
+                              )}
+                              {mission.responsible_name && (
+                                <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">person</span>
+                                  {mission.responsible_name}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
 
-                    {/* Progress Bar */}
-                    <div className="p-4 bg-stone-50/50 border-t border-rustic-border/20">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-[10px] font-black uppercase text-gray-400">Progresso do Dia</span>
-                        <span className="text-[10px] font-black text-primary">
-                          {completedMissions} de {missions.length} concluídas
-                        </span>
+                    {/* Progress Bar (missions only) */}
+                    {missions.length > 0 && (
+                      <div className="p-4 bg-stone-50/50 border-t border-rustic-border/20">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[10px] font-black uppercase text-gray-400">Progresso das Missões</span>
+                          <span className="text-[10px] font-black text-primary">
+                            {completedMissions} de {missions.length} concluídas
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 rounded-full ${completedMissions === missions.length ? 'bg-green-500' : 'bg-primary'}`}
+                            style={{ width: `${(completedMissions / (missions.length || 1)) * 100}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 rounded-full ${completedMissions === missions.length ? 'bg-green-500' : 'bg-primary'}`}
-                          style={{ width: `${(completedMissions / (missions.length || 1)) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>

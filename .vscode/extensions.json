@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "ms-vscode.vscode-typescript-next",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "csstools.postcss",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-pg",
+    "mechatroner.rainbow-csv"
+  ]
+}
