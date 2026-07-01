@@ -675,7 +675,7 @@ const SSCI: React.FC = () => {
                                                     {doc.times_referenced || 0}
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <a href={doc.file_url} target="_blank" className="p-2 rounded-lg bg-stone-50 text-primary hover:bg-stone-100 transition-colors">
+                                                    <a href={doc.file_url} target="_blank" className="p-2 rounded-lg bg-stone-50 text-primary hover:bg-stone-100 transition-colors" rel="noreferrer">
                                                         <span className="material-symbols-outlined text-[18px]">visibility</span>
                                                     </a>
                                                     <a href={doc.file_url} download className="p-2 rounded-lg bg-stone-50 text-gray-400 hover:text-gray-600 hover:bg-stone-100 transition-colors">

@@ -252,7 +252,7 @@ export const GoogleCalendarService = {
 
         let sucesso = 0;
         let erros = 0;
-        let mensagensErro: string[] = [];
+        const mensagensErro: string[] = [];
 
         for (const escala of monthEscalas) {
             const turmaLetter = escala.turma || escala.equipe?.replace('Turma ', '') || '?';

@@ -77,7 +77,7 @@ export class RotationEngine {
         swaps: ServiceSwap[],
         exceptions: ScaleException[]
     ): Escala[] {
-        let result = JSON.parse(JSON.stringify(baseEscala)) as Escala[];
+        const result = JSON.parse(JSON.stringify(baseEscala)) as Escala[];
 
         // 1. Aplicar Remoções Manuais
         exceptions.filter(ex => ex.type === 'REMOVE').forEach(ex => {
@@ -91,7 +91,7 @@ export class RotationEngine {
 
         // 2. Aplicar Adições Manuais
         exceptions.filter(ex => ex.type === 'ADD').forEach(ex => {
-            let day = result.find(e => e.data === ex.date);
+            const day = result.find(e => e.data === ex.date);
             if (day) {
                 if (!day.militares.includes(Number(ex.personnel_id))) {
                     day.militares.push(Number(ex.personnel_id));

@@ -6,6 +6,115 @@ import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 import { useAuth } from '../context/AuthContext';
 import RelatoriosMensais from '../components/b4/RelatoriosMensais';
 
+// ─── Helper sub-components ───────────────────────────────────────────────────
+
+const Detail: React.FC<{ label: string; value?: string; icon?: string }> = ({ label, value, icon }) => (
+  <div className="bg-stone-50 border border-rustic-border/60 rounded-lg p-3">
+    <p className="text-[9px] font-black uppercase tracking-wider text-rustic-brown/40 mb-0.5">{label}</p>
+    <p className="text-sm font-bold text-rustic-brown flex items-center gap-1">
+      {icon && <span className="material-symbols-outlined text-[14px] text-rustic-brown/50">{icon}</span>}
+      {value || '—'}
+    </p>
+  </div>
+);
+
+interface ItemCardProps {
+  item: Vehicle;
+  notices: PendingNotice[];
+  profile: any;
+  onSelect: (item: Vehicle) => void;
+  onDelete: (id: string) => void;
+  onResolve: (id: string) => void;
+}
+
+const ItemCard: React.FC<ItemCardProps> = ({ item, notices, profile, onSelect, onDelete, onResolve }) => {
+  const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || n.description.includes(item.name)));
+
+  return (
+    <div
+      className="bg-white rounded-xl border border-rustic-border p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative group"
+      onClick={() => onSelect(item)}
+    >
+      {/* Click hint */}
+      <span className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity material-symbols-outlined text-rustic-brown/30 text-[18px]">open_in_full</span>
+
+      <div className="flex justify-between items-start mb-3">
+        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {item.status === 'active' ? 'Ativo' : 'Inativo'}
+        </span>
+        <div className="flex gap-2 items-center">
+          <span className="text-[10px] font-bold text-rustic-brown/30 font-mono">{item.type}</span>
+          {profile?.p_logistica === 'editor' && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(item.id); }}
+              className="text-gray-300 hover:text-red-500 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[16px]">delete</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      <h3 className="text-base font-bold mb-1 leading-tight">{item.name}</h3>
+      <p className="text-xs text-rustic-brown/60 mb-3 line-clamp-2">{item.details}</p>
+
+      {/* Atividades badges */}
+      {item.atividades && item.atividades.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2 items-center">
+          {item.atividades.slice(0, 2).map((at, idx) => (
+            <span key={idx} className="text-[9px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+              {at}
+            </span>
+          ))}
+          {item.atividades.length > 2 && (
+            <span className="text-[9px] font-bold bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full border border-stone-200">
+              +{item.atividades.length - 2} mais
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Badges: placa, marca, local, ano */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {item.plate && <span className="text-[9px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{item.plate}</span>}
+        {item.brand && <span className="text-[9px] font-bold bg-stone-100 text-gray-600 px-2 py-0.5 rounded">{item.brand}</span>}
+        {item.location && (
+          <span className="text-[9px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded flex items-center gap-0.5">
+            <span className="material-symbols-outlined text-[12px]">location_on</span>{item.location}
+          </span>
+        )}
+        {item.year && <span className="text-[9px] font-bold bg-stone-100 text-gray-500 px-2 py-0.5 rounded">{item.year}</span>}
+      </div>
+
+      {/* Alerts */}
+      {itemNotices.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {itemNotices.map(notice => (
+            <div key={notice.id} className="bg-red-50 border border-primary/20 rounded-lg p-2">
+              <div className="flex items-start gap-2">
+                <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">warning</span>
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-primary">{notice.description}</p>
+                  {profile?.p_logistica === 'editor' && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onResolve(notice.id!); }}
+                      className="mt-1 text-[9px] font-bold text-white bg-primary px-2 py-0.5 rounded hover:bg-red-700"
+                    >
+                      MARCAR COMO RESOLVIDO
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const PatrimonioB4: React.FC = () => {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes' | 'conferencias' | 'relatorios'>('missoes');
@@ -64,6 +173,14 @@ const PatrimonioB4: React.FC = () => {
   // Filters for Missions
   const [missionFilterStatus, setMissionFilterStatus] = useState<string>("todos");
   const [missionFilterPriority, setMissionFilterPriority] = useState<string>("todos");
+
+  // Listing filters & grouping
+  const [filterAtividade, setFilterAtividade] = useState<string>("todos");
+  const [filterLocation, setFilterLocation] = useState<string>("todos");
+  const [groupByAtividade, setGroupByAtividade] = useState<boolean>(false);
+
+  // Detail modal
+  const [selectedItem, setSelectedItem] = useState<Vehicle | null>(null);
 
   useEffect(() => {
     loadData();
@@ -295,10 +412,45 @@ const PatrimonioB4: React.FC = () => {
     }
   };
 
-  const filteredFleet = fleet.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const ATIVIDADES_LIST = [
+    'Incêndio Urbano', 'Incêndio Florestal', 'Salvamento Terrestre',
+    'Salvamento em Altura', 'Salvamento Aquático', 'APH',
+    'Produtos Perigosos', 'Defesa Civil', 'Administrativo'
+  ];
+
+  const uniqueLocations = Array.from(
+    new Set(fleet.map(i => i.location).filter(Boolean) as string[])
+  ).sort();
+
+  const filteredFleet = fleet.filter(item => {
+    const matchSearch =
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.type.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchAtividade =
+      filterAtividade === 'todos' ||
+      (item.atividades && item.atividades.includes(filterAtividade));
+    const matchLocation =
+      filterLocation === 'todos' ||
+      (item.location && item.location === filterLocation);
+    return matchSearch && matchAtividade && matchLocation;
+  });
+
+  // Group items by atividade
+  const groupedFleet: Record<string, Vehicle[]> = {};
+  if (groupByAtividade) {
+    const semAtividade: Vehicle[] = [];
+    filteredFleet.forEach(item => {
+      if (!item.atividades || item.atividades.length === 0) {
+        semAtividade.push(item);
+      } else {
+        item.atividades.forEach(at => {
+          if (!groupedFleet[at]) groupedFleet[at] = [];
+          groupedFleet[at].push(item);
+        });
+      }
+    });
+    if (semAtividade.length > 0) groupedFleet['Sem Atividade'] = semAtividade;
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-background-light relative text-rustic-brown">
@@ -473,94 +625,221 @@ const PatrimonioB4: React.FC = () => {
 
               {activeTab === 'listagem' && (
                 <div className="space-y-6">
-                  <div className="relative w-full lg:w-96">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rustic-brown/40 material-symbols-outlined">search</span>
-                    <input
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-rustic-border bg-stone-50/30"
-                      placeholder="Filtrar patrimônio..."
-                      type="text"
-                    />
+                  {/* Filter Bar */}
+                  <div className="flex flex-wrap gap-3 items-center p-4 bg-stone-50 border border-rustic-border rounded-xl">
+                    {/* Search */}
+                    <div className="relative flex-1 min-w-[200px]">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rustic-brown/40 material-symbols-outlined text-[18px]">search</span>
+                      <input
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 rounded-lg border border-rustic-border bg-white text-sm"
+                        placeholder="Buscar por nome ou tipo..."
+                        type="text"
+                      />
+                    </div>
+
+                    {/* Location Filter */}
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 material-symbols-outlined text-[16px]">location_on</span>
+                      <select
+                        value={filterLocation}
+                        onChange={e => setFilterLocation(e.target.value)}
+                        className="pl-8 pr-3 h-10 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown appearance-none cursor-pointer"
+                      >
+                        <option value="todos">Todas Localizações</option>
+                        {uniqueLocations.map(loc => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Atividade Filter */}
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-600 material-symbols-outlined text-[16px]">local_fire_department</span>
+                      <select
+                        value={filterAtividade}
+                        onChange={e => setFilterAtividade(e.target.value)}
+                        className="pl-8 pr-3 h-10 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown appearance-none cursor-pointer"
+                      >
+                        <option value="todos">Todas Atividades</option>
+                        {ATIVIDADES_LIST.map(at => (
+                          <option key={at} value={at}>{at}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Group toggle */}
+                    <button
+                      onClick={() => setGroupByAtividade(p => !p)}
+                      className={`flex items-center gap-1.5 px-3 h-10 rounded-lg border text-xs font-bold transition-all ${
+                        groupByAtividade
+                          ? 'bg-amber-600 border-amber-600 text-white shadow-sm'
+                          : 'border-rustic-border bg-white text-rustic-brown hover:border-amber-400'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">category</span>
+                      Agrupar por Atividade
+                    </button>
+
+                    <span className="ml-auto text-[10px] font-black uppercase text-gray-400">
+                      {filteredFleet.length} item(s)
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredFleet.map(item => {
-                      const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || n.description.includes(item.name)));
-
-                      return (
-                        <div key={item.id} className="bg-white rounded-xl border border-rustic-border p-5 hover:shadow-md transition-all relative">
-                          <div className="flex justify-between items-start mb-3">
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                              {item.status}
-                            </span>
-                            <div className="flex gap-2">
-                              <span className="text-[10px] font-bold text-rustic-brown/40">{item.id}</span>
-                              {profile?.p_logistica === 'editor' && (
-                                <button
-                                  onClick={() => handleDeleteItem(item.id)}
-                                  className="text-gray-300 hover:text-red-500 transition-colors"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">delete</span>
-                                </button>
-                              )}
-                            </div>
+                  {/* Listing — flat or grouped */}
+                  {groupByAtividade ? (
+                    <div className="space-y-8">
+                      {Object.entries(groupedFleet).map(([atividade, items]) => (
+                        <div key={atividade}>
+                          <div className="flex items-center gap-3 mb-4">
+                            <span className="material-symbols-outlined text-amber-600">local_fire_department</span>
+                            <h3 className="font-black text-sm uppercase tracking-widest text-rustic-brown">{atividade}</h3>
+                            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{items.length}</span>
+                            <div className="flex-1 h-px bg-rustic-border/40" />
                           </div>
-                          <h3 className="text-lg font-bold mb-1">{item.name}</h3>
-                          <p className="text-xs text-rustic-brown/60 mb-2 line-clamp-2">{item.details}</p>
-                          {/* Atividades badges */}
-                          {item.atividades && item.atividades.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mb-2 items-center">
-                              {item.atividades.slice(0, 2).map((at, idx) => (
-                                <span key={idx} className="text-[9px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
-                                  {at}
-                                </span>
-                              ))}
-                              {item.atividades.length > 2 && (
-                                <span 
-                                  className="text-[9px] font-bold bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full cursor-help border border-stone-200"
-                                  title={item.atividades.slice(2).join(', ')}
-                                >
-                                  +{item.atividades.length - 2} mais
-                                </span>
-                              )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                            {items.map(item => <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />)}
+                          </div>
+                        </div>
+                      ))}
+                      {Object.keys(groupedFleet).length === 0 && (
+                        <div className="text-center py-16 text-gray-400">
+                          <span className="material-symbols-outlined text-[48px] mb-2">inventory_2</span>
+                          <p className="text-sm font-bold">Nenhum item encontrado.</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                      {filteredFleet.map(item => (
+                        <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />
+                      ))}
+                      {filteredFleet.length === 0 && (
+                        <div className="col-span-3 text-center py-16 text-gray-400">
+                          <span className="material-symbols-outlined text-[48px] mb-2">search_off</span>
+                          <p className="text-sm font-bold">Nenhum item encontrado.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Detail Modal */}
+                  {selectedItem && (
+                    <div
+                      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                      style={{ background: 'rgba(30,15,10,0.55)', backdropFilter: 'blur(4px)' }}
+                      onClick={() => setSelectedItem(null)}
+                    >
+                      <div
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {/* Modal Header */}
+                        <div className="flex items-start justify-between p-6 border-b border-rustic-border">
+                          <div>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase mb-2 inline-block ${
+                              selectedItem.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>{selectedItem.status === 'active' ? 'Ativo' : 'Inativo'}</span>
+                            <h2 className="text-2xl font-black text-[#3e2723] mt-1">{selectedItem.name}</h2>
+                            <p className="text-xs text-rustic-brown/50 mt-0.5 font-mono">{selectedItem.id}</p>
+                          </div>
+                          <button
+                            onClick={() => setSelectedItem(null)}
+                            className="p-2 rounded-lg hover:bg-stone-100 text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined">close</span>
+                          </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 space-y-6">
+
+                          {/* Identificação */}
+                          <section>
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/70 mb-3 flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[14px]">info</span> Identificação
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              <Detail label="Tipo" value={selectedItem.type} />
+                              {selectedItem.brand && <Detail label="Marca" value={selectedItem.brand} />}
+                              {selectedItem.plate && <Detail label="Placa" value={selectedItem.plate} icon="directions_car" />}
+                              {selectedItem.year && <Detail label="Ano" value={selectedItem.year} />}
+                              {selectedItem.renavam && <Detail label="RENAVAM" value={selectedItem.renavam} />}
+                              {selectedItem.chassis && <Detail label="Chassi" value={selectedItem.chassis} />}
+                              {selectedItem.oil_type && <Detail label="Tipo de Óleo" value={selectedItem.oil_type} />}
+                              {selectedItem.nf_number && <Detail label="Nº NF Compra" value={selectedItem.nf_number} />}
                             </div>
+                          </section>
+
+                          {/* Patrimônio */}
+                          {(selectedItem.patrimonio_number || selectedItem.patrimonio_type) && (
+                            <section>
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/70 mb-3 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">inventory</span> Patrimônio
+                              </h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                {selectedItem.patrimonio_number && <Detail label="Número" value={selectedItem.patrimonio_number} />}
+                                {selectedItem.patrimonio_type && <Detail label="Tipo" value={selectedItem.patrimonio_type} />}
+                              </div>
+                            </section>
                           )}
-                          {/* Extra info for items */}
-                          <div className="flex flex-wrap gap-1.5 mb-3">
-                            {item.plate && <span className="text-[9px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{item.plate}</span>}
-                            {item.brand && <span className="text-[9px] font-bold bg-stone-100 text-gray-600 px-2 py-0.5 rounded">{item.brand}</span>}
-                            {item.location && <span className="text-[9px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">location_on</span>{item.location}</span>}
-                            {item.year && <span className="text-[9px] font-bold bg-stone-100 text-gray-500 px-2 py-0.5 rounded">{item.year}</span>}
-                          </div>
 
-                          {/* Alerts Section */}
-                          {itemNotices.length > 0 && (
-                            <div className="mt-2 space-y-2">
-                              {itemNotices.map(notice => (
-                                <div key={notice.id} className="bg-red-50 border border-primary/20 rounded-lg p-2 animate-pulse">
-                                  <div className="flex items-start gap-2">
-                                    <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">warning</span>
-                                    <div className="flex-1">
-                                      <p className="text-[10px] font-bold text-primary">{notice.description}</p>
-                                      {profile?.p_logistica === 'editor' && (
-                                        <button
-                                          onClick={() => handleResolveNotice(notice.id!)}
-                                          className="mt-1 text-[9px] font-bold text-white bg-primary px-2 py-0.5 rounded hover:bg-red-700"
-                                        >
-                                          MARCAR COMO RESOLVIDO
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                          {/* Localização */}
+                          {selectedItem.location && (
+                            <section>
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-green-700/80 mb-3 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">location_on</span> Localização Atual
+                              </h4>
+                              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                                <span className="material-symbols-outlined text-green-600 text-[28px]">location_on</span>
+                                <span className="font-bold text-green-800 text-sm">{selectedItem.location}</span>
+                              </div>
+                            </section>
+                          )}
+
+                          {/* Atividades Operacionais */}
+                          {selectedItem.atividades && selectedItem.atividades.length > 0 && (
+                            <section>
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-700/80 mb-3 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">local_fire_department</span> Atividades Operacionais
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {selectedItem.atividades.map((at, i) => (
+                                  <span key={i} className="text-xs font-bold bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1 rounded-full">{at}</span>
+                                ))}
+                              </div>
+                            </section>
+                          )}
+
+                          {/* Detalhes */}
+                          {selectedItem.details && (
+                            <section>
+                              <h4 className="text-[10px] font-black uppercase tracking-widest text-rustic-brown/60 mb-3 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">description</span> Observações
+                              </h4>
+                              <p className="text-sm text-rustic-brown/80 bg-stone-50 rounded-xl p-4 border border-rustic-border leading-relaxed">{selectedItem.details}</p>
+                            </section>
+                          )}
+
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-rustic-border flex justify-between items-center">
+                          <span className="text-[10px] text-gray-400 font-mono">{selectedItem.id}</span>
+                          {profile?.p_logistica === 'editor' && (
+                            <button
+                              onClick={() => { handleDeleteItem(selectedItem.id); setSelectedItem(null); }}
+                              className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg text-xs transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                              Remover Item
+                            </button>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
