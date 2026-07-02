@@ -208,18 +208,34 @@ export const InstructionService = {
      */
     getTrainings: async (): Promise<Training[]> => {
         try {
-            // Query com join precisa ser feita manualmente
-            const { data, error } = await supabase
-                .from('training_schedule')
-                .select('*')
-                .order('date', { ascending: true });
+            // Query com join feita de forma paralela em JavaScript
+            const [trainingsResult, materiasResult] = await Promise.all([
+                supabase
+                    .from('training_schedule')
+                    .select('*')
+                    .order('date', { ascending: true }),
+                supabase
+                    .from('materias_instrucao')
+                    .select('*')
+            ]);
 
-            if (error) {
-                console.error('Error fetching trainings:', error);
-                throw error;
+            if (trainingsResult.error) {
+                console.error('Error fetching trainings:', trainingsResult.error);
+                throw trainingsResult.error;
             }
 
-            return (data as unknown as Training[]) || [];
+            if (materiasResult.error) {
+                console.error('Error fetching materias:', materiasResult.error);
+                throw materiasResult.error;
+            }
+
+            const trainingsData = (trainingsResult.data as unknown as Training[]) || [];
+            const materiasData = materiasResult.data || [];
+
+            return trainingsData.map(t => ({
+                ...t,
+                materia: materiasData.find(m => m.id === t.materia_id)
+            }));
         } catch (error) {
             console.error('Error fetching trainings:', error);
             throw error;

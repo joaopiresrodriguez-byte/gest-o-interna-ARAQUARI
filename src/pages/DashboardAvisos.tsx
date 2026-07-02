@@ -83,8 +83,8 @@ const DashboardAvisos: React.FC = () => {
       setPreviousMissions(prevMissionsData.filter(m => m.status === 'concluida'));
       // Only display vehicles (Viatura type), regardless of status
       setFleet(fleetData.filter(v => v.type === 'Viatura'));
-      // Only scheduled trainings with confirmation (status Scheduled)
-      setTrainings(trainingsData.filter(t => t.status === 'Scheduled'));
+      // Include both scheduled and canceled trainings to maintain history
+      setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
       setReports(reportsData);
       setPersonnel(personnelData);
       setPendingNotices(noticesData);
@@ -225,7 +225,7 @@ const DashboardAvisos: React.FC = () => {
     return trainings.filter(t => t.date === selectedDate);
   }, [trainings, selectedDate]);
 
-  // Unified list: missions + today's trainings, sorted by start time
+  // Unified list: missions + today's trainings, sorted by start time (missions take priority on equal times)
   const unifiedItems = useMemo(() => {
     const missionItems = missions.map(m => ({ type: 'mission' as const, data: m }));
     const trainingItems = todayTrainings.map(t => ({ type: 'training' as const, data: t }));
@@ -233,7 +233,13 @@ const DashboardAvisos: React.FC = () => {
     return all.sort((a, b) => {
       const timeA = a.type === 'mission' ? (a.data.start_time || '99:99') : (a.data as Training).time || '99:99';
       const timeB = b.type === 'mission' ? (b.data.start_time || '99:99') : (b.data as Training).time || '99:99';
-      return timeA.localeCompare(timeB);
+      const timeCompare = timeA.localeCompare(timeB);
+      if (timeCompare !== 0) return timeCompare;
+      
+      // On equal times, mission comes first
+      if (a.type === 'mission' && b.type === 'training') return -1;
+      if (a.type === 'training' && b.type === 'mission') return 1;
+      return 0;
     });
   }, [missions, todayTrainings]);
 
@@ -311,7 +317,7 @@ const DashboardAvisos: React.FC = () => {
               {avisoDoDia ? (
                 <div className="bg-white/80 p-5 rounded-lg border border-yellow-100 shadow-sm backdrop-blur-sm">
                   <p className="text-[#2c1810] whitespace-pre-line text-lg font-medium leading-relaxed">
-                    "{avisoDoDia.description}"
+                    &ldquo;{avisoDoDia.description}&rdquo;
                   </p>
                 </div>
               ) : (
@@ -377,21 +383,22 @@ const DashboardAvisos: React.FC = () => {
                       if (item.type === 'training') {
                         const t = item.data as Training;
                         const materiaName = (t.materia as any)?.name || t.materia_id || 'Instrução';
+                        const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
                         return (
-                          <div key={`training-${t.id || idx}`} className="flex items-start gap-4 p-4 hover:bg-blue-50/40 transition-colors bg-blue-50/20 border-l-2 border-blue-400">
+                          <div key={`training-${t.id || idx}`} className={`flex items-start gap-4 p-4 hover:bg-blue-50/40 transition-colors ${isCanceled ? 'bg-gray-50/50 border-l-2 border-gray-400 opacity-60' : 'bg-blue-50/20 border-l-2 border-blue-400'}`}>
                             <div className="w-6 h-6 mt-0.5 rounded flex items-center justify-center flex-shrink-0">
-                              <span className="material-symbols-outlined text-blue-500 text-[20px]">school</span>
+                              <span className={`material-symbols-outlined text-[20px] ${isCanceled ? 'text-gray-400' : 'text-blue-500'}`}>school</span>
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-medium text-blue-900">{materiaName}</p>
-                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded uppercase bg-blue-100 text-blue-700">
-                                  Instrução Agendada
+                                <p className={`font-medium ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{materiaName}</p>
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${isCanceled ? 'bg-gray-200 text-gray-700' : 'bg-blue-100 text-blue-700'}`}>
+                                  {isCanceled ? 'Instrução Cancelada' : 'Instrução Agendada'}
                                 </span>
                               </div>
                               <div className="flex items-center gap-3 mt-1">
                                 {t.time && (
-                                  <span className="text-[10px] font-bold text-blue-600 flex items-center gap-1">
+                                  <span className={`text-[10px] font-bold flex items-center gap-1 ${isCanceled ? 'text-gray-400' : 'text-blue-600'}`}>
                                     <span className="material-symbols-outlined text-[14px]">schedule</span>
                                     {t.time}
                                   </span>

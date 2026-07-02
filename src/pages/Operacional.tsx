@@ -201,8 +201,8 @@ const Operacional: React.FC = () => {
       setReceipts(recs);
       setFleet(fleetData.filter(v => v.type === 'Viatura'));
       setMissions(missionsData);
-      // Only confirmed/scheduled trainings
-      setTrainings(trainingsData.filter(t => t.status === 'Scheduled'));
+      // Include both scheduled and canceled trainings to maintain history
+      setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
 
       const initial: typeof reportStatuses = {};
       items.forEach(it => {
@@ -361,14 +361,20 @@ const Operacional: React.FC = () => {
     return trainings.filter(t => t.date === missionForm.mission_date);
   }, [trainings, missionForm.mission_date]);
 
-  // Unified list: missions + trainings for the day, sorted by time
+  // Unified list: missions + trainings for the day, sorted by time (missions take priority on equal times)
   const unifiedMissions = useMemo(() => {
     const missionItems = filteredMissions.map(m => ({ type: 'mission' as const, data: m }));
     const trainingItems = todayTrainings.map(t => ({ type: 'training' as const, data: t }));
     return [...missionItems, ...trainingItems].sort((a, b) => {
       const timeA = a.type === 'mission' ? (a.data.start_time || '99:99') : (a.data as Training).time || '99:99';
       const timeB = b.type === 'mission' ? (b.data.start_time || '99:99') : (b.data as Training).time || '99:99';
-      return timeA.localeCompare(timeB);
+      const timeCompare = timeA.localeCompare(timeB);
+      if (timeCompare !== 0) return timeCompare;
+
+      // On equal times, mission comes first
+      if (a.type === 'mission' && b.type === 'training') return -1;
+      if (a.type === 'training' && b.type === 'mission') return 1;
+      return 0;
     });
   }, [filteredMissions, todayTrainings]);
 
@@ -523,17 +529,20 @@ const Operacional: React.FC = () => {
                       </span>
                     </div>
                   ))}
-                  {todayTrainings.map(t => (
-                    <div key={t.id} className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                      <span className="material-symbols-outlined text-blue-500 text-[18px]">school</span>
-                      <span className="text-sm font-bold text-blue-900 flex-1">
-                        {(t.materia as any)?.name || 'Instrução'}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
-                        {t.time || 'Agendada'}
-                      </span>
-                    </div>
-                  ))}
+                  {todayTrainings.map(t => {
+                    const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
+                    return (
+                      <div key={t.id} className={`flex items-center gap-3 p-3 rounded-lg border ${isCanceled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-blue-50 border-blue-100'}`}>
+                        <span className={`material-symbols-outlined text-[18px] ${isCanceled ? 'text-gray-400' : 'text-blue-500'}`}>school</span>
+                        <span className={`text-sm font-bold flex-1 ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>
+                          {(t.materia as any)?.name || 'Instrução'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isCanceled ? 'bg-gray-200 text-gray-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {isCanceled ? 'Cancelada' : t.time || 'Agendada'}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}
@@ -637,18 +646,21 @@ const Operacional: React.FC = () => {
                 if (item.type === 'training') {
                   const t = item.data as Training;
                   const materiaName = (t.materia as any)?.name || t.materia_id || 'Instrução';
+                  const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
                   return (
-                    <div key={`training-${t.id || idx}`} className="bg-blue-50 rounded-xl border border-blue-200 shadow-sm p-5 transition-all hover:shadow-md">
+                    <div key={`training-${t.id || idx}`} className={`rounded-xl border shadow-sm p-5 transition-all hover:shadow-md ${isCanceled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-blue-50 border-blue-200'}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-100 text-blue-600">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isCanceled ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>
                             <span className="material-symbols-outlined">school</span>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-bold text-blue-900 text-base truncate">{materiaName}</p>
+                            <p className={`font-bold text-base truncate ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{materiaName}</p>
                             <div className="flex flex-wrap items-center gap-2 mt-2">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-blue-100 text-blue-700 border-blue-200">Instrução</span>
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">Agendada</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${isCanceled ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>Instrução</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isCanceled ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                {isCanceled ? 'Cancelada' : 'Agendada'}
+                              </span>
                               {t.time && (
                                 <span className="text-[10px] text-gray-500 font-bold">
                                   <span className="material-symbols-outlined text-[12px] align-middle">schedule</span> {t.time}
@@ -734,7 +746,7 @@ const Operacional: React.FC = () => {
                 <div className="text-center py-16">
                   <span className="material-symbols-outlined text-5xl text-gray-200 mb-3">event_busy</span>
                   <p className="text-sm text-gray-400 font-bold">Nenhuma missão ou instrução para este dia.</p>
-                  {isEditor && <p className="text-xs text-gray-300 mt-1">Clique em "Nova Missão" para criar.</p>}
+                  {isEditor && <p className="text-xs text-gray-300 mt-1">Clique em &quot;Nova Missão&quot; para criar.</p>}
                 </div>
               )}
             </div>
