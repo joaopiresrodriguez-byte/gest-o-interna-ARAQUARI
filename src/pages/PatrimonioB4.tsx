@@ -287,9 +287,10 @@ const PatrimonioB4: React.FC = () => {
     try {
       await SupabaseService.addVehicle(newItem);
 
-      // Sync to Google Sheets (fire-and-forget)
-      GoogleSheetsService.syncVehicle(newItem).then(ok => {
+      // Sync to Google Sheets — routes to Equipamento / Material / Viatura tab (fire-and-forget)
+      GoogleSheetsService.syncB4Item(newItem).then(ok => {
         if (ok) toast.info('📊 Dados sincronizados com o Google Sheets.');
+        else console.warn('[B4] Google Sheets sync skipped or failed (non-blocking).');
       });
 
       // 2. If it's an Equipment, Viatura or Material, also add to Daily Conference (itens_conferencia)

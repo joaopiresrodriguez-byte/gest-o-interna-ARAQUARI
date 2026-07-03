@@ -1,8 +1,75 @@
 import { Personnel, Vehicle, Occurrence, B1Course, EpiDelivery, Escala, ServiceSwap } from './types';
 import type { RelatorioMensal } from './b4RelatorioService';
 
+// ─── Webhook-based config (existing integrations) ─────────────────────────────
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 const SHEET_EFETIVO = import.meta.env.VITE_SHEETS_EFETIVO_ABA || 'CadastroEfetivo';
+
+// ─── Google Sheets API v4 — B4 Patrimônio ─────────────────────────────────────
+const SHEETS_API_KEY  = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY || '';
+const B4_SPREADSHEET_ID = '1p1AZXbEO8TY5lqJB5IZ03Rhycn80_LAkarOzp65rqAQ';
+
+// Map item types to the exact tab names in the spreadsheet
+const B4_TAB_MAP: Record<string, string> = {
+    Equipamento: 'Equipamento',
+    Material:    'Material',
+    Viatura:     'Viatura',
+};
+
+// Column headers for each tab (must match the spreadsheet structure)
+const B4_HEADERS: Record<string, string[]> = {
+    Equipamento: [
+        'Data Cadastro', 'Nome', 'Marca', 'Nº NF', 'Nº Patrimônio',
+        'Tipo Patrimônio', 'Localização', 'Status', 'Detalhes', 'Atividades',
+    ],
+    Material: [
+        'Data Cadastro', 'Nome', 'Descrição/Detalhes', 'Status',
+        'Localização', 'Atividades',
+    ],
+    Viatura: [
+        'Data Cadastro', 'Nome', 'Marca', 'Placa', 'RENAVAM', 'Chassi',
+        'Ano', 'Tipo Óleo', 'Localização', 'Nº Patrimônio', 'Tipo Patrimônio',
+        'Status', 'Detalhes', 'Atividades',
+    ],
+};
+
+/**
+ * Appends a single row to a named tab in the B4 spreadsheet using the
+ * Google Sheets API v4 (public append endpoint — requires API key).
+ */
+async function appendToB4Sheet(
+    tabName: string,
+    values: (string | number | boolean)[],
+): Promise<boolean> {
+    if (!SHEETS_API_KEY) {
+        console.warn('[SheetsAPI] VITE_GOOGLE_SHEETS_API_KEY not configured. Skipping B4 sync.');
+        return false;
+    }
+
+    const range  = encodeURIComponent(`${tabName}!A1`);
+    const url    = `https://sheets.googleapis.com/v4/spreadsheets/${B4_SPREADSHEET_ID}/values/${range}:append` +
+                   `?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${SHEETS_API_KEY}`;
+
+    try {
+        const res = await fetch(url, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ values: [values] }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error('[SheetsAPI] Append failed:', res.status, err);
+            return false;
+        }
+
+        console.log(`[SheetsAPI] Row appended to "${tabName}".`);
+        return true;
+    } catch (error) {
+        console.error('[SheetsAPI] Network error during append:', error);
+        return false;
+    }
+}
 
 async function sendToSheets(sheet: string, data: (string | number | boolean)[]): Promise<boolean> {
     if (!WEBHOOK_URL) {
@@ -81,8 +148,73 @@ export const GoogleSheetsService = {
             vehicle.patrimonio_number || '',
             vehicle.patrimonio_type || '',
         ];
+        // Legacy webhook (kept for backward compatibility)
         return sendToSheets('Patrimônio', row);
     },
+
+    // ─── B4 Direct API Sync ───────────────────────────────────────────────────
+
+    /**
+     * Syncs a patrimônio item to the correct B4 spreadsheet tab
+     * based on its type: Equipamento | Material | Viatura.
+     */
+    syncB4Item: async (item: Partial<Vehicle>): Promise<boolean> => {
+        const type    = item.type || 'Equipamento';
+        const tabName = B4_TAB_MAP[type] ?? 'Equipamento';
+        const status  = item.status === 'active' ? 'Ativo' : 'Inativo';
+        const atividades = Array.isArray(item.atividades) ? item.atividades.join(', ') : '';
+        const dateStr = new Date().toLocaleDateString('pt-BR');
+
+        let row: (string | number | boolean)[];
+
+        if (type === 'Viatura') {
+            row = [
+                dateStr,
+                item.name              || '',
+                item.brand             || '',
+                item.plate             || '',
+                item.renavam           || '',
+                item.chassis           || '',
+                item.year              || '',
+                item.oil_type          || '',
+                item.location          || '',
+                item.patrimonio_number || '',
+                item.patrimonio_type   || '',
+                status,
+                item.details           || '',
+                atividades,
+            ];
+        } else if (type === 'Equipamento') {
+            row = [
+                dateStr,
+                item.name              || '',
+                item.brand             || '',
+                item.nf_number         || '',
+                item.patrimonio_number || '',
+                item.patrimonio_type   || '',
+                item.location          || '',
+                status,
+                item.details           || '',
+                atividades,
+            ];
+        } else {
+            // Material
+            row = [
+                dateStr,
+                item.name     || '',
+                item.details  || '',
+                status,
+                item.location || '',
+                atividades,
+            ];
+        }
+
+        return appendToB4Sheet(tabName, row);
+    },
+
+    /** Expose tab headers so a setup routine can pre-fill row 1 if needed. */
+    getB4Headers: (type: 'Equipamento' | 'Material' | 'Viatura'): string[] =>
+        B4_HEADERS[type] ?? [],
 
     syncOccurrence: async (occ: Partial<Occurrence>): Promise<boolean> => {
         const row = [
