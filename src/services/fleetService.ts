@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { Vehicle, ChecklistItem, DailyChecklist, PendingNotice } from './types';
 import { BaseService } from './baseService';
+import { triggerSync } from './syncScheduler';
 
 // Campos específicos para otimizar queries
 const VEHICLE_FIELDS = 'id, name, type, plate, status, details, current_km, last_revision, brand, renavam, chassis, year, oil_type, location, nf_number, patrimonio_number, patrimonio_type, atividades';
@@ -34,7 +35,9 @@ export const FleetService = {
      */
     addVehicle: async (vehicle: Omit<Vehicle, 'id'>): Promise<Vehicle> => {
         try {
-            return await fleetBase.create(vehicle);
+            const created = await fleetBase.create({ ...vehicle, sync_status: 'pending' } as Omit<Vehicle, 'id'>);
+            if (created.id) triggerSync('fleet', created.id).catch(() => {});
+            return created;
         } catch (error) {
             console.error('Error adding vehicle:', error);
             throw error;
@@ -46,7 +49,8 @@ export const FleetService = {
      */
     updateVehicleStatus: async (id: string, status: Vehicle['status']): Promise<void> => {
         try {
-            await fleetBase.update(id, { status } as Partial<Vehicle>);
+            await fleetBase.update(id, { status, sync_status: 'pending' } as Partial<Vehicle>);
+            triggerSync('fleet', id).catch(() => {});
         } catch (error) {
             console.error('Error updating vehicle:', error);
             throw error;

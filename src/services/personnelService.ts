@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification, Escala, ScaleRotationConfig, TeamConfig } from './types';
 import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
+import { triggerSync } from './syncScheduler';
 
 // Field selectors for optimized queries
 const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cnh_expiry_date, cpf, emergency_phone, emergency_contact_name, cve_active, cve_issue_date, cve_expiry_date, toxicological_date, toxicological_expiry_date, graduation, last_cadastro_review, matricula, cidade_residencia, data_inclusao, data_ultima_promocao';
@@ -42,7 +43,9 @@ export const PersonnelService = {
         const error = PersonnelService.validateCondutor(person);
         if (error) throw new Error(error);
         try {
-            return await personnelBase.create(person);
+            const created = await personnelBase.create({ ...person, sync_status: 'pending' } as Omit<Personnel, 'id'>);
+            if (created.id) triggerSync('personnel', created.id).catch(() => {});
+            return created;
         } catch (error) {
             console.error('Error adding personnel:', error);
             throw error;
@@ -55,7 +58,9 @@ export const PersonnelService = {
         const error = PersonnelService.validateCondutor(merged as Personnel);
         if (error) throw new Error(error);
         try {
-            return await personnelBase.update(id, person);
+            const updated = await personnelBase.update(id, { ...person, sync_status: 'pending' } as Partial<Personnel>);
+            triggerSync('personnel', id).catch(() => {});
+            return updated;
         } catch (error) {
             console.error('Error updating personnel:', error);
             throw error;
@@ -140,7 +145,9 @@ export const PersonnelService = {
 
     addVacation: async (vacation: Omit<Vacation, 'id'>): Promise<Vacation> => {
         try {
-            return await vacationsBase.create(vacation);
+            const created = await vacationsBase.create({ ...vacation, sync_status: 'pending' } as Omit<Vacation, 'id'>);
+            if (created.id) triggerSync('personnel_vacations', created.id).catch(() => {});
+            return created;
         } catch (error) {
             console.error('Error adding vacation:', error);
             throw error;
@@ -149,7 +156,9 @@ export const PersonnelService = {
 
     updateVacation: async (id: string, data: Partial<Vacation>): Promise<Vacation> => {
         try {
-            return await vacationsBase.update(id, data);
+            const updated = await vacationsBase.update(id, { ...data, sync_status: 'pending' } as Partial<Vacation>);
+            triggerSync('personnel_vacations', id).catch(() => {});
+            return updated;
         } catch (error) {
             console.error('Error updating vacation:', error);
             throw error;
@@ -291,10 +300,11 @@ export const PersonnelService = {
     addDisciplinaryRecord: async (record: Omit<DisciplinaryRecord, 'id'>): Promise<DisciplinaryRecord> => {
         const { data, error } = await supabase
             .from('disciplinary_records')
-            .insert(record)
+            .insert({ ...record, sync_status: 'pending' })
             .select()
             .single();
         if (error) throw error;
+        if (data?.id) triggerSync('disciplinary_records', data.id).catch(() => {});
         return data;
     },
 
@@ -416,14 +426,25 @@ export const PersonnelService = {
     },
 
     addCourse: async (course: Omit<B1Course, 'id'>): Promise<B1Course> => {
-        const { data, error } = await supabase.from('b1_courses').insert(course).select().single();
+        const { data, error } = await supabase
+            .from('b1_courses')
+            .insert({ ...course, sync_status: 'pending' })
+            .select()
+            .single();
         if (error) throw error;
+        if (data?.id) triggerSync('b1_courses', data.id).catch(() => {});
         return data;
     },
 
     updateCourse: async (id: string, updates: Partial<B1Course>): Promise<B1Course> => {
-        const { data, error } = await supabase.from('b1_courses').update(updates).eq('id', id).select().single();
+        const { data, error } = await supabase
+            .from('b1_courses')
+            .update({ ...updates, sync_status: 'pending' })
+            .eq('id', id)
+            .select()
+            .single();
         if (error) throw error;
+        triggerSync('b1_courses', id).catch(() => {});
         return data;
     },
 

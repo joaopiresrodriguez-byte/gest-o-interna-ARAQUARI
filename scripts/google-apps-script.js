@@ -2,34 +2,96 @@
  * Google Apps Script - Webhook para Gestão Interna ARAQUARI
  * 
  * INSTRUÇÕES:
- * 1. Crie uma planilha no Google Sheets com 2 abas: "Efetivo" e "Patrimônio"
- * 2. Adicione os cabeçalhos na linha 1 de cada aba (veja implementation_plan.md)
- * 3. No menu da planilha: Extensões → Apps Script
- * 4. Cole este código (substituindo o conteúdo padrão)
- * 5. Salve e implante como Web App (Implantar → Nova implantação → App da Web)
- * 6. Copie a URL gerada e adicione no .env.local como VITE_GOOGLE_SHEETS_WEBHOOK_URL
+ * 1. Cole este código no Apps Script da planilha principal (Extensões → Apps Script)
+ * 2. Salve e implante como Web App (Implantar → Nova implantação → App da Web)
+ * 3. Garanta acesso para "Qualquer um" (Anyone)
+ * 4. Configure a URL gerada no arquivo .env como VITE_GOOGLE_SHEETS_WEBHOOK_URL
  */
 
 function doPost(e) {
     try {
         var payload = JSON.parse(e.postData.contents);
-        var sheetName = payload.sheet; // "Efetivo" ou "Patrimônio"
-        var data = payload.data;       // Array com os valores da linha
+        var action = payload.action || 'sync';
 
-        var ss = SpreadsheetApp.getActiveSpreadsheet();
-        var sheet = ss.getSheetByName(sheetName);
+        // 1. AÇÃO: CRIAR NOVA PLANILHA NO DRIVE
+        if (action === 'createSpreadsheet') {
+            var name = payload.name || 'Nova Planilha B3';
+            var folderId = payload.folderId || '1g-Aby4GnKZUNRenTpPiXMhJj38LStWHO';
+            
+            var newSS = SpreadsheetApp.create(name);
+            var file = DriveApp.getFileById(newSS.getId());
+            
+            var folder = DriveApp.getFolderById(folderId);
+            folder.addFile(file);
+            DriveApp.getRootFolder().removeFile(file); // remove do root
 
-        if (!sheet) {
             return ContentService
-                .createTextOutput(JSON.stringify({ success: false, error: "Aba '" + sheetName + "' não encontrada" }))
+                .createTextOutput(JSON.stringify({ 
+                    success: true, 
+                    spreadsheetId: newSS.getId(),
+                    url: newSS.getUrl()
+                }))
                 .setMimeType(ContentService.MimeType.JSON);
         }
 
-        // Append the row data
-        sheet.appendRow(data);
+        // 2. AÇÃO: SINCRONIZAR/ATUALIZAR DADOS (PADRÃO)
+        var sheetName = payload.sheet;
+        var data = payload.data;
+        var spreadsheetId = payload.spreadsheetId;
+        var keyColumnIndex = payload.keyColumnIndex; // Índice 0-based
+        var keyValue = payload.keyValue;
+        var headers = payload.headers;
+
+        var ss;
+        if (spreadsheetId) {
+            ss = SpreadsheetApp.openById(spreadsheetId);
+        } else {
+            ss = SpreadsheetApp.getActiveSpreadsheet();
+        }
+
+        var sheet = ss.getSheetByName(sheetName);
+        if (!sheet) {
+            sheet = ss.insertSheet(sheetName);
+            if (headers && headers.length > 0) {
+                sheet.appendRow(headers);
+            }
+        }
+
+        var updated = false;
+        var rowIndex = -1;
+
+        // Se chave única informada, procura linha correspondente para atualizar
+        if (keyColumnIndex !== undefined && keyColumnIndex !== null && keyValue) {
+            var lastRow = sheet.getLastRow();
+            if (lastRow > 1) {
+                var range = sheet.getRange(2, keyColumnIndex + 1, lastRow - 1, 1);
+                var values = range.getValues();
+                for (var i = 0; i < values.length; i++) {
+                    if (String(values[i][0]) === String(keyValue)) {
+                        rowIndex = i + 2; // +2 devido à linha de cabeçalho e index 1-based
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (rowIndex > 0) {
+            // Atualiza linha existente
+            sheet.getRange(rowIndex, 1, 1, data.length).setValues([data]);
+            updated = true;
+        } else {
+            // Adiciona nova linha
+            sheet.appendRow(data);
+            rowIndex = sheet.getLastRow();
+        }
 
         return ContentService
-            .createTextOutput(JSON.stringify({ success: true, sheet: sheetName, rows: sheet.getLastRow() }))
+            .createTextOutput(JSON.stringify({ 
+                success: true, 
+                sheet: sheetName, 
+                row: rowIndex, 
+                updated: updated 
+            }))
             .setMimeType(ContentService.MimeType.JSON);
 
     } catch (err) {
@@ -39,9 +101,8 @@ function doPost(e) {
     }
 }
 
-// Test endpoint (optional, for GET requests)
 function doGet() {
     return ContentService
-        .createTextOutput(JSON.stringify({ status: "ok", message: "Webhook Gestão Interna ARAQUARI ativo" }))
+        .createTextOutput(JSON.stringify({ status: "ok", message: "Webhook ARAQUARI Ativo" }))
         .setMimeType(ContentService.MimeType.JSON);
 }

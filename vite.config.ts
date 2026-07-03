@@ -18,6 +18,12 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
       }
-    }
+    },
+    test: {
+      globals: true,
+      environment: 'node',
+      envFile: '.env.test',
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    },
   };
 });

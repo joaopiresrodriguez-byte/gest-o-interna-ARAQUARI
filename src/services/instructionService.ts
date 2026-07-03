@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { MateriaInstrucao, MateriaApresentacao, MateriaVideo, Training } from './types';
 import { BaseService } from './baseService';
+import { triggerSync, createB3Spreadsheet } from './syncScheduler';
 
 // Campos específicos para otimizar queries
 const MATERIA_FIELDS = 'id, name, category, level, status, credit_hours, description, instructor, notes, total_presentations, total_videos, created_at, updated_at';
@@ -50,7 +51,10 @@ export const InstructionService = {
      */
     addMateriaInstrucao: async (materia: Omit<MateriaInstrucao, 'id'>): Promise<MateriaInstrucao> => {
         try {
-            return await materiasBase.create(materia);
+            const created = await materiasBase.create(materia);
+            // Cria planilha B3 dedicada no Drive (fire-and-forget)
+            if (created.name) createB3Spreadsheet(`B3 - ${created.name}`).catch(() => {});
+            return created;
         } catch (error) {
             console.error('Error adding materia:', error);
             throw error;
@@ -247,7 +251,9 @@ export const InstructionService = {
      */
     addTraining: async (training: Omit<Training, 'id'>): Promise<Training> => {
         try {
-            return await trainingsBase.create(training);
+            const created = await trainingsBase.create({ ...training, sync_status: 'pending' } as Omit<Training, 'id'>);
+            if (created.id) triggerSync('training_schedule', created.id).catch(() => {});
+            return created;
         } catch (error) {
             console.error('Error adding training:', error);
             throw error;
