@@ -44,7 +44,7 @@ async function sendToSheets(
         if (spreadsheetId) body.spreadsheetId = spreadsheetId; // roteamento dinâmico
 
         const isNode = typeof window === 'undefined';
-        const fetchOptions: RequestInit = {
+        const fetchOptions: { method: string; headers: Record<string, string>; body: string; mode?: 'cors' | 'no-cors' | 'same-origin' } = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),

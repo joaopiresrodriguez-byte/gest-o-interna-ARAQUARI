@@ -59,7 +59,7 @@ async function callWebhook(payload: WebhookPayload): Promise<{ ok: boolean; erro
     }
     try {
         const isNode = typeof window === 'undefined';
-        const fetchOptions: RequestInit = {
+        const fetchOptions: { method: string; headers: Record<string, string>; body: string; mode?: 'cors' | 'no-cors' | 'same-origin' } = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

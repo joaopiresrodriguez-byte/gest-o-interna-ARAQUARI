@@ -5,8 +5,7 @@ import type { RelatorioMensal } from './b4RelatorioService';
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 const SHEET_EFETIVO = import.meta.env.VITE_SHEETS_EFETIVO_ABA || 'CadastroEfetivo';
 
-// ─── Google Sheets API v4 — B4 Patrimônio ─────────────────────────────────────
-const SHEETS_API_KEY  = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY || '';
+// ─── B4 Patrimônio — Spreadsheet ID ──────────────────────────────────────────
 const B4_SPREADSHEET_ID = '1p1AZXbEO8TY5lqJB5IZ03Rhycn80_LAkarOzp65rqAQ';
 
 // Map item types to the exact tab names in the spreadsheet
@@ -59,7 +58,7 @@ async function sendToSheets(
             if (options.headers) body.headers = options.headers;
         }
 
-        const fetchOptions: RequestInit = {
+        const fetchOptions: { method: string; headers: Record<string, string>; body: string; mode?: 'cors' | 'no-cors' | 'same-origin' } = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
