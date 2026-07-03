@@ -58,15 +58,38 @@ async function callWebhook(payload: WebhookPayload): Promise<{ ok: boolean; erro
         return { ok: false, error: 'VITE_GOOGLE_SHEETS_WEBHOOK_URL não configurado.' };
     }
     try {
-        await fetch(WEBHOOK_URL, {
+        const isNode = typeof window === 'undefined';
+        const fetchOptions: RequestInit = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            mode: 'no-cors',
-        });
+        };
+
+        if (!isNode) {
+            fetchOptions.mode = 'no-cors';
+        }
+
+        const response = await fetch(WEBHOOK_URL, fetchOptions);
+
+        if (isNode || fetchOptions.mode !== 'no-cors') {
+            if (!response.ok) {
+                const errText = await response.text().catch(() => '');
+                const errMsg = `Erro HTTP ${response.status}: ${response.statusText}. Detalhes: ${errText}`;
+                console.error('[SyncScheduler] Falha na requisição:', errMsg);
+                return { ok: false, error: errMsg };
+            }
+            const resJson = await response.json().catch(() => null) as { success: boolean; error?: string } | null;
+            if (resJson && resJson.success === false) {
+                const errMsg = resJson.error || 'Erro interno reportado pelo Apps Script.';
+                console.error('[SyncScheduler] Erro do Apps Script:', errMsg);
+                return { ok: false, error: errMsg };
+            }
+        }
+
         return { ok: true };
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        console.error('[SyncScheduler] Erro de rede ou na chamada do webhook:', err);
         return { ok: false, error: message };
     }
 }

@@ -33,60 +33,61 @@ const B4_HEADERS: Record<string, string[]> = {
     ],
 };
 
-/**
- * Appends a single row to a named tab in the B4 spreadsheet using the
- * Google Sheets API v4 (public append endpoint — requires API key).
- */
-async function appendToB4Sheet(
-    tabName: string,
-    values: (string | number | boolean)[],
-): Promise<boolean> {
-    if (!SHEETS_API_KEY) {
-        console.warn('[SheetsAPI] VITE_GOOGLE_SHEETS_API_KEY not configured. Skipping B4 sync.');
-        return false;
-    }
-
-    const range  = encodeURIComponent(`${tabName}!A1`);
-    const url    = `https://sheets.googleapis.com/v4/spreadsheets/${B4_SPREADSHEET_ID}/values/${range}:append` +
-                   `?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${SHEETS_API_KEY}`;
-
-    try {
-        const res = await fetch(url, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ values: [values] }),
-        });
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            console.error('[SheetsAPI] Append failed:', res.status, err);
-            return false;
-        }
-
-        console.log(`[SheetsAPI] Row appended to "${tabName}".`);
-        return true;
-    } catch (error) {
-        console.error('[SheetsAPI] Network error during append:', error);
-        return false;
-    }
+interface SendToSheetsOptions {
+    spreadsheetId?: string;
+    keyColumnIndex?: number;
+    keyValue?: string;
+    headers?: string[];
 }
 
-async function sendToSheets(sheet: string, data: (string | number | boolean)[]): Promise<boolean> {
+async function sendToSheets(
+    sheet: string, 
+    data: (string | number | boolean | null)[],
+    options?: SendToSheetsOptions
+): Promise<boolean> {
     if (!WEBHOOK_URL) {
-        console.warn('[GoogleSheets] VITE_GOOGLE_SHEETS_WEBHOOK_URL not configured. Skipping sync.');
+        console.warn(`[GoogleSheets] VITE_GOOGLE_SHEETS_WEBHOOK_URL not configured. Skipping sync for "${sheet}".`);
         return false;
     }
     try {
-        await fetch(WEBHOOK_URL, {
+        const isNode = typeof window === 'undefined';
+        const body: Record<string, unknown> = { sheet, data };
+        if (options) {
+            if (options.spreadsheetId) body.spreadsheetId = options.spreadsheetId;
+            if (options.keyColumnIndex !== undefined) body.keyColumnIndex = options.keyColumnIndex;
+            if (options.keyValue) body.keyValue = options.keyValue;
+            if (options.headers) body.headers = options.headers;
+        }
+
+        const fetchOptions: RequestInit = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sheet, data }),
-            mode: 'no-cors',
-        });
-        console.log(`[GoogleSheets] Data sent to "${sheet}" sheet.`);
+            body: JSON.stringify(body),
+        };
+
+        if (!isNode) {
+            fetchOptions.mode = 'no-cors';
+        }
+
+        const res = await fetch(WEBHOOK_URL, fetchOptions);
+
+        if (isNode || fetchOptions.mode !== 'no-cors') {
+            if (!res.ok) {
+                const errText = await res.text().catch(() => '');
+                console.error(`[GoogleSheets] Webhook HTTP Error ${res.status}: ${res.statusText}. Details: ${errText}`);
+                return false;
+            }
+            const resJson = await res.json() as { success: boolean; error?: string } | null;
+            if (resJson && resJson.success === false) {
+                console.error(`[GoogleSheets] Apps Script Error for "${sheet}":`, resJson.error);
+                return false;
+            }
+        }
+
+        console.log(`[GoogleSheets] Data sent successfully to "${sheet}" sheet.`);
         return true;
     } catch (error) {
-        console.error('[GoogleSheets] Sync failed (non-blocking):', error);
+        console.error(`[GoogleSheets] Sync network error to "${sheet}":`, error);
         return false;
     }
 }
@@ -209,7 +210,21 @@ export const GoogleSheetsService = {
             ];
         }
 
-        return appendToB4Sheet(tabName, row);
+        const headers = B4_HEADERS[type] || [];
+        const keyValue = type === 'Viatura' 
+            ? String(item.plate || item.id || '')
+            : String(item.patrimonio_number || item.id || '');
+
+        const keyColumnIndex = type === 'Viatura'
+            ? headers.indexOf('Placa')
+            : headers.indexOf('Nº Patrimônio');
+
+        return sendToSheets(tabName, row, {
+            spreadsheetId: B4_SPREADSHEET_ID,
+            headers,
+            keyValue,
+            keyColumnIndex: keyColumnIndex >= 0 ? keyColumnIndex : undefined
+        });
     },
 
     /** Expose tab headers so a setup routine can pre-fill row 1 if needed. */
