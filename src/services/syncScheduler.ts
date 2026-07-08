@@ -31,7 +31,7 @@ let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 type SyncStatus = 'pending' | 'synced' | 'failed';
 
 interface WebhookPayload {
-    action?: 'sync' | 'createSpreadsheet';
+    action?: 'sync' | 'createSpreadsheet' | 'delete';
     sheet?: string;
     data?: (string | number | null)[];
     spreadsheetId?: string;
@@ -227,7 +227,7 @@ async function syncCourseRecord(record: Record<string, unknown>): Promise<{ ok: 
 }
 
 async function syncFleetRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const B4_SPREADSHEET_ID = '1p1AZXbEO8TY5lqJB5IZ03Rhycn80_LAkarOzp65rqAQ';
+    const B4_SPREADSHEET_ID = SHEETS_EFETIVO_ID || '13U9RCucWBBO2eovZtWX3-CxjZ6coEMsxEh1qYsFiKRw';
     const type = String(record.type || 'Equipamento');
     const status = record.status === 'active' ? 'Ativo' : record.status === 'maintenance' ? 'Manutenção' : 'Inativo';
     const atividades = Array.isArray(record.atividades) ? (record.atividades as string[]).join(', ') : '';
@@ -402,6 +402,34 @@ export function stopSyncScheduler(): void {
 }
 
 /**
+ * Remove uma linha da planilha Google Sheets pelo valor da chave.
+ * Usar na exclusão de um registro do Supabase para manter paridade.
+ * @param sheet - Nome da aba na planilha (ex: 'CadastroEfetivo')
+ * @param keyColumnIndex - Índice (0-based) da coluna chave
+ * @param keyValue - Valor da chave a procurar e remover
+ * @param spreadsheetId - ID da planilha (opcional, usa a padrão se omitido)
+ */
+export async function deleteFromSheets(
+    sheet: string,
+    keyColumnIndex: number,
+    keyValue: string,
+    spreadsheetId?: string,
+): Promise<void> {
+    const result = await callWebhook({
+        action: 'delete',
+        sheet,
+        keyColumnIndex,
+        keyValue,
+        spreadsheetId,
+    });
+    if (!result.ok) {
+        console.warn(`[SyncScheduler] Falha ao deletar "${keyValue}" da aba "${sheet}":`, result.error);
+    } else {
+        console.log(`✅ [SyncScheduler] Linha "${keyValue}" removida da aba "${sheet}".`);
+    }
+}
+
+/**
  * Cria uma nova planilha B3 no Google Drive para uma nova matéria.
  */
 export async function createB3Spreadsheet(name: string): Promise<string | null> {
@@ -418,3 +446,4 @@ export async function createB3Spreadsheet(name: string): Promise<string | null> 
     console.log(`✅ [SyncScheduler] Planilha B3 "${name}" criada no Drive.`);
     return null;
 }
+

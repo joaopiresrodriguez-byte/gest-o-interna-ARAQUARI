@@ -4,8 +4,9 @@
  * INSTRUÇÕES:
  * 1. Cole este código no Apps Script da planilha principal (Extensões → Apps Script)
  * 2. Salve e implante como Web App (Implantar → Nova implantação → App da Web)
- * 3. Garanta acesso para "Qualquer um" (Anyone)
- * 4. Configure a URL gerada no arquivo .env como VITE_GOOGLE_SHEETS_WEBHOOK_URL
+ * 3. Garanta acesso para "Qualquer um" (Anyone) e execute como "Eu"
+ * 4. IMPORTANTE: Compartilhe TODAS as planilhas como Editor com a sua conta Google
+ * 5. Configure a URL gerada no arquivo .env como VITE_GOOGLE_SHEETS_WEBHOOK_URL
  */
 
 function doPost(e) {
@@ -23,7 +24,7 @@ function doPost(e) {
             
             var folder = DriveApp.getFolderById(folderId);
             folder.addFile(file);
-            DriveApp.getRootFolder().removeFile(file); // remove do root
+            DriveApp.getRootFolder().removeFile(file);
 
             return ContentService
                 .createTextOutput(JSON.stringify({ 
@@ -34,7 +35,57 @@ function doPost(e) {
                 .setMimeType(ContentService.MimeType.JSON);
         }
 
-        // 2. AÇÃO: SINCRONIZAR/ATUALIZAR DADOS (PADRÃO)
+        // 2. AÇÃO: DELETAR LINHA NA PLANILHA
+        if (action === 'delete') {
+            var delSpreadsheetId = payload.spreadsheetId;
+            var delSheetName = payload.sheet;
+            var delKeyColumnIndex = payload.keyColumnIndex;
+            var delKeyValue = payload.keyValue;
+
+            var delSS;
+            try {
+                delSS = delSpreadsheetId
+                    ? SpreadsheetApp.openById(delSpreadsheetId)
+                    : SpreadsheetApp.getActiveSpreadsheet();
+            } catch (e) {
+                return ContentService
+                    .createTextOutput(JSON.stringify({ success: false, error: 'Sem permissão para abrir planilha: ' + e.toString() }))
+                    .setMimeType(ContentService.MimeType.JSON);
+            }
+
+            var delSheet = delSS.getSheetByName(delSheetName);
+            if (!delSheet) {
+                return ContentService
+                    .createTextOutput(JSON.stringify({ success: false, error: 'Aba não encontrada: ' + delSheetName }))
+                    .setMimeType(ContentService.MimeType.JSON);
+            }
+
+            var delLastRow = delSheet.getLastRow();
+            var delRowIndex = -1;
+            if (delLastRow > 1 && delKeyColumnIndex !== undefined && delKeyValue) {
+                var delRange = delSheet.getRange(2, delKeyColumnIndex + 1, delLastRow - 1, 1);
+                var delValues = delRange.getValues();
+                for (var d = 0; d < delValues.length; d++) {
+                    if (String(delValues[d][0]) === String(delKeyValue)) {
+                        delRowIndex = d + 2;
+                        break;
+                    }
+                }
+            }
+
+            if (delRowIndex > 0) {
+                delSheet.deleteRow(delRowIndex);
+                return ContentService
+                    .createTextOutput(JSON.stringify({ success: true, sheet: delSheetName, row: delRowIndex, deleted: true }))
+                    .setMimeType(ContentService.MimeType.JSON);
+            } else {
+                return ContentService
+                    .createTextOutput(JSON.stringify({ success: true, sheet: delSheetName, deleted: false, message: 'Linha não encontrada na planilha (já removida ou chave inválida).' }))
+                    .setMimeType(ContentService.MimeType.JSON);
+            }
+        }
+
+        // 3. AÇÃO: SINCRONIZAR/ATUALIZAR DADOS (PADRÃO)
         var sheetName = payload.sheet;
         var data = payload.data;
         var spreadsheetId = payload.spreadsheetId;
@@ -44,16 +95,34 @@ function doPost(e) {
 
         var ss;
         if (spreadsheetId) {
-            ss = SpreadsheetApp.openById(spreadsheetId);
+            try {
+                ss = SpreadsheetApp.openById(spreadsheetId);
+            } catch (openErr) {
+                return ContentService
+                    .createTextOutput(JSON.stringify({ 
+                        success: false, 
+                        error: 'Sem permissão para acessar a planilha ID: ' + spreadsheetId + '. Compartilhe como Editor com sua conta Google. Detalhe: ' + openErr.toString()
+                    }))
+                    .setMimeType(ContentService.MimeType.JSON);
+            }
         } else {
             ss = SpreadsheetApp.getActiveSpreadsheet();
         }
 
         var sheet = ss.getSheetByName(sheetName);
         if (!sheet) {
-            sheet = ss.insertSheet(sheetName);
-            if (headers && headers.length > 0) {
-                sheet.appendRow(headers);
+            try {
+                sheet = ss.insertSheet(sheetName);
+                if (headers && headers.length > 0) {
+                    sheet.appendRow(headers);
+                }
+            } catch (insertErr) {
+                return ContentService
+                    .createTextOutput(JSON.stringify({ 
+                        success: false, 
+                        error: 'Falha ao criar aba "' + sheetName + '". Verifique permissões de Editor. Detalhe: ' + insertErr.toString()
+                    }))
+                    .setMimeType(ContentService.MimeType.JSON);
             }
         }
 

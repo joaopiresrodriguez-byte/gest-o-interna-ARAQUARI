@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { Personnel, DocumentB1, Vacation, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, BulletinNote, BulletinVersion, SigrhExport, AlertItem, B1Course, EpiDelivery, InternalNotification, Escala, ScaleRotationConfig, TeamConfig } from './types';
 import { BaseService, ServiceError } from './baseService';
 import { PAGINATION } from '../config/constants';
-import { triggerSync } from './syncScheduler';
+import { triggerSync, deleteFromSheets } from './syncScheduler';
 
 // Field selectors for optimized queries
 const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cnh_expiry_date, cpf, emergency_phone, emergency_contact_name, cve_active, cve_issue_date, cve_expiry_date, toxicological_date, toxicological_expiry_date, graduation, last_cadastro_review, matricula, cidade_residencia, data_inclusao, data_ultima_promocao';
@@ -69,7 +69,14 @@ export const PersonnelService = {
 
     deletePersonnel: async (id: number): Promise<void> => {
         try {
+            // Busca a matrícula antes de deletar para sincronizar com o Sheets
+            const record = await personnelBase.getById(id);
             await personnelBase.delete(id);
+            // Remove da planilha de forma assíncrona usando a matrícula como chave
+            if (record?.matricula) {
+                const sheetsId = import.meta.env.VITE_SHEETS_EFETIVO_ID as string | undefined;
+                deleteFromSheets('CadastroEfetivo', 0, record.matricula, sheetsId).catch(() => {});
+            }
         } catch (error) {
             console.error('Error deleting personnel:', error);
             throw error;

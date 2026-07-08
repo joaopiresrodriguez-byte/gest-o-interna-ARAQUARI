@@ -232,6 +232,7 @@ const PessoalB1: React.FC = () => {
   // ===== CRUD Handlers =====
   const handleSavePersonnel = async () => {
     if (!formData.name) return toast.error('Nome é obrigatório!');
+    if (!formData.matricula) return toast.error('Matrícula é obrigatória para sincronização com o Sheets!');
     if (formData.cpf && !validateCpf(formData.cpf)) return toast.error('CPF inválido!');
 
     // Auto-calculate expiry dates
@@ -667,8 +668,21 @@ const PessoalB1: React.FC = () => {
                     {formField('Função', 'role')}
                     {/* Matrícula */}
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Matrícula</label>
-                      <input type="text" value={formData.matricula || ''} onChange={e => setFormData(prev => ({ ...prev, matricula: e.target.value }))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: 12345" />
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">
+                        Matrícula <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.matricula || ''}
+                        onChange={e => setFormData(prev => ({ ...prev, matricula: e.target.value }))}
+                        className={`w-full h-11 px-4 rounded-lg border bg-stone-50 text-sm ${
+                          !formData.matricula ? 'border-red-300 focus:border-red-500' : 'border-rustic-border'
+                        }`}
+                        placeholder="Ex: 12345 (obrigatório)"
+                      />
+                      {!formData.matricula && (
+                        <p className="text-[10px] text-red-500 mt-1">Matrícula é obrigatória para sincronização com Google Sheets.</p>
+                      )}
                     </div>
                     {/* CPF com máscara */}
                     <div>
