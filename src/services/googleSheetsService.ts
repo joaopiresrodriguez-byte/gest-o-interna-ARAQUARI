@@ -5,8 +5,8 @@ import type { RelatorioMensal } from './b4RelatorioService';
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 const SHEET_EFETIVO = import.meta.env.VITE_SHEETS_EFETIVO_ABA || 'CadastroEfetivo';
 
-// ─── B4 Patrimônio — Spreadsheet ID ──────────────────────────────────────────
-const B4_SPREADSHEET_ID = '1p1AZXbEO8TY5lqJB5IZ03Rhycn80_LAkarOzp65rqAQ';
+// ─── B4 Patrimônio — Spreadsheet ID (aligned with main B1 spreadsheet) ────────
+const B4_SPREADSHEET_ID = import.meta.env.VITE_SHEETS_EFETIVO_ID || '13U9RCucWBBO2eovZtWX3-CxjZ6coEMsxEh1qYsFiKRw';
 
 // Map item types to the exact tab names in the spreadsheet
 const B4_TAB_MAP: Record<string, string> = {

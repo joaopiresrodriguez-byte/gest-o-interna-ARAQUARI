@@ -38,7 +38,7 @@ if (fs.existsSync(envPath)) {
 
 const WEBHOOK_URL = process.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 const SHEETS_EFETIVO_ID = process.env.VITE_SHEETS_EFETIVO_ID;
-const B4_SPREADSHEET_ID = '1p1AZXbEO8TY5lqJB5IZ03Rhycn80_LAkarOzp65rqAQ';
+const B4_SPREADSHEET_ID = SHEETS_EFETIVO_ID || '13U9RCucWBBO2eovZtWX3-CxjZ6coEMsxEh1qYsFiKRw';
 
 console.log(`- Webhook URL: ${WEBHOOK_URL ? WEBHOOK_URL.slice(0, 45) + '...' : 'NÃO CONFIGURADO'}`);
 console.log(`- Efetivo Spreadsheet ID: ${SHEETS_EFETIVO_ID || 'NÃO CONFIGURADO (Usará planilha padrão do webhook)'}`);
