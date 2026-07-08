@@ -133,7 +133,7 @@ describe('SyncScheduler — Fluxo de Sincronização Google Sheets', () => {
         // O webhook recebeu os dados corretos
         const [url, options] = mockFetch.mock.calls[0];
         expect(url).toContain('script.google.com');
-        const body = JSON.parse((options as RequestInit).body as string);
+        const body = JSON.parse((options as any).body as string);
         expect(body.sheet).toBe('CadastroEfetivo');
         expect(body.keyValue).toBe('123456');
 
@@ -196,7 +196,7 @@ describe('SyncScheduler — Fluxo de Sincronização Google Sheets', () => {
 
         expect(mockFetch).toHaveBeenCalled();
         const [, options] = mockFetch.mock.calls[0];
-        const body = JSON.parse((options as RequestInit).body as string);
+        const body = JSON.parse((options as any).body as string);
         expect(body.sheet).toBe('Equipamento');
         expect(body.keyValue).toBe('PAT-9999');
     });
@@ -231,7 +231,7 @@ describe('SyncScheduler — Fluxo de Sincronização Google Sheets', () => {
 
         expect(mockFetch).toHaveBeenCalled();
         const [, options] = mockFetch.mock.calls[0];
-        const body = JSON.parse((options as RequestInit).body as string);
+        const body = JSON.parse((options as any).body as string);
         expect(body.sheet).toBe('FeriasLicencas');
         expect(body.keyColumnIndex).toBe(0);
     });
@@ -251,7 +251,7 @@ describe('SyncScheduler — Fluxo de Sincronização Google Sheets', () => {
         await syncPendingRecords();
 
         const [, options] = mockFetch.mock.calls[0];
-        const body = JSON.parse((options as RequestInit).body as string);
+        const body = JSON.parse((options as any).body as string);
         expect(body.sheet).toBe('InstrucoesB3');
     });
 });
