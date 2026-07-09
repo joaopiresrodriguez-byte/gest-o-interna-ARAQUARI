@@ -5,6 +5,7 @@ import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
 import { syncCursoDrive } from '../services/driveSync';
+import { formatLocalDate, parseLocalDate } from '../utils/dateUtils';
 
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
@@ -28,7 +29,7 @@ const tabIcons: Record<Tab, string> = { ALERTAS_AVISOS: 'notifications_active', 
 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
 const STATUS_OPTIONS = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
-const LEAVE_TYPES = [{ value: 'ferias', label: 'Férias' }, { value: 'licenca_medica', label: 'Licença Médica' }, { value: 'licenca_especial', label: 'Licença Especial' }, { value: 'afastamento', label: 'Afastamento' }, { value: 'cedido', label: 'Cedido' }, { value: 'outros', label: 'Outros' }];
+const LEAVE_TYPES = [{ value: 'ferias', label: 'Férias' }, { value: 'desconto_ferias', label: 'Desconto de Férias' }, { value: 'licenca_medica', label: 'Licença Médica' }, { value: 'licenca_especial', label: 'Licença Especial' }, { value: 'afastamento', label: 'Afastamento' }, { value: 'cedido', label: 'Cedido' }, { value: 'outros', label: 'Outros' }];
 
 const formatCpf = (value: string): string => {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -101,6 +102,49 @@ const PessoalB1: React.FC = () => {
   const [vacEnd, setVacEnd] = useState('');
   const [vacType, setVacType] = useState('ferias');
   const [vacNotes, setVacNotes] = useState('');
+
+  // Vacation Sub-Tabs & Balances
+  const [vacationSubTab, setVacationSubTab] = useState<'lancamentos' | 'saldos'>('lancamentos');
+  const [selectedBalanceYear, setSelectedBalanceYear] = useState(new Date().getFullYear());
+  const [balanceSearchQuery, setBalanceSearchQuery] = useState('');
+  const [expandedPersonnelId, setExpandedPersonnelId] = useState<number | null>(null);
+
+  const today = new Date();
+  const isDateExpired = (dateStr: string | undefined | null): boolean => {
+    if (!dateStr) return false;
+    const d = parseLocalDate(dateStr);
+    return d ? d <= today : false;
+  };
+
+  const getVacationStats = (personnelId: number, year: number) => {
+    const personVacations = vacations.filter(v => {
+      if (v.personnel_id !== personnelId) return false;
+      if (!v.start_date) return false;
+      const startDate = parseLocalDate(v.start_date);
+      return startDate ? startDate.getFullYear() === year : false;
+    });
+
+    let gozadas = 0;
+    let descontos = 0;
+
+    personVacations.forEach(v => {
+      if (v.leave_type === 'ferias') {
+        gozadas += v.day_count || 0;
+      } else if (v.leave_type === 'desconto_ferias') {
+        descontos += v.day_count || 0;
+      }
+    });
+
+    const totalRight = 30;
+    const balance = totalRight - gozadas - descontos;
+
+    return {
+      gozadas,
+      descontos,
+      balance,
+      details: personVacations
+    };
+  };
 
   // Scale state
 
@@ -327,12 +371,27 @@ const PessoalB1: React.FC = () => {
   const handleSaveVacation = async () => {
     if (!vacPersonnelId || !vacStart || !vacEnd) return toast.error('Preencha todos os campos!');
     const person = personnelList.find(p => p.id === vacPersonnelId);
-    const dayCount = Math.ceil((new Date(vacEnd).getTime() - new Date(vacStart).getTime()) / 86400000) + 1;
+    
+    const start = parseLocalDate(vacStart);
+    const end = parseLocalDate(vacEnd);
+    if (!start || !end) return toast.error('Datas inválidas!');
+    
+    const dayCount = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    
     try {
-      await PersonnelService.addVacation({ personnel_id: vacPersonnelId as number, full_name: person?.name || '', start_date: vacStart, end_date: vacEnd, day_count: dayCount, leave_type: vacType, status: 'planejado', notes: vacNotes });
+      await PersonnelService.addVacation({ 
+        personnel_id: vacPersonnelId as number, 
+        full_name: person?.name || '', 
+        start_date: vacStart, 
+        end_date: vacEnd, 
+        day_count: dayCount, 
+        leave_type: vacType, 
+        status: 'planejado', 
+        notes: vacNotes 
+      });
       PersonnelService.addNotification({
         title: 'Férias/Licença Registrada',
-        message: `${person?.name || 'Militar'}: ${LEAVE_TYPES.find(lt => lt.value === vacType)?.label || vacType} de ${vacStart} a ${vacEnd}.`,
+        message: `${person?.name || 'Militar'}: ${LEAVE_TYPES.find(lt => lt.value === vacType)?.label || vacType} de ${formatLocalDate(vacStart)} a ${formatLocalDate(vacEnd)}.`,
         source_event: 'vacation_registered', is_read: false,
         target_personnel_id: vacPersonnelId as number,
       }).catch(() => { });
@@ -638,8 +697,8 @@ const PessoalB1: React.FC = () => {
                             <td className="px-4 py-3 text-center font-bold">{p.graduation || p.rank}</td>
                             <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
                             <td className="px-4 py-3 text-center text-[10px] text-gray-500">{p.email || '—'}</td>
-                            <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={new Date(p.cve_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cve_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
-                            <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={new Date(p.cnh_expiry_date) <= new Date() ? 'text-red-600 font-black' : ''}>{new Date(p.cnh_expiry_date).toLocaleDateString('pt-BR')}</span> : '—'}</td>
+                            <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={isDateExpired(p.cve_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cve_expiry_date)}</span> : '—'}</td>
+                            <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={isDateExpired(p.cnh_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cnh_expiry_date)}</span> : '—'}</td>
                             <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                               <div className="flex gap-1 justify-center">
                                 <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">edit</span></button>
@@ -787,7 +846,7 @@ const PessoalB1: React.FC = () => {
                             <span className="text-sm font-semibold">
                               <span className="text-blue-700 font-black mr-2">{c.sigla_curso}</span>
                               {c.nome_curso}
-                              <span className="text-gray-400 text-xs ml-2">— {new Date(c.data_realizacao).toLocaleDateString('pt-BR')}</span>
+                              <span className="text-gray-400 text-xs ml-2">— {formatLocalDate(c.data_realizacao)}</span>
                             </span>
                             <button type="button" onClick={() => setCursosForm(prev => prev.filter(x => x.id !== c.id))} className="text-red-400 hover:text-red-600 ml-3">
                               <span className="material-symbols-outlined text-sm">close</span>
@@ -827,7 +886,7 @@ const PessoalB1: React.FC = () => {
                       return (
                         <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-rustic-border hover:border-primary/30 transition-all">
                           <span className="material-symbols-outlined text-primary">description</span>
-                          <div className="flex-1 min-w-0"><span className="font-bold text-sm block truncate">{d.file_name}</span><span className="text-[10px] text-gray-400">{d.document_type} {person ? `• ${person.name}` : ''} {d.upload_date ? `• ${new Date(d.upload_date).toLocaleDateString('pt-BR')}` : ''}</span></div>
+                          <div className="flex-1 min-w-0"><span className="font-bold text-sm block truncate">{d.file_name}</span><span className="text-[10px] text-gray-400">{d.document_type} {person ? `• ${person.name}` : ''} {d.upload_date ? `• ${formatLocalDate(d.upload_date)}` : ''}</span></div>
                           <a href={d.file_url} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">download</span></a>
                         </div>
                       );
@@ -925,9 +984,10 @@ const PessoalB1: React.FC = () => {
                         </thead>
                         <tbody className="divide-y">
                           {personnelList.filter(p => p.cnh_category && (p.cnh_category.includes('D') || p.cnh_category.includes('E'))).map(p => {
-                            const today = new Date();
-                            const expiry = p.toxicological_expiry_date ? new Date(p.toxicological_expiry_date) : null;
-                            const daysLeft = expiry ? Math.ceil((expiry.getTime() - today.getTime()) / 86400000) : null;
+                            const todayNoon = new Date();
+                            todayNoon.setHours(12, 0, 0, 0);
+                            const expiry = p.toxicological_expiry_date ? parseLocalDate(p.toxicological_expiry_date) : null;
+                            const daysLeft = expiry ? Math.round((expiry.getTime() - todayNoon.getTime()) / 86400000) : null;
                             let badge = { label: 'Sem registro', cls: 'bg-gray-100 text-gray-500' };
                             if (expiry) {
                               if (daysLeft !== null && daysLeft < 0) badge = { label: 'VENCIDO', cls: 'bg-red-100 text-red-700 font-black' };
@@ -943,8 +1003,8 @@ const PessoalB1: React.FC = () => {
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-center font-bold">{p.cnh_category}</td>
-                                <td className="px-4 py-3 text-center text-xs">{p.toxicological_date ? new Date(p.toxicological_date).toLocaleDateString('pt-BR') : '—'}</td>
-                                <td className="px-4 py-3 text-center text-xs">{expiry ? expiry.toLocaleDateString('pt-BR') : '—'}</td>
+                                <td className="px-4 py-3 text-center text-xs">{p.toxicological_date ? formatLocalDate(p.toxicological_date) : '—'}</td>
+                                <td className="px-4 py-3 text-center text-xs">{p.toxicological_expiry_date ? formatLocalDate(p.toxicological_expiry_date) : '—'}</td>
                                 <td className="px-4 py-3 text-center"><span className={`text-[9px] px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span></td>
                               </tr>
                             );
@@ -961,32 +1021,245 @@ const PessoalB1: React.FC = () => {
 
               {/* TAB: FERIAS */}
               {tab === 'FERIAS' && (
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
-                    <h3 className="font-black text-lg mb-4">Registrar Férias / Licença</h3>
-                    <div className="space-y-4">
-                      <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
-                      <select value={vacType} onChange={e => setVacType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm">{LEAVE_TYPES.map(lt => <option key={lt.value} value={lt.value}>{lt.label}</option>)}</select>
-                      <input type="date" value={vacStart} onChange={e => setVacStart(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
-                      <input type="date" value={vacEnd} onChange={e => setVacEnd(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm" />
-                      <textarea value={vacNotes} onChange={e => setVacNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
-                      <button onClick={handleSaveVacation} className="w-full py-3 bg-primary text-white font-black rounded-xl">REGISTRAR</button>
+                <div className="space-y-6">
+                  {/* Sub-tab navigation */}
+                  <div className="flex items-center justify-between border-b border-rustic-border pb-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setVacationSubTab('lancamentos')}
+                        className={`px-4 py-2 text-xs font-black rounded-lg transition-all flex items-center gap-2 ${
+                          vacationSubTab === 'lancamentos'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-stone-50 text-gray-500 hover:bg-stone-100 border border-rustic-border'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">event_note</span>
+                        Lançamentos e Registro
+                      </button>
+                      <button
+                        onClick={() => setVacationSubTab('saldos')}
+                        className={`px-4 py-2 text-xs font-black rounded-lg transition-all flex items-center gap-2 ${
+                          vacationSubTab === 'saldos'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-stone-50 text-gray-500 hover:bg-stone-100 border border-rustic-border'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">equalizer</span>
+                        Painel de Saldos Anuais
+                      </button>
                     </div>
                   </div>
-                  <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                    <h3 className="font-black text-lg mb-4">Períodos Registrados ({vacations.length})</h3>
-                    <div className="space-y-2">{vacations.map(v => {
-                      const leaveLabel = LEAVE_TYPES.find(lt => lt.value === v.leave_type)?.label || v.leave_type || 'Férias';
-                      return (
-                        <div key={v.id} className="flex items-center gap-4 p-4 rounded-xl border border-rustic-border hover:border-primary/30">
-                          <span className="material-symbols-outlined text-blue-500">event</span>
-                          <div className="flex-1"><span className="font-bold text-sm block">{v.full_name}</span><span className="text-xs text-gray-400">{leaveLabel} • {new Date(v.start_date).toLocaleDateString('pt-BR')} — {new Date(v.end_date).toLocaleDateString('pt-BR')} ({v.day_count}d)</span></div>
-                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${v.status === 'concluido' ? 'bg-green-100 text-green-700' : v.status === 'em_andamento' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'} uppercase`}>{v.status || 'planejado'}</span>
-                          <button onClick={async () => { if (confirm('Remover?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }} className="p-1 text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+
+                  {vacationSubTab === 'lancamentos' && (
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 animate-fadeIn">
+                      <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
+                        <h3 className="font-black text-lg mb-4 text-gray-800">Registrar Férias / Licença</h3>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Militar</label>
+                            <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border border-rustic-border text-sm bg-white"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Tipo de Afastamento</label>
+                            <select value={vacType} onChange={e => setVacType(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border text-sm bg-white">{LEAVE_TYPES.map(lt => <option key={lt.value} value={lt.value}>{lt.label}</option>)}</select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Início</label>
+                              <input type="date" value={vacStart} onChange={e => setVacStart(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border text-sm" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Fim</label>
+                              <input type="date" value={vacEnd} onChange={e => setVacEnd(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border text-sm" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Observações</label>
+                            <textarea value={vacNotes} onChange={e => setVacNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-xs focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Descreva detalhes, portarias de desconto, etc." />
+                          </div>
+                          <button onClick={handleSaveVacation} className="w-full py-3 bg-primary text-white font-black rounded-xl hover:bg-primary/95 transition-all shadow-md">REGISTRAR</button>
                         </div>
-                      );
-                    })}{vacations.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum período registrado.</p>}</div>
-                  </div>
+                      </div>
+                      <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                        <h3 className="font-black text-lg mb-4 text-gray-800">Períodos Registrados ({vacations.length})</h3>
+                        <div className="space-y-2">{vacations.map(v => {
+                          const leaveLabel = LEAVE_TYPES.find(lt => lt.value === v.leave_type)?.label || v.leave_type || 'Férias';
+                          const isDiscount = v.leave_type === 'desconto_ferias';
+                          return (
+                            <div key={v.id} className="flex items-center gap-4 p-4 rounded-xl border border-rustic-border hover:border-primary/30">
+                              <span className={`material-symbols-outlined ${isDiscount ? 'text-amber-500' : 'text-blue-500'}`}>
+                                {isDiscount ? 'percent' : 'event'}
+                              </span>
+                              <div className="flex-1">
+                                <span className="font-bold text-sm block">{v.full_name}</span>
+                                <span className="text-xs text-gray-400">
+                                  {leaveLabel} • {formatLocalDate(v.start_date)} — {formatLocalDate(v.end_date)} ({v.day_count}d)
+                                </span>
+                                {v.notes && <p className="text-[10px] text-gray-400 italic mt-0.5">Obs: {v.notes}</p>}
+                              </div>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${v.status === 'concluido' ? 'bg-green-100 text-green-700' : v.status === 'em_andamento' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'} uppercase`}>{v.status || 'planejado'}</span>
+                              <button onClick={async () => { if (confirm('Remover?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }} className="p-1 text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                            </div>
+                          );
+                        })}{vacations.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum período registrado.</p>}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {vacationSubTab === 'saldos' && (
+                    <div className="space-y-6 animate-fadeIn">
+                      {/* Controls */}
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-stone-50 p-4 rounded-2xl border border-rustic-border">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black uppercase tracking-wider text-gray-400">Ano de Referência:</span>
+                          <div className="flex gap-1">
+                            {[2024, 2025, 2026, 2027, 2028].map(y => (
+                              <button
+                                key={y}
+                                onClick={() => setSelectedBalanceYear(y)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                                  selectedBalanceYear === y
+                                    ? 'bg-primary text-white shadow-sm'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-rustic-border'
+                                }`}
+                              >
+                                {y}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="relative flex-1 max-w-md">
+                          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>
+                          <input
+                            type="text"
+                            placeholder="Buscar militar..."
+                            value={balanceSearchQuery}
+                            onChange={e => setBalanceSearchQuery(e.target.value)}
+                            className="w-full h-10 pl-10 pr-4 rounded-xl border border-rustic-border text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Personnel Balance Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {personnelList
+                          .filter(p => p.name.toLowerCase().includes(balanceSearchQuery.toLowerCase()) || (p.war_name && p.war_name.toLowerCase().includes(balanceSearchQuery.toLowerCase())))
+                          .map(p => {
+                            const stats = getVacationStats(p.id!, selectedBalanceYear);
+                            const isExpanded = expandedPersonnelId === p.id;
+                            
+                            // Color based on balance
+                            const balanceColor = stats.balance > 0 
+                              ? 'text-green-600' 
+                              : stats.balance === 0 
+                                ? 'text-gray-500' 
+                                : 'text-red-600';
+
+                            return (
+                              <div key={p.id} className="bg-white p-5 rounded-2xl border border-rustic-border shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
+                                <div>
+                                  <div className="flex items-start justify-between mb-3">
+                                    <div>
+                                      <span className="text-[10px] uppercase font-black tracking-wider text-primary/80 bg-primary/5 px-2 py-0.5 rounded-md">
+                                        {p.graduation || p.rank}
+                                      </span>
+                                      <h4 className="font-black text-gray-800 text-base mt-1">{p.name}</h4>
+                                      {p.war_name && <p className="text-[10px] text-gray-400">Nome de guerra: {p.war_name}</p>}
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-[10px] text-gray-400 block uppercase font-bold">Saldo</span>
+                                      <span className={`text-xl font-black ${balanceColor}`}>{stats.balance}d</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Progress Bar */}
+                                  <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden flex mb-4 border border-gray-100 shadow-inner">
+                                    {/* Gozadas (Blue) */}
+                                    {stats.gozadas > 0 && (
+                                      <div 
+                                        className="bg-blue-500 h-full transition-all duration-500" 
+                                        style={{ width: `${Math.min(100, (stats.gozadas / 30) * 100)}%` }}
+                                        title={`Férias Gozadas: ${stats.gozadas} dias`}
+                                      />
+                                    )}
+                                    {/* Descontos (Orange) */}
+                                    {stats.descontos > 0 && (
+                                      <div 
+                                        className="bg-amber-500 h-full transition-all duration-500" 
+                                        style={{ width: `${Math.min(100, (stats.descontos / 30) * 100)}%` }}
+                                        title={`Descontos de Férias: ${stats.descontos} dias`}
+                                      />
+                                    )}
+                                    {/* Remaining (Green or Gray if zero/negative) */}
+                                    {stats.balance > 0 && (
+                                      <div 
+                                        className="bg-green-400 h-full transition-all duration-500 flex-1" 
+                                        title={`Saldo Disponível: ${stats.balance} dias`}
+                                      />
+                                    )}
+                                  </div>
+
+                                  {/* Breakdown badges */}
+                                  <div className="grid grid-cols-3 gap-2 text-center text-xs mb-4">
+                                    <div className="bg-blue-50/50 p-2 rounded-xl border border-blue-100/50">
+                                      <span className="text-gray-400 text-[9px] uppercase font-bold block">Gozado</span>
+                                      <span className="font-bold text-blue-700">{stats.gozadas}d</span>
+                                    </div>
+                                    <div className="bg-amber-50/50 p-2 rounded-xl border border-amber-100/50">
+                                      <span className="text-gray-400 text-[9px] uppercase font-bold block">Desconto</span>
+                                      <span className="font-bold text-amber-700">{stats.descontos}d</span>
+                                    </div>
+                                    <div className="bg-green-50/50 p-2 rounded-xl border border-green-100/50">
+                                      <span className="text-gray-400 text-[9px] uppercase font-bold block">Disponível</span>
+                                      <span className="font-bold text-green-700">{Math.max(0, stats.balance)}d</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Expandable Details */}
+                                <div className="border-t border-dashed border-rustic-border pt-3 mt-1">
+                                  <button
+                                    onClick={() => setExpandedPersonnelId(isExpanded ? null : p.id!)}
+                                    className="w-full flex items-center justify-between text-xs font-bold text-gray-500 hover:text-primary transition-colors"
+                                  >
+                                    <span>{isExpanded ? 'Ocultar lançamentos' : 'Ver lançamentos'}</span>
+                                    <span className="material-symbols-outlined text-[16px] transition-transform duration-300" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }}>
+                                      expand_more
+                                    </span>
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div className="mt-3 space-y-2 max-h-48 overflow-y-auto pr-1">
+                                      {stats.details.length === 0 ? (
+                                        <p className="text-[10px] text-gray-400 italic text-center py-2 animate-fadeIn">Sem lançamentos neste ano.</p>
+                                      ) : (
+                                        stats.details.map(v => {
+                                          const isDiscount = v.leave_type === 'desconto_ferias';
+                                          return (
+                                            <div key={v.id} className={`p-2 rounded-lg text-[10px] border animate-fadeIn ${isDiscount ? 'bg-amber-50/30 border-amber-100' : 'bg-blue-50/30 border-blue-100'}`}>
+                                              <div className="flex justify-between font-bold text-gray-700">
+                                                <span>{isDiscount ? 'Desconto de Férias' : 'Férias'}</span>
+                                                <span className={isDiscount ? 'text-amber-700' : 'text-blue-700'}>
+                                                  {v.day_count}d
+                                                </span>
+                                              </div>
+                                              <p className="text-gray-400 mt-0.5">
+                                                {formatLocalDate(v.start_date)} até {formatLocalDate(v.end_date)}
+                                              </p>
+                                              {v.notes && <p className="text-gray-500 mt-1 italic font-medium">"{v.notes}"</p>}
+                                            </div>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
