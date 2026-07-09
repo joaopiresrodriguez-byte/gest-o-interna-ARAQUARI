@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { SupabaseService, DailyMission, Vehicle, GuReport, Personnel, PendingNotice, Training } from '../services/SupabaseService';
+import {
+  SupabaseService,
+  DailyMission,
+  Vehicle,
+  GuReport,
+  Personnel,
+  PendingNotice,
+  Training,
+  Vacation,
+  ServiceSwap
+} from '../services/SupabaseService';
 import { supabase } from '../services/supabase';
 import { DefesaCivilTicker } from '../components/DefesaCivilTicker';
 import { BirthdayCard } from '../components/BirthdayCard';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
+import { formatLocalDate } from '../utils/dateUtils';
 
 // Helper to format dates in pt-BR style
 const formatDateBR = (dateStr: string) => {
@@ -44,6 +55,8 @@ const DashboardAvisos: React.FC = () => {
   const [reports, setReports] = useState<GuReport[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [pendingNotices, setPendingNotices] = useState<PendingNotice[]>([]);
+  const [vacations, setVacations] = useState<Vacation[]>([]);
+  const [serviceSwaps, setServiceSwaps] = useState<ServiceSwap[]>([]);
   const [guReportText, setGuReportText] = useState("");
   const [selectedDate, setSelectedDate] = useState(SupabaseService.getTodayDate());
   const [loading, setLoading] = useState(true);
@@ -59,13 +72,24 @@ const DashboardAvisos: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [missionsData, prevMissionsData, fleetData, reportsData, personnelData, trainingsData] = await Promise.all([
+      const [
+        missionsData,
+        prevMissionsData,
+        fleetData,
+        reportsData,
+        personnelData,
+        trainingsData,
+        vacationsData,
+        swapsData
+      ] = await Promise.all([
         SupabaseService.getDailyMissions({ data: selectedDate }),
         SupabaseService.getDailyMissions({ data: targetDate }),
         SupabaseService.getFleet(),
         SupabaseService.getGuReports(),
         SupabaseService.getPersonnel(),
         SupabaseService.getTrainings(),
+        SupabaseService.getVacations(),
+        SupabaseService.getServiceSwaps()
       ]);
 
       // Try to load pending notices (might not exist)
@@ -88,6 +112,8 @@ const DashboardAvisos: React.FC = () => {
       setReports(reportsData);
       setPersonnel(personnelData);
       setPendingNotices(noticesData);
+      setVacations(vacationsData || []);
+      setServiceSwaps(swapsData || []);
     } catch (error) {
       console.error("Failed to load data", error);
       toast.error('Erro ao carregar dados do painel.');
@@ -120,6 +146,57 @@ const DashboardAvisos: React.FC = () => {
       .filter(Boolean);
   }, [escala, personnel]);
 
+  // Find service swaps on the selected date
+  const swapsForToday = useMemo(() => {
+    return serviceSwaps.filter(s => s.original_date === selectedDate || s.new_date === selectedDate);
+  }, [serviceSwaps, selectedDate]);
+
+  // Find vacations and leaves active in the current month of selectedDate
+  const selectedMonthRef = useMemo(() => selectedDate.slice(0, 7), [selectedDate]);
+  
+  const vacationsThisMonth = useMemo(() => {
+    return vacations.filter(v => {
+      if (v.leave_type === 'desconto_ferias') return false;
+      const startMonth = v.start_date.slice(0, 7);
+      const endMonth = v.end_date.slice(0, 7);
+      return startMonth <= selectedMonthRef && endMonth >= selectedMonthRef;
+    });
+  }, [vacations, selectedMonthRef]);
+
+  // Helper to resolve personnel name
+  const getPersonnelName = (id?: number) => {
+    if (!id) return '—';
+    const p = personnel.find(x => x.id === id);
+    if (!p) return `Militar #${id}`;
+    return `${p.rank} ${p.war_name || p.name}`;
+  };
+
+  // Helper to get detailed personnel info
+  const getPersonnelDetails = (id?: number) => {
+    if (!id) return null;
+    const p = personnel.find(x => x.id === id);
+    if (!p) return null;
+    return {
+      name: `${p.rank} ${p.war_name || p.name}`,
+      matricula: p.matricula || '—',
+      cveActive: p.cve_active === 'Sim',
+      cnhCategory: p.cnh_category || '—'
+    };
+  };
+
+  // Helper to map leave type value to label
+  const getLeaveLabel = (type?: string) => {
+    switch (type) {
+      case 'ferias': return 'Férias';
+      case 'licenca_medica': return 'Licença Médica';
+      case 'licenca_especial': return 'Licença Especial';
+      case 'afastamento': return 'Afastamento';
+      case 'cedido': return 'Cedido';
+      case 'outros': return 'Outros';
+      default: return 'Férias';
+    }
+  };
+
   // Realtime Subscription
   useEffect(() => {
     loadData();
@@ -151,6 +228,24 @@ const DashboardAvisos: React.FC = () => {
           event: '*',
           schema: 'public',
           table: 'training_schedule',
+        },
+        () => { loadData(); }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'vacations',
+        },
+        () => { loadData(); }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'service_swaps',
         },
         () => { loadData(); }
       )
@@ -519,39 +614,188 @@ const DashboardAvisos: React.FC = () => {
             {/* Birthday Card */}
             <BirthdayCard selectedDate={selectedDate} />
 
-            {/* Efetivo de Serviço */}
-            {escalaMilitares.length > 0 && (
-              <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-5">
-                <h2 className="font-bold text-[#2c1810] mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-primary">shield_person</span>
-                  Efetivo de Serviço
-                  <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-auto">{escalaMilitares.length}</span>
-                </h2>
+            {/* Alteração de Efetivo */}
+            <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-5 space-y-5">
+              <h2 className="font-bold text-[#2c1810] flex items-center gap-2 text-sm border-b border-rustic-border/30 pb-3">
+                <span className="material-symbols-outlined text-primary">groups</span>
+                Alteração de Efetivo
+              </h2>
+
+              {/* 1. Guarnição de Serviço do Dia */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase text-rustic-brown/70 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">shield_person</span>
+                  Guarnição de Serviço do Dia
+                  {escalaMilitares.length > 0 && (
+                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full ml-auto">
+                      {escalaMilitares.length}
+                    </span>
+                  )}
+                </h3>
                 {escala?.equipe && (
-                  <div className="mb-3 bg-primary/5 border border-primary/10 rounded-lg px-3 py-2 flex items-center gap-2">
+                  <div className="bg-primary/5 border border-primary/10 rounded-lg px-3 py-2 flex items-center gap-2">
                     <span className="material-symbols-outlined text-primary text-[16px]">group</span>
                     <span className="text-xs font-black text-primary uppercase">{escala.equipe}</span>
                   </div>
                 )}
-                <div className="space-y-2">
-                  {escalaMilitares.map((p: Personnel) => (
-                    <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg bg-background-light border border-rustic-border/50">
-                      {p.image ? (
-                        <img src={p.image} alt={p.name} className="w-8 h-8 rounded-full object-cover border border-rustic-border" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <span className="material-symbols-outlined text-primary text-[16px]">person</span>
+                {escalaMilitares.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
+                    {escalaMilitares.map((p: Personnel) => (
+                      <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg bg-background-light border border-rustic-border/50">
+                        {p.image ? (
+                          <img src={p.image} alt={p.name} className="w-7 h-7 rounded-full object-cover border border-rustic-border" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="material-symbols-outlined text-primary text-[14px]">person</span>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs font-bold text-[#2c1810]">{p.rank} {p.war_name || p.name}</p>
+                          <p className="text-[9px] text-rustic-brown/50">{p.role || p.type}</p>
                         </div>
-                      )}
-                      <div>
-                        <p className="text-xs font-bold text-[#2c1810]">{p.rank} {p.war_name || p.name}</p>
-                        <p className="text-[9px] text-rustic-brown/50">{p.role || p.type}</p>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-rustic-brown/40 italic pl-1">Nenhuma guarnição escalada para hoje.</p>
+                )}
+              </div>
+
+              {/* 2. Trocas de Serviço do Dia */}
+              <div className="space-y-3 pt-3 border-t border-rustic-border/30">
+                <h3 className="text-xs font-black uppercase text-rustic-brown/70 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">published_with_changes</span>
+                  Trocas de Serviço do Dia
+                  {swapsForToday.length > 0 && (
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full ml-auto">
+                      {swapsForToday.length}
+                    </span>
+                  )}
+                </h3>
+                {swapsForToday.length > 0 ? (
+                  <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
+                    {swapsForToday.map((s, idx) => {
+                      const reqDetails = getPersonnelDetails(s.personnel_id);
+                      const coverDetails = getPersonnelDetails(s.swap_with_personnel_id);
+                      const isApproved = s.approval_status === 'Aprovado';
+                      const isPending = s.approval_status === 'Pendente';
+                      
+                      return (
+                        <div key={s.id || idx} className="p-3 rounded-lg bg-background-light border border-rustic-border/50 space-y-2.5 text-xs shadow-sm">
+                          {/* Header with status and dates */}
+                          <div className="flex justify-between items-center border-b border-rustic-border/20 pb-2">
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider border ${
+                              isApproved ? 'bg-green-50 text-green-700 border-green-200' :
+                              isPending ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'
+                            }`}>
+                              {s.approval_status || 'Pendente'}
+                            </span>
+                            <span className="text-[10px] text-rustic-brown/65 flex items-center gap-1 font-semibold">
+                              <span className="material-symbols-outlined text-[12px]">calendar_today</span>
+                              {formatLocalDate(s.original_date)} ⇄ {formatLocalDate(s.new_date)}
+                            </span>
+                          </div>
+
+                          {/* Saindo (Requester) */}
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1 text-[9px] font-black text-red-600 uppercase tracking-wider">
+                              <span className="material-symbols-outlined text-[12px]">logout</span>
+                              <span>Saindo</span>
+                            </div>
+                            {reqDetails ? (
+                              <div className="pl-4 space-y-0.5">
+                                <p className="font-bold text-xs text-[#2c1810]">{reqDetails.name}</p>
+                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] text-rustic-brown/60">
+                                  <span>Mat: <span className="font-bold text-rustic-brown">{reqDetails.matricula}</span></span>
+                                  <span>•</span>
+                                  <span>CNH: <span className="font-bold text-rustic-brown">{reqDetails.cnhCategory}</span></span>
+                                  <span>•</span>
+                                  <span className={`font-bold ${reqDetails.cveActive ? 'text-green-600' : 'text-stone-500'}`}>
+                                    {reqDetails.cveActive ? 'CVE Ativo' : 'CVE Inativo'}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="pl-4 text-rustic-brown/50 italic text-[10px]">Militar não encontrado</p>
+                            )}
+                          </div>
+
+                          {/* Connection Arrow */}
+                          <div className="flex items-center justify-center -my-1 text-rustic-brown/30">
+                            <span className="material-symbols-outlined text-sm font-black">arrow_downward</span>
+                          </div>
+
+                          {/* Assumindo (Cover) */}
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1 text-[9px] font-black text-green-600 uppercase tracking-wider">
+                              <span className="material-symbols-outlined text-[12px]">login</span>
+                              <span>Assumindo</span>
+                            </div>
+                            {coverDetails ? (
+                              <div className="pl-4 space-y-0.5">
+                                <p className="font-bold text-xs text-[#2c1810]">{coverDetails.name}</p>
+                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] text-rustic-brown/60">
+                                  <span>Mat: <span className="font-bold text-rustic-brown">{coverDetails.matricula}</span></span>
+                                  <span>•</span>
+                                  <span>CNH: <span className="font-bold text-rustic-brown">{coverDetails.cnhCategory}</span></span>
+                                  <span>•</span>
+                                  <span className={`font-bold ${coverDetails.cveActive ? 'text-green-600' : 'text-stone-500'}`}>
+                                    {coverDetails.cveActive ? 'CVE Ativo' : 'CVE Inativo'}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pl-4">
+                                <p className="font-bold text-xs text-rustic-brown/60">Folga / Serviço</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-rustic-brown/40 italic pl-1">Nenhuma troca registrada para hoje.</p>
+                )}
+              </div>
+
+              {/* 3. Férias e Afastamentos do Mês */}
+              <div className="space-y-3 pt-3 border-t border-rustic-border/30">
+                <h3 className="text-xs font-black uppercase text-rustic-brown/70 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">flight_takeoff</span>
+                  Férias e Afastamentos do Mês
+                  {vacationsThisMonth.length > 0 && (
+                    <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full ml-auto">
+                      {vacationsThisMonth.length}
+                    </span>
+                  )}
+                </h3>
+                {vacationsThisMonth.length > 0 ? (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {vacationsThisMonth.map((v, idx) => {
+                      const name = v.full_name || getPersonnelName(v.personnel_id);
+                      const leaveLabel = getLeaveLabel(v.leave_type);
+                      return (
+                        <div key={v.id || idx} className="p-2.5 rounded-lg bg-background-light border border-rustic-border/50 space-y-1 text-xs">
+                          <div className="flex justify-between items-start gap-1">
+                            <p className="font-bold text-[#2c1810] leading-tight">{name}</p>
+                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase flex-shrink-0">
+                              {leaveLabel}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-rustic-brown/65 flex items-center gap-1 font-semibold">
+                            <span className="material-symbols-outlined text-[12px]">date_range</span>
+                            <span>{formatLocalDate(v.start_date)} a {formatLocalDate(v.end_date)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-rustic-brown/40 italic pl-1">Nenhum afastamento ou férias este mês.</p>
+                )}
+              </div>
+            </section>
 
             {/* Status da Frota */}
             <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-6">
