@@ -124,22 +124,35 @@ const PessoalB1: React.FC = () => {
       return startDate ? startDate.getFullYear() === year : false;
     });
 
-    let gozadas = 0;
-    let descontos = 0;
+    const todayNoon = new Date();
+    todayNoon.setHours(12, 0, 0, 0);
+
+    let gozadas = 0;      // férias whose end_date has already passed
+    let planejadas = 0;   // férias scheduled for the future (not yet consumed)
+    let descontos = 0;    // discount days always count immediately
 
     personVacations.forEach(v => {
       if (v.leave_type === 'ferias') {
-        gozadas += v.day_count || 0;
+        const endDate = v.end_date ? parseLocalDate(v.end_date) : null;
+        const alreadyTaken = endDate ? endDate <= todayNoon : false;
+        if (alreadyTaken) {
+          gozadas += v.day_count || 0;
+        } else {
+          planejadas += v.day_count || 0;
+        }
       } else if (v.leave_type === 'desconto_ferias') {
         descontos += v.day_count || 0;
       }
     });
 
     const totalRight = 30;
+    // Balance = total - days already taken - discounts
+    // Planned future vacations don't reduce the balance yet
     const balance = totalRight - gozadas - descontos;
 
     return {
       gozadas,
+      planejadas,
       descontos,
       balance,
       details: personVacations
@@ -1172,38 +1185,50 @@ const PessoalB1: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  {/* Progress Bar */}
+                                  {/* Progress Bar — 4 segments */}
                                   <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden flex mb-4 border border-gray-100 shadow-inner">
                                     {/* Gozadas (Blue) */}
                                     {stats.gozadas > 0 && (
-                                      <div 
-                                        className="bg-blue-500 h-full transition-all duration-500" 
+                                      <div
+                                        className="bg-blue-500 h-full transition-all duration-500"
                                         style={{ width: `${Math.min(100, (stats.gozadas / 30) * 100)}%` }}
                                         title={`Férias Gozadas: ${stats.gozadas} dias`}
                                       />
                                     )}
-                                    {/* Descontos (Orange) */}
+                                    {/* Planejadas (Indigo, striped) */}
+                                    {stats.planejadas > 0 && (
+                                      <div
+                                        className="bg-indigo-400 h-full transition-all duration-500 opacity-60"
+                                        style={{ width: `${Math.min(100, (stats.planejadas / 30) * 100)}%` }}
+                                        title={`Férias Planejadas (futuras): ${stats.planejadas} dias`}
+                                      />
+                                    )}
+                                    {/* Descontos (Amber) */}
                                     {stats.descontos > 0 && (
-                                      <div 
-                                        className="bg-amber-500 h-full transition-all duration-500" 
+                                      <div
+                                        className="bg-amber-500 h-full transition-all duration-500"
                                         style={{ width: `${Math.min(100, (stats.descontos / 30) * 100)}%` }}
                                         title={`Descontos de Férias: ${stats.descontos} dias`}
                                       />
                                     )}
-                                    {/* Remaining (Green or Gray if zero/negative) */}
+                                    {/* Saldo disponível (Green) */}
                                     {stats.balance > 0 && (
-                                      <div 
-                                        className="bg-green-400 h-full transition-all duration-500 flex-1" 
+                                      <div
+                                        className="bg-green-400 h-full transition-all duration-500 flex-1"
                                         title={`Saldo Disponível: ${stats.balance} dias`}
                                       />
                                     )}
                                   </div>
 
-                                  {/* Breakdown badges */}
-                                  <div className="grid grid-cols-3 gap-2 text-center text-xs mb-4">
+                                  {/* Breakdown badges — 4 columns */}
+                                  <div className="grid grid-cols-4 gap-1.5 text-center text-xs mb-4">
                                     <div className="bg-blue-50/50 p-2 rounded-xl border border-blue-100/50">
                                       <span className="text-gray-400 text-[9px] uppercase font-bold block">Gozado</span>
                                       <span className="font-bold text-blue-700">{stats.gozadas}d</span>
+                                    </div>
+                                    <div className="bg-indigo-50/50 p-2 rounded-xl border border-indigo-100/50">
+                                      <span className="text-gray-400 text-[9px] uppercase font-bold block">Planejado</span>
+                                      <span className="font-bold text-indigo-500">{stats.planejadas}d</span>
                                     </div>
                                     <div className="bg-amber-50/50 p-2 rounded-xl border border-amber-100/50">
                                       <span className="text-gray-400 text-[9px] uppercase font-bold block">Desconto</span>
@@ -1235,13 +1260,25 @@ const PessoalB1: React.FC = () => {
                                       ) : (
                                         stats.details.map(v => {
                                           const isDiscount = v.leave_type === 'desconto_ferias';
+                                          const isRegularFerias = v.leave_type === 'ferias';
+                                          const todayCheck = new Date(); todayCheck.setHours(12,0,0,0);
+                                          const endDate = v.end_date ? parseLocalDate(v.end_date) : null;
+                                          const isFuture = isRegularFerias && endDate ? endDate > todayCheck : false;
+                                          
+                                          let cardStyle = 'bg-blue-50/30 border-blue-100';
+                                          let labelText = 'Férias Gozadas';
+                                          let valueColor = 'text-blue-700';
+                                          if (isDiscount) { cardStyle = 'bg-amber-50/30 border-amber-100'; labelText = 'Desconto de Férias'; valueColor = 'text-amber-700'; }
+                                          if (isFuture) { cardStyle = 'bg-indigo-50/30 border-indigo-100'; labelText = 'Férias Planejadas'; valueColor = 'text-indigo-500'; }
+                                          
                                           return (
-                                            <div key={v.id} className={`p-2 rounded-lg text-[10px] border animate-fadeIn ${isDiscount ? 'bg-amber-50/30 border-amber-100' : 'bg-blue-50/30 border-blue-100'}`}>
+                                            <div key={v.id} className={`p-2 rounded-lg text-[10px] border animate-fadeIn ${cardStyle}`}>
                                               <div className="flex justify-between font-bold text-gray-700">
-                                                <span>{isDiscount ? 'Desconto de Férias' : 'Férias'}</span>
-                                                <span className={isDiscount ? 'text-amber-700' : 'text-blue-700'}>
-                                                  {v.day_count}d
+                                                <span className="flex items-center gap-1">
+                                                  {isFuture && <span className="text-[8px] bg-indigo-100 text-indigo-600 px-1 rounded font-black uppercase">futuro</span>}
+                                                  {labelText}
                                                 </span>
+                                                <span className={valueColor}>{v.day_count}d</span>
                                               </div>
                                               <p className="text-gray-400 mt-0.5">
                                                 {formatLocalDate(v.start_date)} até {formatLocalDate(v.end_date)}
