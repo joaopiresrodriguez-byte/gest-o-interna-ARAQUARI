@@ -16,11 +16,11 @@ function daysUntil(dateStr: string): number {
 }
 
 function ExpiryBadge({ date }: { date?: string }) {
-    if (!date) return <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 text-stone-400 font-medium">Sem validade</span>;
+    if (!date) return <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 text-stone-500 font-medium">Sem validade</span>;
     const days = daysUntil(date);
-    if (days < 0) return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">Expirado</span>;
-    if (days <= 60) return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 font-semibold">{days}d restantes</span>;
-    return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 font-semibold">Válido</span>;
+    if (days < 0) return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">Expirado</span>;
+    if (days <= 60) return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{days}d restantes</span>;
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Válido</span>;
 }
 
 const emptyForm = (): Omit<B1Course, 'id'> => ({
@@ -118,12 +118,12 @@ export default function CursosB1({ personnelList }: Props) {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-base font-semibold text-primary-text">Cursos e Qualificações</h3>
-                    <p className="text-xs text-secondary-text mt-0.5">{courses.length} registro{courses.length !== 1 ? 's' : ''}</p>
+                    <h3 className="text-base font-semibold text-stone-800">Cursos e Qualificações</h3>
+                    <p className="text-xs text-stone-500 mt-0.5">{courses.length} registro{courses.length !== 1 ? 's' : ''}</p>
                 </div>
                 <button
                     onClick={openModal}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-cbm-red text-white rounded-xl text-sm font-semibold hover:bg-opacity-90 transition-all shadow-md shadow-red-200 active:scale-95"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#C62828] text-white rounded-xl text-sm font-semibold hover:bg-[#A32020] transition-all shadow-md active:scale-95"
                 >
                     <span className="material-symbols-outlined text-base">add</span>
                     Novo Curso
@@ -133,19 +133,19 @@ export default function CursosB1({ personnelList }: Props) {
             {/* Filters */}
             <div className="flex flex-wrap gap-2">
                 <div className="relative flex-1 min-w-40">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-secondary-text">search</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-stone-400">search</span>
                     <input
                         type="text"
                         placeholder="Buscar curso ou instituição..."
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        className="w-full pl-8 bg-primary border border-rustic-border rounded-lg px-3 py-1.5 text-sm text-primary-text placeholder-secondary-text focus:outline-none focus:border-cbm-red"
+                        className="w-full pl-8 bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 placeholder-stone-400 focus:outline-none focus:border-[#C62828]"
                     />
                 </div>
                 <select
                     value={filterPersonnel}
                     onChange={e => setFilterPersonnel(e.target.value)}
-                    className="bg-primary border border-rustic-border rounded-lg px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-cbm-red"
+                    className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-[#C62828]"
                 >
                     <option value="">Todos os militares</option>
                     {personnelList.map(p => <option key={p.id} value={p.id}>{p.rank} {p.name}</option>)}
@@ -153,7 +153,7 @@ export default function CursosB1({ personnelList }: Props) {
                 <select
                     value={filterCategory}
                     onChange={e => setFilterCategory(e.target.value)}
-                    className="bg-primary border border-rustic-border rounded-lg px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-cbm-red"
+                    className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-[#C62828]"
                 >
                     <option value="">Todas as categorias</option>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -167,39 +167,39 @@ export default function CursosB1({ personnelList }: Props) {
                     <span className="text-sm text-secondary-text">Carregando cursos...</span>
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="text-center py-14 border-2 border-dashed border-rustic-border rounded-2xl">
-                    <span className="material-symbols-outlined text-5xl block mb-3 text-secondary-text opacity-40">school</span>
-                    <p className="text-sm text-secondary-text font-medium">Nenhum curso encontrado</p>
-                    <p className="text-xs text-secondary-text mt-1 opacity-60">Use o botão "Novo Curso" para adicionar</p>
+                <div className="text-center py-14 border-2 border-dashed border-stone-200 rounded-2xl">
+                    <span className="material-symbols-outlined text-5xl block mb-3 text-stone-400">school</span>
+                    <p className="text-sm text-stone-500 font-medium">Nenhum curso encontrado</p>
+                    <p className="text-xs text-stone-400 mt-1">Use o botão "Novo Curso" para adicionar</p>
                 </div>
             ) : (
                 <div className="space-y-2">
                     {filtered.map(c => (
                         <div
                             key={c.id}
-                            className="bg-primary border border-rustic-border rounded-xl p-3.5 flex items-start justify-between gap-3 hover:border-cbm-red/30 hover:shadow-sm transition-all"
+                            className="bg-white border border-stone-200 rounded-xl p-3.5 flex items-start justify-between gap-3 hover:border-[#C62828]/30 hover:shadow-sm transition-all"
                         >
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {c.sigla_curso && (
-                                        <span className="text-[10px] font-black bg-cbm-red/10 text-cbm-red border border-cbm-red/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                        <span className="text-[10px] font-black bg-red-50 text-[#C62828] border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                             {c.sigla_curso}
                                         </span>
                                     )}
-                                    <span className="text-sm font-semibold text-primary-text truncate">{c.course_name}</span>
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 text-stone-500 font-medium">{c.category}</span>
+                                    <span className="text-sm font-semibold text-stone-800 truncate">{c.course_name}</span>
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium">{c.category}</span>
                                     <ExpiryBadge date={c.expiry_date} />
                                 </div>
                                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                    <span className="text-xs text-secondary-text font-medium">{c.personnel_rank} {c.personnel_name}</span>
-                                    {c.institution && <span className="text-xs text-secondary-text opacity-60">· {c.institution}</span>}
+                                    <span className="text-xs text-stone-600 font-medium">{c.personnel_rank} {c.personnel_name}</span>
+                                    {c.institution && <span className="text-xs text-stone-400">· {c.institution}</span>}
                                     {c.workload_hours && (
-                                        <span className="text-xs text-secondary-text opacity-60 flex items-center gap-0.5">
+                                        <span className="text-xs text-stone-400 flex items-center gap-0.5">
                                             · <span className="material-symbols-outlined text-[12px]">timer</span> {c.workload_hours}h
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs text-secondary-text opacity-70 mt-0.5">
+                                <p className="text-xs text-stone-400 mt-0.5">
                                     Conclusão: {new Date(c.completion_date).toLocaleDateString('pt-BR')}
                                     {c.expiry_date ? ` · Validade: ${new Date(c.expiry_date).toLocaleDateString('pt-BR')}` : ''}
                                 </p>
@@ -213,7 +213,7 @@ export default function CursosB1({ personnelList }: Props) {
                                         href={c.certificate_url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="p-1.5 text-secondary-text hover:text-cbm-red transition-colors"
+                                        className="p-1.5 text-stone-400 hover:text-[#C62828] transition-colors"
                                         title="Ver certificado"
                                     >
                                         <span className="material-symbols-outlined text-base">open_in_new</span>
@@ -221,7 +221,7 @@ export default function CursosB1({ personnelList }: Props) {
                                 )}
                                 <button
                                     onClick={() => handleDelete(c.id!, c.course_name)}
-                                    className="p-1.5 text-secondary-text hover:text-red-500 transition-colors"
+                                    className="p-1.5 text-stone-400 hover:text-red-600 transition-colors"
                                     title="Remover curso"
                                 >
                                     <span className="material-symbols-outlined text-base">delete</span>
