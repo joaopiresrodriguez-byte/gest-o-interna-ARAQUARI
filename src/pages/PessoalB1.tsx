@@ -896,7 +896,6 @@ const PessoalB1: React.FC = () => {
                     <h3 className="font-black text-lg mb-4 flex items-center gap-2">
                       <span className="material-symbols-outlined text-blue-500">science</span>
                       Status Toxicológico — CNH Cat. D
-                      <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Validade: 2a 6m</span>
                     </h3>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -904,8 +903,7 @@ const PessoalB1: React.FC = () => {
                           <tr className="text-[10px] font-black uppercase text-gray-400">
                             <th className="px-4 py-3 text-left">Militar</th>
                             <th className="px-4 py-3">Cat. CNH</th>
-                            <th className="px-4 py-3">Data Exame</th>
-                            <th className="px-4 py-3">Validade</th>
+                            <th className="px-4 py-3">Vencimento</th>
                             <th className="px-4 py-3">Status</th>
                           </tr>
                         </thead>
@@ -930,7 +928,6 @@ const PessoalB1: React.FC = () => {
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-center font-bold">{p.cnh_category}</td>
-                                <td className="px-4 py-3 text-center text-xs">{p.toxicological_date ? formatLocalDate(p.toxicological_date) : '—'}</td>
                                 <td className="px-4 py-3 text-center text-xs">{p.toxicological_expiry_date ? formatLocalDate(p.toxicological_expiry_date) : '—'}</td>
                                 <td className="px-4 py-3 text-center"><span className={`text-[9px] px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span></td>
                               </tr>
