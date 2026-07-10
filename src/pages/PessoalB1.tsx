@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, Bulletin, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 import { supabase } from '../services/supabase';
@@ -10,12 +10,10 @@ import { formatLocalDate, parseLocalDate } from '../utils/dateUtils';
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
 import DisciplinarySection from '../components/b1/DisciplinarySection';
-import BulletinSection from '../components/b1/BulletinSection';
 import ReadinessReport from '../components/b1/ReadinessReport';
 import PersonnelProfile from '../components/b1/PersonnelProfile';
 import ExportSection from '../components/b1/ExportSection';
 import CursosB1 from '../components/b1/CursosB1';
-import DisponibilidadeB1 from '../components/b1/DisponibilidadeB1';
 import NotificacoesB1 from '../components/b1/NotificacoesB1';
 import DashboardComandante from '../components/b1/DashboardComandante';
 import ScaleConfigPanel from '../components/b1/ScaleConfigPanel';
@@ -23,9 +21,9 @@ import ScaleCalendar from '../components/b1/ScaleCalendar';
 import { GoogleCalendarService } from '../services/googleCalendarService';
 import { ScaleReportingService } from '../services/scaleReportingService';
 
-type Tab = 'ALERTAS_AVISOS' | 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'BOLETIM' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DISPONIBILIDADE' | 'DASHBOARD';
+type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
 
-const tabIcons: Record<Tab, string> = { ALERTAS_AVISOS: 'notifications_active', EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', BOLETIM: 'article', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DISPONIBILIDADE: 'location_on', DASHBOARD: 'dashboard' };
+const tabIcons: Record<Tab, string> = { EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DASHBOARD: 'dashboard' };
 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
 const STATUS_OPTIONS = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
@@ -61,12 +59,6 @@ const calcExpiry = (issueDate: string, years: number): string => {
   return d.toISOString().split('T')[0];
 };
 
-const calcToxExpiry = (issueDate: string): string => {
-  const d = new Date(issueDate);
-  d.setFullYear(d.getFullYear() + 2);
-  d.setMonth(d.getMonth() + 6);
-  return d.toISOString().split('T')[0];
-};
 
 const emptyForm = (): Partial<Personnel> => ({
   name: '', war_name: '', rank: 'Sd', role: '', status: 'Ativo' as const, type: 'BM' as const,
@@ -86,7 +78,7 @@ interface CursoLocal {
 
 
 const PessoalB1: React.FC = () => {
-  const [tab, setTab] = useState<Tab>('ALERTAS_AVISOS');
+  const [tab, setTab] = useState<Tab>('DASHBOARD');
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   const [documents, setDocuments] = useState<DocumentB1[]>([]);
   const [vacations, setVacations] = useState<Vacation[]>([]);
@@ -182,7 +174,6 @@ const PessoalB1: React.FC = () => {
 
   // Sub-section data
   const [disciplinaryRecords, setDisciplinaryRecords] = useState<DisciplinaryRecord[]>([]);
-  const [bulletins, setBulletins] = useState<Bulletin[]>([]);
   const [sigrhExports, setSigrhExports] = useState<SigrhExport[]>([]);
 
   // New modules state
@@ -202,9 +193,8 @@ const PessoalB1: React.FC = () => {
   const [rankChangeNewRank, setRankChangeNewRank] = useState('');
   const [rankChangeLegalBasis, setRankChangeLegalBasis] = useState('');
 
-  // Course state for registration form
+  // Course state for registration form (kept for handleSavePersonnel compatibility)
   const [cursosForm, setCursosForm] = useState<CursoLocal[]>([]);
-  const [novoCurso, setNovoCurso] = useState({ nome_curso: '', sigla_curso: '', data_realizacao: '' });
 
   // Document upload
   const [docFile, setDocFile] = useState<File | null>(null);
@@ -263,9 +253,6 @@ const PessoalB1: React.FC = () => {
   const loadDisciplinary = async () => {
     try { setDisciplinaryRecords(await PersonnelService.getDisciplinaryRecords()); } catch { /* ignore */ }
   };
-  const loadBulletins = async () => {
-    try { setBulletins(await PersonnelService.getBulletins()); } catch { /* ignore */ }
-  };
   const loadExports = async () => {
     try { setSigrhExports(await PersonnelService.getSigrhExports()); } catch { /* ignore */ }
   };
@@ -282,7 +269,6 @@ const PessoalB1: React.FC = () => {
 
   useEffect(() => {
     if (tab === 'DISCIPLINA') loadDisciplinary();
-    if (tab === 'BOLETIM') loadBulletins();
     if (tab === 'EXPORTAR') loadExports();
   }, [tab]);
 
@@ -295,7 +281,6 @@ const PessoalB1: React.FC = () => {
     // Auto-calculate expiry dates
     const cleanedData = { ...formData };
     if (cleanedData.cve_issue_date) cleanedData.cve_expiry_date = calcExpiry(cleanedData.cve_issue_date, 5);
-    if (cleanedData.toxicological_date) cleanedData.toxicological_expiry_date = calcToxExpiry(cleanedData.toxicological_date);
     cleanedData.last_cadastro_review = new Date().toISOString().split('T')[0];
 
     // Remove empty strings and non-updatable fields for DB
@@ -655,10 +640,10 @@ const PessoalB1: React.FC = () => {
 
           {/* Tabs */}
           <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
-            {(['DASHBOARD', 'ALERTAS_AVISOS', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'BOLETIM', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS', 'DISPONIBILIDADE'] as Tab[]).map(t => (
+            {(['DASHBOARD', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
               <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
-                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('ALERTAS_AVISOS', 'ALERTAS & AVISOS').replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DISPONIBILIDADE', 'DISPON.').replace('DASHBOARD', 'DASHBOARD')}
-                {t === 'ALERTAS_AVISOS' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
+                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DASHBOARD', 'DASHBOARD')}
+                {t === 'DASHBOARD' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
               </button>
             ))}
           </div>
@@ -676,22 +661,7 @@ const PessoalB1: React.FC = () => {
 
           {!loading && (
             <div className="space-y-6">
-              {/* TAB: ALERTAS & AVISOS (unificado) */}
-              {tab === 'ALERTAS_AVISOS' && (
-                <div className="space-y-6">
-                  <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />
-                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                    <h3 className="font-black text-base mb-4 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-gray-500">notifications</span>
-                      Avisos Internos
-                      {notifications.filter(n => !n.is_read).length > 0 && (
-                        <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center">{notifications.filter(n => !n.is_read).length}</span>
-                      )}
-                    </h3>
-                    <NotificacoesB1 />
-                  </div>
-                </div>
-              )}
+
 
               {/* TAB: EFETIVO */}
               {tab === 'EFETIVO' && (
@@ -782,7 +752,7 @@ const PessoalB1: React.FC = () => {
                     {formField('Nível de Instrução', 'education_level', 'text', ['Ensino Fundamental', 'Ensino Médio', 'Ensino Superior', 'Pós-Graduação', 'Mestrado', 'Doutorado'])}
                     {formField('Tipo Sanguíneo', 'blood_type', 'text', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])}
                     {formField('Endereço', 'address')}
-                    {formField('Contato Emergência', 'emergency_contact_name')}
+                    {formField('Nome do Contato de Emergência', 'emergency_contact_name')}
                     {formField('Tel. Emergência', 'emergency_phone', 'tel')}
                   </div>
 
@@ -797,11 +767,7 @@ const PessoalB1: React.FC = () => {
                     {formField('Cat. CNH', 'cnh_category', 'text', ['A', 'B', 'AB', 'C', 'D', 'E', 'AD', 'AE'])}
                     {formField('Nº CNH', 'cnh_number')}
                     {formField('Validade CNH', 'cnh_expiry_date', 'date')}
-                    {formField('Data Toxicológico', 'toxicological_date', 'date')}
-                    <div>
-                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Validade Toxicológico (auto: +2a6m)</label>
-                      <input type="date" value={formData.toxicological_date ? calcToxExpiry(formData.toxicological_date) : formData.toxicological_expiry_date || ''} readOnly className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-gray-100 text-sm" />
-                    </div>
+                    {formField('Vencimento do Toxicológico', 'toxicological_expiry_date', 'date')}
                     {formField('Porte de Arma', 'weapon_permit', 'checkbox')}
                   </div>
 
@@ -817,63 +783,11 @@ const PessoalB1: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Cursos e Treinamentos CBMSC */}
-                  <div className="mb-6 p-5 bg-blue-50/50 rounded-xl border border-blue-200">
-                    <h3 className="font-black text-sm mb-4 text-blue-800 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px]">school</span>
-                      Cursos e Treinamentos CBMSC
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Nome do Curso</label>
-                        <input type="text" value={novoCurso.nome_curso} onChange={e => setNovoCurso(p => ({ ...p, nome_curso: e.target.value }))} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-sm" placeholder="Ex: Curso de Form. de Oficiais" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Sigla</label>
-                        <input type="text" value={novoCurso.sigla_curso} onChange={e => setNovoCurso(p => ({ ...p, sigla_curso: e.target.value.toUpperCase() }))} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-sm" placeholder="Ex: CFO" maxLength={10} />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Data de Realização</label>
-                        <input type="date" value={novoCurso.data_realizacao} onChange={e => setNovoCurso(p => ({ ...p, data_realizacao: e.target.value }))} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-sm" />
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!novoCurso.nome_curso || !novoCurso.sigla_curso || !novoCurso.data_realizacao) {
-                          toast.warning('Preencha Nome, Sigla e Data do curso.');
-                          return;
-                        }
-                        setCursosForm(prev => [...prev, { ...novoCurso, id: crypto.randomUUID() }]);
-                        setNovoCurso({ nome_curso: '', sigla_curso: '', data_realizacao: '' });
-                      }}
-                      className="mb-3 px-4 py-2 bg-blue-700 text-white text-xs font-black rounded-lg hover:bg-blue-800 flex items-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-sm">add</span> Adicionar Curso
-                    </button>
-                    {cursosForm.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-black uppercase text-gray-400">Cursos adicionados:</p>
-                        {cursosForm.map(c => (
-                          <div key={c.id} className="flex items-center justify-between bg-white border border-blue-200 rounded-lg px-3 py-2">
-                            <span className="text-sm font-semibold">
-                              <span className="text-blue-700 font-black mr-2">{c.sigla_curso}</span>
-                              {c.nome_curso}
-                              <span className="text-gray-400 text-xs ml-2">— {formatLocalDate(c.data_realizacao)}</span>
-                            </span>
-                            <button type="button" onClick={() => setCursosForm(prev => prev.filter(x => x.id !== c.id))} className="text-red-400 hover:text-red-600 ml-3">
-                              <span className="material-symbols-outlined text-sm">close</span>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {cursosForm.length === 0 && <p className="text-xs text-gray-400 italic">Nenhum curso adicionado ainda.</p>}
-                  </div>
+
 
                   <div className="flex gap-3 pt-4 border-t">
                     <button onClick={handleSavePersonnel} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">{editId ? 'ATUALIZAR' : 'CADASTRAR'}</button>
-                    <button onClick={() => { setFormData(emptyForm()); setEditId(null); setCursosForm([]); setNovoCurso({ nome_curso: '', sigla_curso: '', data_realizacao: '' }); setTab('EFETIVO'); }} className="px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">CANCELAR</button>
+                    <button onClick={() => { setFormData(emptyForm()); setEditId(null); setCursosForm([]); setTab('EFETIVO'); }} className="px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">CANCELAR</button>
                   </div>
                 </div>
               )}
@@ -1300,11 +1214,6 @@ const PessoalB1: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB: BOLETIM */}
-              {tab === 'BOLETIM' && (
-                <BulletinSection bulletins={bulletins} onAddBulletin={async (b) => { await PersonnelService.addBulletin(b); loadBulletins(); toast.success('Boletim criado!'); }} onUpdateBulletin={async (id, u) => { await PersonnelService.updateBulletin(id, u); loadBulletins(); toast.success('Boletim atualizado!'); }} onGetNotes={PersonnelService.getBulletinNotes} onAddNote={async (n) => { await PersonnelService.addBulletinNote(n); toast.success('Nota adicionada!'); }} onGetVersions={PersonnelService.getBulletinVersions} isEditor={true} />
-              )}
-
               {/* TAB: DISCIPLINA */}
               {tab === 'DISCIPLINA' && (
                 <DisciplinarySection records={disciplinaryRecords} personnelList={personnelList} onAdd={async (r) => { await PersonnelService.addDisciplinaryRecord(r); loadDisciplinary(); toast.success('Registro adicionado!'); }} onDelete={async (id) => { if (confirm('Remover registro?')) { await PersonnelService.deleteDisciplinaryRecord(id); loadDisciplinary(); toast.success('Removido!'); } }} isEditor={true} />
@@ -1324,10 +1233,25 @@ const PessoalB1: React.FC = () => {
                 <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
               )}
 
-              {/* TAB: DASHBOARD */}
+              {/* TAB: DASHBOARD — inclui alertas, avisos e painel de comando */}
               {tab === 'DASHBOARD' && (
-                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                  <DashboardComandante personnelList={personnelList} vacations={vacations} courses={courses} epiDeliveries={epiDeliveries} notifications={notifications} alerts={alerts} onNavigate={(t) => setTab(t as Tab)} />
+                <div className="space-y-6">
+                  {/* Painel de Alertas e Avisos no topo */}
+                  <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />
+                  {notifications.filter(n => !n.is_read).length > 0 && (
+                    <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                      <h3 className="font-black text-base mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-gray-500">notifications</span>
+                        Avisos Internos
+                        <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center">{notifications.filter(n => !n.is_read).length}</span>
+                      </h3>
+                      <NotificacoesB1 />
+                    </div>
+                  )}
+                  {/* Dashboard principal do Comandante */}
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
+                    <DashboardComandante personnelList={personnelList} vacations={vacations} courses={courses} epiDeliveries={epiDeliveries} notifications={notifications} alerts={alerts} onNavigate={(t) => setTab(t as Tab)} />
+                  </div>
                 </div>
               )}
 
@@ -1335,13 +1259,6 @@ const PessoalB1: React.FC = () => {
               {tab === 'CURSOS' && (
                 <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
                   <CursosB1 personnelList={personnelList} />
-                </div>
-              )}
-
-              {/* TAB: DISPONIBILIDADE */}
-              {tab === 'DISPONIBILIDADE' && (
-                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                  <DisponibilidadeB1 personnelList={personnelList} vacations={vacations} escalas={escalas} />
                 </div>
               )}
 

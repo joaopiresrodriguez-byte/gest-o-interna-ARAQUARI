@@ -59,7 +59,7 @@ const PersonnelProfile: React.FC<Props> = ({ person, rankHistory, swaps, discipl
                         <div><span className="text-gray-400 block">Email</span><span className="font-bold">{person.email || '—'}</span></div>
                         <div><span className="text-gray-400 block">Telefone</span><span className="font-bold">{person.phone || '—'}</span></div>
                         <div><span className="text-gray-400 block">Tipo Sanguíneo</span><span className="font-bold">{person.blood_type || '—'}</span></div>
-                        <div><span className="text-gray-400 block">Contato Emergência</span><span className="font-bold">{person.emergency_contact_name || '—'} {person.emergency_phone ? `(${person.emergency_phone})` : ''}</span></div>
+                        <div><span className="text-gray-400 block">Nome do Contato de Emergência</span><span className="font-bold">{person.emergency_contact_name || '—'} {person.emergency_phone ? `(${person.emergency_phone})` : ''}</span></div>
                     </div>
                 </div>
             </div>
