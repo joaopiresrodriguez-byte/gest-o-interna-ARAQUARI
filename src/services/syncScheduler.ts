@@ -112,24 +112,25 @@ async function updateSyncStatus(
 // ─── Funções de Sync por Tabela ────────────────────────────────────────────────
 
 async function syncPersonnelRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const data = [
-        record.matricula || '',
-        record.name || '',
-        record.war_name || '',
-        record.graduation || record.rank || '',
-        record.type || '',
-        record.status || '',
-        record.role || '',
-        record.cpf || '',
+    const str = (v: unknown) => (v != null ? String(v) : '');
+    const data: (string | null)[] = [
+        str(record.matricula),
+        str(record.name),
+        str(record.war_name),
+        str(record.graduation || record.rank),
+        str(record.type),
+        str(record.status),
+        str(record.role),
+        str(record.cpf),
         formatDate(record.birth_date as string),
-        record.email || '',
-        record.phone || '',
-        record.education_level || '',
-        record.blood_type || '',
-        record.cnh_category || '',
-        record.cnh_number || '',
+        str(record.email),
+        str(record.phone),
+        str(record.education_level),
+        str(record.blood_type),
+        str(record.cnh_category),
+        str(record.cnh_number),
         formatDate(record.cnh_expiry_date as string),
-        record.cve_active || '',
+        str(record.cve_active),
         formatDate(record.cve_issue_date as string),
         formatDate(record.cve_expiry_date as string),
         record.weapon_permit ? 'Sim' : 'Não',
@@ -141,8 +142,8 @@ async function syncPersonnelRecord(record: Record<string, unknown>): Promise<{ o
         sheet: 'CadastroEfetivo',
         data,
         spreadsheetId: SHEETS_EFETIVO_ID,
-        keyColumnIndex: 0, // Matrícula na coluna A
-        keyValue: record.matricula as string,
+        keyColumnIndex: 0,
+        keyValue: str(record.matricula),
         headers: [
             'Matrícula', 'Nome Completo', 'Nome de Guerra', 'Posto/Graduação',
             'Tipo', 'Status', 'Função', 'CPF', 'Nascimento', 'Email', 'Telefone',
@@ -154,15 +155,16 @@ async function syncPersonnelRecord(record: Record<string, unknown>): Promise<{ o
 }
 
 async function syncVacationRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const data = [
-        String(record.id || ''),
-        record.full_name || '',
-        record.leave_type || 'ferias',
+    const str = (v: unknown) => (v != null ? String(v) : '');
+    const data: (string | null)[] = [
+        str(record.id),
+        str(record.full_name),
+        str(record.leave_type) || 'ferias',
         formatDate(record.start_date as string),
         formatDate(record.end_date as string),
-        String(record.day_count || ''),
-        record.status || '',
-        record.notes || '',
+        str(record.day_count),
+        str(record.status),
+        str(record.notes),
         new Date().toLocaleDateString('pt-BR'),
     ];
 
@@ -170,21 +172,22 @@ async function syncVacationRecord(record: Record<string, unknown>): Promise<{ ok
         sheet: 'FeriasLicencas',
         data,
         spreadsheetId: SHEETS_EFETIVO_ID,
-        keyColumnIndex: 0, // ID na coluna A
-        keyValue: String(record.id),
+        keyColumnIndex: 0,
+        keyValue: str(record.id),
         headers: ['ID', 'Nome', 'Tipo', 'Início', 'Fim', 'Dias', 'Status', 'Observações', 'Data Registro'],
     });
 }
 
 async function syncDisciplinaryRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const data = [
-        String(record.id || ''),
-        record.personnel_name || '',
-        record.record_type || '',
+    const str = (v: unknown) => (v != null ? String(v) : '');
+    const data: (string | null)[] = [
+        str(record.id),
+        str(record.personnel_name),
+        str(record.record_type),
         formatDate(record.date as string),
-        record.description || '',
-        record.legal_reference || '',
-        record.responsible_authority || '',
+        str(record.description),
+        str(record.legal_reference),
+        str(record.responsible_authority),
         new Date().toLocaleDateString('pt-BR'),
     ];
 
@@ -193,22 +196,23 @@ async function syncDisciplinaryRecord(record: Record<string, unknown>): Promise<
         data,
         spreadsheetId: SHEETS_EFETIVO_ID,
         keyColumnIndex: 0,
-        keyValue: String(record.id),
+        keyValue: str(record.id),
         headers: ['ID', 'Nome', 'Tipo', 'Data', 'Descrição', 'Ref. Legal', 'Autoridade', 'Data Registro'],
     });
 }
 
 async function syncCourseRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const data = [
-        String(record.id || ''),
-        String(record.personnel_id || ''),
-        record.course_name || '',
-        record.sigla_curso || '',
-        record.institution || '',
-        String(record.workload_hours || ''),
+    const str = (v: unknown) => (v != null ? String(v) : '');
+    const data: (string | null)[] = [
+        str(record.id),
+        str(record.personnel_id),
+        str(record.course_name),
+        str(record.sigla_curso),
+        str(record.institution),
+        str(record.workload_hours),
         formatDate(record.completion_date as string),
         formatDate(record.expiry_date as string),
-        record.category || '',
+        str(record.category),
         record.is_retroactive ? 'Sim' : 'Não',
         new Date().toLocaleDateString('pt-BR'),
     ];
@@ -218,7 +222,7 @@ async function syncCourseRecord(record: Record<string, unknown>): Promise<{ ok: 
         data,
         spreadsheetId: SHEETS_EFETIVO_ID,
         keyColumnIndex: 0,
-        keyValue: String(record.id),
+        keyValue: str(record.id),
         headers: [
             'ID', 'ID Militar', 'Curso', 'Sigla', 'Instituição', 'Carga Horária',
             'Conclusão', 'Validade', 'Categoria', 'Retroativo', 'Data Registro',
@@ -238,15 +242,16 @@ async function syncFleetRecord(record: Record<string, unknown>): Promise<{ ok: b
     let headers: string[];
     let keyValue: string;
 
+    const str = (v: unknown) => (v != null ? String(v) : '');
     if (type === 'Viatura') {
         sheetName = 'Viatura';
-        keyValue = String(record.plate || record.id);
+        keyValue = str(record.plate || record.id);
         data = [
-            dateStr, record.name || '', record.brand || '', record.plate || '',
-            record.renavam || '', record.chassis || '', record.year || '',
-            record.oil_type || '', record.location || '',
-            record.patrimonio_number || '', record.patrimonio_type || '',
-            status, record.details || '', atividades,
+            dateStr, str(record.name), str(record.brand), str(record.plate),
+            str(record.renavam), str(record.chassis), str(record.year),
+            str(record.oil_type), str(record.location),
+            str(record.patrimonio_number), str(record.patrimonio_type),
+            status, str(record.details), atividades,
         ];
         headers = [
             'Data Cadastro', 'Nome', 'Marca', 'Placa', 'RENAVAM', 'Chassi',
@@ -255,12 +260,12 @@ async function syncFleetRecord(record: Record<string, unknown>): Promise<{ ok: b
         ];
     } else if (type === 'Equipamento') {
         sheetName = 'Equipamento';
-        keyValue = String(record.patrimonio_number || record.id);
+        keyValue = str(record.patrimonio_number || record.id);
         data = [
-            dateStr, record.name || '', record.brand || '',
-            record.nf_number || '', record.patrimonio_number || '',
-            record.patrimonio_type || '', record.location || '',
-            status, record.details || '', atividades,
+            dateStr, str(record.name), str(record.brand),
+            str(record.nf_number), str(record.patrimonio_number),
+            str(record.patrimonio_type), str(record.location),
+            status, str(record.details), atividades,
         ];
         headers = [
             'Data Cadastro', 'Nome', 'Marca', 'Nº NF', 'Nº Patrimônio',
@@ -268,8 +273,8 @@ async function syncFleetRecord(record: Record<string, unknown>): Promise<{ ok: b
         ];
     } else {
         sheetName = 'Material';
-        keyValue = String(record.patrimonio_number || record.id);
-        data = [dateStr, record.name || '', record.details || '', status, record.location || '', atividades];
+        keyValue = str(record.patrimonio_number || record.id);
+        data = [dateStr, str(record.name), str(record.details), status, str(record.location), atividades];
         headers = ['Data Cadastro', 'Nome', 'Descrição/Detalhes', 'Status', 'Localização', 'Atividades'];
     }
 
@@ -286,14 +291,15 @@ async function syncFleetRecord(record: Record<string, unknown>): Promise<{ ok: b
 }
 
 async function syncTrainingRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const data = [
-        String(record.id || ''),
+    const str = (v: unknown) => (v != null ? String(v) : '');
+    const data: (string | null)[] = [
+        str(record.id),
         formatDate(record.date as string),
-        record.time || '',
-        record.instructor || '',
-        record.location || '',
-        record.status || '',
-        record.materia_id || '',
+        str(record.time),
+        str(record.instructor),
+        str(record.location),
+        str(record.status),
+        str(record.materia_id),
         new Date().toLocaleDateString('pt-BR'),
     ];
 
@@ -301,7 +307,7 @@ async function syncTrainingRecord(record: Record<string, unknown>): Promise<{ ok
         sheet: 'InstrucoesB3',
         data,
         keyColumnIndex: 0,
-        keyValue: String(record.id),
+        keyValue: str(record.id),
         headers: ['ID', 'Data', 'Hora', 'Instrutor', 'Local', 'Status', 'ID Matéria', 'Data Registro'],
     });
 }

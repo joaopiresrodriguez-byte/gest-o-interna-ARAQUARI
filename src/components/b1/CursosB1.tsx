@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { PersonnelService } from '../../services/personnelService';
 import { GoogleSheetsService } from '../../services/googleSheetsService';
 import { B1Course, Personnel } from '../../services/types';
@@ -13,6 +13,27 @@ interface Props {
 
 function daysUntil(dateStr: string): number {
     return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
+}
+
+function getRankPriority(rankOrGrad?: string): number {
+    if (!rankOrGrad) return 99;
+    const normalized = rankOrGrad.trim().toLowerCase().replace(/\s+/g, ' ');
+    
+    if (normalized.includes('coronel') || normalized === 'cel') return 1;
+    if (normalized.includes('tenente coronel') || normalized.includes('tenente-coronel') || normalized === 'ten cel' || normalized === 'ten-cel') return 2;
+    if (normalized.includes('major') || normalized === 'maj') return 3;
+    if (normalized.includes('capitão') || normalized.includes('capitao') || normalized === 'cap') return 4;
+    if (normalized.includes('1º tenente') || normalized.includes('1o tenente') || normalized === '1º ten' || normalized === '1o ten') return 5;
+    if (normalized.includes('2º tenente') || normalized.includes('2o tenente') || normalized === '2º ten' || normalized === '2o ten') return 6;
+    if (normalized.includes('subtenente') || normalized.includes('sub tenente') || normalized.includes('sub-tenente') || normalized === 'sub ten' || normalized === 'sub-ten') return 7;
+    if (normalized.includes('1º sargento') || normalized.includes('1o sargento') || normalized === '1º sgt' || normalized === '1o sgt') return 8;
+    if (normalized.includes('2º sargento') || normalized.includes('2 º sargento') || normalized.includes('2o sargento') || normalized === '2º sgt' || normalized === '2 º sgt' || normalized === '2o sgt') return 9;
+    if (normalized.includes('3º sargento') || normalized.includes('3o sargento') || normalized === '3º sgt' || normalized === '3o sgt') return 10;
+    if (normalized.includes('cabo') || normalized === 'cb') return 11;
+    if (normalized.includes('soldado') || normalized === 'sd') return 12;
+    if (normalized.includes('bombeiro comunitário') || normalized.includes('bombeiro de comunidade') || normalized.includes('bombeiro comunitario') || normalized === 'bc') return 13;
+    
+    return 99;
 }
 
 function ExpiryBadge({ date }: { date?: string }) {
@@ -46,6 +67,7 @@ export default function CursosB1({ personnelList }: Props) {
     const [filterPersonnel, setFilterPersonnel] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
     const [search, setSearch] = useState('');
+    const [sortByAvailability, setSortByAvailability] = useState(true);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -54,11 +76,46 @@ export default function CursosB1({ personnelList }: Props) {
         const enriched = data.map(c => ({
             ...c,
             personnel_name: personnelMap.get(c.personnel_id)?.name || `ID ${c.personnel_id}`,
-            personnel_rank: personnelMap.get(c.personnel_id)?.rank,
+            personnel_rank: personnelMap.get(c.personnel_id)?.graduation || personnelMap.get(c.personnel_id)?.rank,
         }));
         setCourses(enriched);
         setLoading(false);
     }, [personnelList]);
+
+    const sortedPersonnel = useMemo(() => {
+        if (!sortByAvailability) {
+            return personnelList.slice().sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        const year = form.completion_date
+            ? Number(form.completion_date.split('-')[0])
+            : new Date().getFullYear();
+
+        return personnelList.slice().sort((a, b) => {
+            const hasA = courses.some(
+                c => c.personnel_id === a.id && 
+                c.completion_date && 
+                Number(c.completion_date.split('-')[0]) === year
+            );
+            const hasB = courses.some(
+                c => c.personnel_id === b.id && 
+                c.completion_date && 
+                Number(c.completion_date.split('-')[0]) === year
+            );
+
+            if (hasA && !hasB) return 1;
+            if (!hasA && hasB) return -1;
+
+            const rankA = getRankPriority(a.graduation || a.rank);
+            const rankB = getRankPriority(b.graduation || b.rank);
+
+            if (rankA !== rankB) {
+                return rankA - rankB;
+            }
+
+            return a.name.localeCompare(b.name);
+        });
+    }, [personnelList, courses, sortByAvailability, form.completion_date]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -90,7 +147,7 @@ export default function CursosB1({ personnelList }: Props) {
         try {
             await PersonnelService.addCourse({ ...form, personnel_id: Number(form.personnel_id) });
             const person = personnelList.find(p => p.id === Number(form.personnel_id));
-            GoogleSheetsService.syncCourse(form, person?.name || '', person?.rank || '').catch(() => { });
+            GoogleSheetsService.syncCourse(form, person?.name || '', person?.graduation || person?.rank || '').catch(() => { });
             syncCursoDrive({ name: person?.name || '', rank: person?.rank || person?.graduation }, form).catch(() => { });
             toast.success('Curso registrado com sucesso!');
             closeModal();
@@ -148,7 +205,7 @@ export default function CursosB1({ personnelList }: Props) {
                     className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-[#C62828]"
                 >
                     <option value="">Todos os militares</option>
-                    {personnelList.map(p => <option key={p.id} value={p.id}>{p.rank} {p.name}</option>)}
+                    {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation || p.rank || ''} {p.name}</option>)}
                 </select>
                 <select
                     value={filterCategory}
@@ -170,7 +227,7 @@ export default function CursosB1({ personnelList }: Props) {
                 <div className="text-center py-14 border-2 border-dashed border-stone-200 rounded-2xl">
                     <span className="material-symbols-outlined text-5xl block mb-3 text-stone-400">school</span>
                     <p className="text-sm text-stone-500 font-medium">Nenhum curso encontrado</p>
-                    <p className="text-xs text-stone-400 mt-1">Use o botão "Novo Curso" para adicionar</p>
+                    <p className="text-xs text-stone-400 mt-1">Use o botão &quot;Novo Curso&quot; para adicionar</p>
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -266,6 +323,29 @@ export default function CursosB1({ personnelList }: Props) {
                         {/* Modal Body */}
                         <form onSubmit={handleSubmit} className="px-7 py-6 space-y-5">
 
+                            {/* Ordenação por Disponibilidade Toggle */}
+                            <div className="flex items-center justify-between p-3.5 bg-stone-50 border-2 border-stone-200 rounded-xl">
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-stone-700">Priorizar por Disponibilidade</span>
+                                    <span className="text-[10px] text-stone-400 mt-0.5">
+                                        Militar sem curso no ano ({form.completion_date ? Number(form.completion_date.split('-')[0]) : new Date().getFullYear()}) e mais antigo no topo
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSortByAvailability(!sortByAvailability)}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                        sortByAvailability ? 'bg-[#C62828]' : 'bg-stone-300'
+                                    }`}
+                                >
+                                    <span
+                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                            sortByAvailability ? 'translate-x-5' : 'translate-x-0'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
                             {/* Militar (dropdown) */}
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold uppercase tracking-wider text-stone-400">
@@ -276,17 +356,24 @@ export default function CursosB1({ personnelList }: Props) {
                                     <select
                                         value={form.personnel_id || ''}
                                         onChange={e => setForm(f => ({ ...f, personnel_id: Number(e.target.value) }))}
-                                        className="w-full pl-10 pr-4 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors appearance-none"
+                                        className="w-full pl-10 pr-10 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors appearance-none"
                                         required
                                     >
                                         <option value="">Selecione o militar...</option>
-                                        {personnelList
-                                            .slice()
-                                            .sort((a, b) => a.name.localeCompare(b.name))
-                                            .map(p => (
-                                                <option key={p.id} value={p.id}>{p.rank} {p.name}</option>
-                                            ))}
+                                        {sortedPersonnel.map(p => {
+                                            const displayRank = p.graduation || p.rank || '';
+                                            const year = form.completion_date 
+                                                ? Number(form.completion_date.split('-')[0]) 
+                                                : new Date().getFullYear();
+                                            const hasCourse = courses.some(c => c.personnel_id === p.id && c.completion_date && Number(c.completion_date.split('-')[0]) === year);
+                                            return (
+                                                <option key={p.id} value={p.id}>
+                                                    {displayRank} {p.name} {sortByAvailability ? (hasCourse ? `(Já fez curso em ${year})` : '(Disponível)') : ''}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
+                                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-stone-400 pointer-events-none">expand_more</span>
                                 </div>
                             </div>
 

@@ -5,8 +5,11 @@ import type { RelatorioMensal } from './b4RelatorioService';
 const WEBHOOK_URL = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
 const SHEET_EFETIVO = import.meta.env.VITE_SHEETS_EFETIVO_ABA || 'CadastroEfetivo';
 
+// ─── Planilha Mestre B1 — usada por TODAS as abas do módulo B1 ────────────────
+const B1_SPREADSHEET_ID = import.meta.env.VITE_SHEETS_EFETIVO_ID || '13U9RCucWBBO2eovZtWX3-CxjZ6coEMsxEh1qYsFiKRw';
+
 // ─── B4 Patrimônio — Spreadsheet ID (aligned with main B1 spreadsheet) ────────
-const B4_SPREADSHEET_ID = import.meta.env.VITE_SHEETS_EFETIVO_ID || '13U9RCucWBBO2eovZtWX3-CxjZ6coEMsxEh1qYsFiKRw';
+const B4_SPREADSHEET_ID = B1_SPREADSHEET_ID;
 
 // Map item types to the exact tab names in the spreadsheet
 const B4_TAB_MAP: Record<string, string> = {
@@ -126,7 +129,7 @@ export const GoogleSheetsService = {
             person.weapon_permit ? 'Sim' : 'Não',            // Y: Porte de Arma
             formatDate(person.last_cadastro_review),          // Z: Última Revisão Cadastro
         ];
-        return sendToSheets(SHEET_EFETIVO, row);
+        return sendToSheets(SHEET_EFETIVO, row, { spreadsheetId: B1_SPREADSHEET_ID });
     },
 
     syncVehicle: async (vehicle: Partial<Vehicle>): Promise<boolean> => {
@@ -261,21 +264,33 @@ export const GoogleSheetsService = {
     },
 
     syncCourse: async (course: Partial<B1Course>, personnelName: string, rank: string): Promise<boolean> => {
+        const CURSO_HEADERS = [
+            'Data Registro', 'Militar', 'Graduação', 'Curso', 'Sigla',
+            'Instituição', 'Carga Horária (h)', 'Data Conclusão', 'Validade', 'Categoria',
+        ];
         const row = [
             new Date().toLocaleDateString('pt-BR'),
             personnelName,
             rank,
             course.course_name || '',
+            course.sigla_curso || '',
             course.institution || '',
             course.workload_hours?.toString() || '',
             formatDate(course.completion_date),
             formatDate(course.expiry_date),
             course.category || '',
         ];
-        return sendToSheets('Cursos B1', row);
+        return sendToSheets('CursosEfetivo', row, {
+            spreadsheetId: B1_SPREADSHEET_ID,
+            headers: CURSO_HEADERS,
+        });
     },
 
     syncEpi: async (epi: Partial<EpiDelivery>, personnelName: string, rank: string): Promise<boolean> => {
+        const EPI_HEADERS = [
+            'Data Registro', 'Militar', 'Graduação', 'Item', 'Tipo',
+            'Descrição', 'Data Entrega', 'Data Substituição', 'Qtd', 'Condição', 'Nº Patrimônio',
+        ];
         const row = [
             new Date().toLocaleDateString('pt-BR'),
             personnelName,
@@ -289,7 +304,10 @@ export const GoogleSheetsService = {
             epi.condition || '',
             epi.patrimonio_number || '',
         ];
-        return sendToSheets('Uniformes EPIs', row);
+        return sendToSheets('Uniformes EPIs', row, {
+            spreadsheetId: B1_SPREADSHEET_ID,
+            headers: EPI_HEADERS,
+        });
     },
 
     syncEscala: async (escala: Partial<Escala>, names: string): Promise<boolean> => {
@@ -301,7 +319,7 @@ export const GoogleSheetsService = {
             escala.shift_type || '',
             escala.is_folga ? 'Sim' : 'Não'
         ];
-        return sendToSheets('Escalas', row);
+        return sendToSheets('Escalas', row, { spreadsheetId: B1_SPREADSHEET_ID });
     },
 
     syncServiceSwap: async (swap: Partial<ServiceSwap>, milA: string, milB: string, approver?: string): Promise<boolean> => {
@@ -315,7 +333,7 @@ export const GoogleSheetsService = {
             swap.approval_status || 'Pendente',
             approver || ''
         ];
-        return sendToSheets('Trocas_Servico', row);
+        return sendToSheets('Trocas_Servico', row, { spreadsheetId: B1_SPREADSHEET_ID });
     },
 
     syncSwapCounter: async (personnelName: string, month: string, count: number): Promise<boolean> => {
@@ -325,7 +343,7 @@ export const GoogleSheetsService = {
             month,
             count.toString()
         ];
-        return sendToSheets('Contador_Trocas', row);
+        return sendToSheets('Contador_Trocas', row, { spreadsheetId: B1_SPREADSHEET_ID });
     },
 
     syncMonthlyScale: async (month: string, escalas: Escala[], personnel: Personnel[]): Promise<boolean> => {
