@@ -58,32 +58,25 @@ async function callWebhook(payload: WebhookPayload): Promise<{ ok: boolean; erro
         return { ok: false, error: 'VITE_GOOGLE_SHEETS_WEBHOOK_URL não configurado.' };
     }
     try {
-        const isNode = typeof window === 'undefined';
-        const fetchOptions: { method: string; headers: Record<string, string>; body: string; mode?: 'cors' | 'no-cors' | 'same-origin' } = {
+        const fetchOptions: { method: string; headers: Record<string, string>; body: string } = {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(payload),
         };
 
-        if (!isNode) {
-            fetchOptions.mode = 'no-cors';
-        }
-
         const response = await fetch(WEBHOOK_URL, fetchOptions);
 
-        if (isNode || fetchOptions.mode !== 'no-cors') {
-            if (!response.ok) {
-                const errText = await response.text().catch(() => '');
-                const errMsg = `Erro HTTP ${response.status}: ${response.statusText}. Detalhes: ${errText}`;
-                console.error('[SyncScheduler] Falha na requisição:', errMsg);
-                return { ok: false, error: errMsg };
-            }
-            const resJson = await response.json().catch(() => null) as { success: boolean; error?: string } | null;
-            if (resJson && resJson.success === false) {
-                const errMsg = resJson.error || 'Erro interno reportado pelo Apps Script.';
-                console.error('[SyncScheduler] Erro do Apps Script:', errMsg);
-                return { ok: false, error: errMsg };
-            }
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            const errMsg = `Erro HTTP ${response.status}: ${response.statusText}. Detalhes: ${errText}`;
+            console.error('[SyncScheduler] Falha na requisição:', errMsg);
+            return { ok: false, error: errMsg };
+        }
+        const resJson = await response.json().catch(() => null) as { success: boolean; error?: string } | null;
+        if (resJson && resJson.success === false) {
+            const errMsg = resJson.error || 'Erro interno reportado pelo Apps Script.';
+            console.error('[SyncScheduler] Erro do Apps Script:', errMsg);
+            return { ok: false, error: errMsg };
         }
 
         return { ok: true };
@@ -112,7 +105,7 @@ async function updateSyncStatus(
 // ─── Funções de Sync por Tabela ────────────────────────────────────────────────
 
 async function syncPersonnelRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const str = (v: unknown) => (v != null ? String(v) : '');
+    const str = (v: unknown) => (v !== null && v !== undefined ? String(v) : '');
     const data: (string | null)[] = [
         str(record.matricula),
         str(record.name),
@@ -155,7 +148,7 @@ async function syncPersonnelRecord(record: Record<string, unknown>): Promise<{ o
 }
 
 async function syncVacationRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const str = (v: unknown) => (v != null ? String(v) : '');
+    const str = (v: unknown) => (v !== null && v !== undefined ? String(v) : '');
     const data: (string | null)[] = [
         str(record.id),
         str(record.full_name),
@@ -179,7 +172,7 @@ async function syncVacationRecord(record: Record<string, unknown>): Promise<{ ok
 }
 
 async function syncDisciplinaryRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const str = (v: unknown) => (v != null ? String(v) : '');
+    const str = (v: unknown) => (v !== null && v !== undefined ? String(v) : '');
     const data: (string | null)[] = [
         str(record.id),
         str(record.personnel_name),
@@ -202,7 +195,7 @@ async function syncDisciplinaryRecord(record: Record<string, unknown>): Promise<
 }
 
 async function syncCourseRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const str = (v: unknown) => (v != null ? String(v) : '');
+    const str = (v: unknown) => (v !== null && v !== undefined ? String(v) : '');
     const data: (string | null)[] = [
         str(record.id),
         str(record.personnel_id),
@@ -242,7 +235,7 @@ async function syncFleetRecord(record: Record<string, unknown>): Promise<{ ok: b
     let headers: string[];
     let keyValue: string;
 
-    const str = (v: unknown) => (v != null ? String(v) : '');
+    const str = (v: unknown) => (v !== null && v !== undefined ? String(v) : '');
     if (type === 'Viatura') {
         sheetName = 'Viatura';
         keyValue = str(record.plate || record.id);
@@ -291,7 +284,7 @@ async function syncFleetRecord(record: Record<string, unknown>): Promise<{ ok: b
 }
 
 async function syncTrainingRecord(record: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
-    const str = (v: unknown) => (v != null ? String(v) : '');
+    const str = (v: unknown) => (v !== null && v !== undefined ? String(v) : '');
     const data: (string | null)[] = [
         str(record.id),
         formatDate(record.date as string),

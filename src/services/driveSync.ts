@@ -43,30 +43,23 @@ async function sendToSheets(
         const body: Record<string, unknown> = { sheet, data };
         if (spreadsheetId) body.spreadsheetId = spreadsheetId; // roteamento dinâmico
 
-        const isNode = typeof window === 'undefined';
-        const fetchOptions: { method: string; headers: Record<string, string>; body: string; mode?: 'cors' | 'no-cors' | 'same-origin' } = {
+        const fetchOptions: { method: string; headers: Record<string, string>; body: string } = {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(body),
         };
 
-        if (!isNode) {
-            fetchOptions.mode = 'no-cors';
-        }
-
         const res = await fetch(WEBHOOK_URL, fetchOptions);
 
-        if (isNode || fetchOptions.mode !== 'no-cors') {
-            if (!res.ok) {
-                const errText = await res.text().catch(() => '');
-                console.error(`[driveSync] Webhook HTTP Error ${res.status}: ${res.statusText}. Details: ${errText}`);
-                return false;
-            }
-            const resJson = await res.json().catch(() => null) as { success: boolean; error?: string } | null;
-            if (resJson && resJson.success === false) {
-                console.error(`[driveSync] Apps Script Error for "${sheet}":`, resJson.error);
-                return false;
-            }
+        if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            console.error(`[driveSync] Webhook HTTP Error ${res.status}: ${res.statusText}. Details: ${errText}`);
+            return false;
+        }
+        const resJson = await res.json().catch(() => null) as { success: boolean; error?: string } | null;
+        if (resJson && resJson.success === false) {
+            console.error(`[driveSync] Apps Script Error for "${sheet}":`, resJson.error);
+            return false;
         }
 
         console.log(`✅ [driveSync] Dados enviados para aba "${sheet}"${ spreadsheetId ? ' (planilha: ' + spreadsheetId.slice(0,8) + '...)' : '' }`);
