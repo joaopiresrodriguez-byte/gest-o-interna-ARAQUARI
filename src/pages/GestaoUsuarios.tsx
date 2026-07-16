@@ -7,11 +7,7 @@ const GestaoUsuarios: React.FC = () => {
     const [profiles, setProfiles] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        fetchProfiles();
-    }, []);
-
-    const fetchProfiles = async () => {
+    async function fetchProfiles() {
         setLoading(true);
         const { data, error } = await supabase
             .from('profiles')
@@ -24,7 +20,14 @@ const GestaoUsuarios: React.FC = () => {
             setProfiles(data || []);
         }
         setLoading(false);
-    };
+    }
+
+    useEffect(() => {
+        const t = setTimeout(() => {
+            fetchProfiles();
+        }, 0);
+        return () => clearTimeout(t);
+    }, []);
 
     const handleUpdatePermission = async (userId: string, column: string, value: string | boolean | null) => {
         const { error } = await supabase

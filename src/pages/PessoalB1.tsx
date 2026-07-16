@@ -153,7 +153,7 @@ const PessoalB1: React.FC = () => {
 
   // Scale state
 
-  const [scaleAnchorDate, setScaleAnchorDate] = useState('2024-01-01');
+  const [scaleAnchorDate, setScaleAnchorDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   const [scaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
 
@@ -242,6 +242,8 @@ const PessoalB1: React.FC = () => {
       if (configs && configs.length > 0) {
         const active = configs[0];
         setScaleAnchorDate(active.anchorDate);
+      } else {
+        setScaleAnchorDate(new Date().toISOString().split('T')[0]);
       }
     } catch (err: any) {
       toast.error('Erro ao carregar dados: ' + (err.message || 'Desconhecido'));
@@ -517,6 +519,27 @@ const PessoalB1: React.FC = () => {
 
         await PersonnelService.saveEscala(entry);
       }
+
+      // Save configuration back to DB
+      const CORES: Record<string, string> = {
+        A: '#2563EB',
+        B: '#DC2626',
+        C: '#EAB308',
+        D: '#9CA3AF',
+      };
+      const configTeams = guarnicoesFormatadas.map(g => ({
+        name: g.codigo,
+        color: CORES[g.codigo] || '#9CA3AF',
+        personnelIds: g.membrosIds
+      }));
+      const currentConfigs = await PersonnelService.getScaleConfigs();
+      const configId = currentConfigs.length > 0 ? currentConfigs[0].id : undefined;
+      await PersonnelService.saveScaleConfig({
+        id: configId,
+        anchorDate,
+        teams: configTeams,
+        shiftStartTime: '07:30'
+      });
 
       loadData();
       toast.success(`Escala de ${month} publicada usando motor determinístico!`);
@@ -1194,7 +1217,7 @@ const PessoalB1: React.FC = () => {
                                               <p className="text-gray-400 mt-0.5">
                                                 {formatLocalDate(v.start_date)} até {formatLocalDate(v.end_date)}
                                               </p>
-                                              {v.notes && <p className="text-gray-500 mt-1 italic font-medium">"{v.notes}"</p>}
+                                              {v.notes && <p className="text-gray-500 mt-1 italic font-medium">&quot;{v.notes}&quot;</p>}
                                             </div>
                                           );
                                         })

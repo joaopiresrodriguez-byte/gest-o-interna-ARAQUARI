@@ -151,7 +151,7 @@ const SSCI: React.FC = () => {
             // Storage cleanup logic could be added here if desired.
             loadData();
             if (currentAnalysis?.id === id) setCurrentAnalysis(null);
-        } catch (error) {
+        } catch {
             alert("Erro ao excluir análise.");
         }
     };
@@ -165,7 +165,7 @@ const SSCI: React.FC = () => {
                 setMessages([]);
             }
             loadData();
-        } catch (error) {
+        } catch {
             alert("Erro ao excluir sessão.");
         }
     };
@@ -260,7 +260,7 @@ const SSCI: React.FC = () => {
             setDocumentFile(null);
             setDocumentName("");
             loadData();
-        } catch (error) {
+        } catch {
             showToast('Erro ao salvar documento.', 'error');
         } finally {
             setLoading(false);

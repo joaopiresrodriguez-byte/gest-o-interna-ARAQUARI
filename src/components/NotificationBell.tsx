@@ -1,47 +1,72 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PersonnelService } from '../services/personnelService';
 import { InternalNotification } from '../services/types';
 
 export default function NotificationBell() {
     const [open, setOpen] = useState(false);
+    const [now, setNow] = useState(() => Date.now());
     const [unreadCount, setUnreadCount] = useState(0);
     const [notifications, setNotifications] = useState<InternalNotification[]>([]);
     const [loading, setLoading] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
 
-    const loadCount = useCallback(async () => {
-        try {
-            const count = await PersonnelService.getUnreadCount();
-            setUnreadCount(count);
-        } catch { /* silent */ }
-    }, []);
 
-    const loadNotifications = useCallback(async () => {
-        setLoading(true);
-        try {
-            const list = await PersonnelService.getNotifications(15);
-            setNotifications(list);
-            setUnreadCount(list.filter(n => !n.is_read).length);
-        } catch { /* silent */ }
-        setLoading(false);
+
+    useEffect(() => {
+        let active = true;
+        const fetchCount = () => {
+            PersonnelService.getUnreadCount().then(count => {
+                if (active) setUnreadCount(count);
+            }).catch(() => {});
+        };
+
+        // Fetch asynchronously after mount
+        const t = setTimeout(fetchCount, 0);
+
+        const interval = setInterval(fetchCount, 60000);
+        return () => {
+            active = false;
+            clearTimeout(t);
+            clearInterval(interval);
+        };
     }, []);
 
     useEffect(() => {
-        loadCount();
-        const interval = setInterval(loadCount, 60000);
-        return () => clearInterval(interval);
-    }, [loadCount]);
+        if (!open) return;
+        let active = true;
 
-    useEffect(() => {
-        if (open) loadNotifications();
-    }, [open, loadNotifications]);
+        const fetchNotifications = () => {
+            setLoading(true);
+            setNow(Date.now());
+            PersonnelService.getNotifications(15).then(list => {
+                if (active) {
+                    setNotifications(list);
+                    setUnreadCount(list.filter(n => !n.is_read).length);
+                    setLoading(false);
+                }
+            }).catch(() => {
+                if (active) setLoading(false);
+            });
+        };
+
+        const t = setTimeout(fetchNotifications, 0);
+        return () => {
+            active = false;
+            clearTimeout(t);
+        };
+    }, [open]);
 
     // Close on outside click
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
         };
-        if (open) document.addEventListener('mousedown', handler);
+        if (open) {
+            const t = setTimeout(() => {
+                document.addEventListener('mousedown', handler);
+            }, 0);
+            return () => clearTimeout(t);
+        }
         return () => document.removeEventListener('mousedown', handler);
     }, [open]);
 
@@ -62,7 +87,7 @@ export default function NotificationBell() {
     };
 
     const timeAgo = (dateStr: string) => {
-        const diff = Date.now() - new Date(dateStr).getTime();
+        const diff = now - new Date(dateStr).getTime();
         const mins = Math.floor(diff / 60000);
         if (mins < 1) return 'agora';
         if (mins < 60) return `${mins}min`;

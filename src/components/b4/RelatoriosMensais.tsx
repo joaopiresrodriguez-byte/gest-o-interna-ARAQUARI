@@ -259,7 +259,7 @@ const RelatoriosMensais: React.FC = () => {
 
         {historico.length === 0 ? (
           <p className="text-center text-gray-400 italic py-8">
-            Nenhum relatório gerado ainda. Selecione o mês/ano e clique em "GERAR RELATÓRIO".
+            Nenhum relatório gerado ainda. Selecione o mês/ano e clique em &quot;GERAR RELATÓRIO&quot;.
           </p>
         ) : (
           <div className="overflow-x-auto">

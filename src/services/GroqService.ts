@@ -247,7 +247,7 @@ Forneça a análise no formato especificado, citando artigos, incisos e parágra
     },
 
     extrairNormativas: (texto: string): string[] => {
-        const regex = /(IN|Instrução Normativa|Lei|Decreto|Portaria)\s+(Nº\s+)?([0-9\.\/\-]+)/gi;
+        const regex = /(IN|Instrução Normativa|Lei|Decreto|Portaria)\s+(Nº\s+)?([0-9./-]+)/gi;
         const matches = texto.match(regex);
         return matches ? Array.from(new Set(matches.map(m => m.trim()))) : [];
     }

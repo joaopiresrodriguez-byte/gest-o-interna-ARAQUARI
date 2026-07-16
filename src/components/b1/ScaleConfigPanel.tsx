@@ -25,7 +25,14 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     });
-    const [anchorDate, setAnchorDate] = useState(initialAnchorDate || '2024-01-01');
+    const [prevInitialAnchorDate, setPrevInitialAnchorDate] = useState(initialAnchorDate);
+    const [anchorDate, setAnchorDate] = useState(() => initialAnchorDate || new Date().toISOString().split('T')[0]);
+
+    if (initialAnchorDate !== prevInitialAnchorDate) {
+        setPrevInitialAnchorDate(initialAnchorDate);
+        setAnchorDate(initialAnchorDate || new Date().toISOString().split('T')[0]);
+    }
+
     const [shiftType, setShiftType] = useState('24x72');
     const [stats, setStats] = useState({ guarnicoes: 0, membros: 0 });
 

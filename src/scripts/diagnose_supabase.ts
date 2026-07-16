@@ -35,7 +35,7 @@ async function diagnose() {
         } else {
             console.log('Table exists but is empty.');
             // Try to get columns anyway if empty
-            const { data: cols, error: colError } = await supabase.from(table).select('*').limit(0);
+            const { error: colError } = await supabase.from(table).select('*').limit(0);
             if (!colError) {
                 // Note: select * limit 0 might not give keys in some drivers but let's see
             }

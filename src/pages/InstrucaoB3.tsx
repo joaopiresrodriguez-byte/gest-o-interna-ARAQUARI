@@ -877,7 +877,7 @@ const InstrucaoB3: React.FC = () => {
                   <div className="space-y-3">
                     <h4 className="text-sm font-black uppercase tracking-widest text-[#C62828]">Descrição do Conteúdo</h4>
                     <p className="text-lg text-[#4A443F] leading-relaxed italic border-l-4 border-[#C62828] pl-6 bg-white py-6 rounded-r-2xl">
-                      "{selectedMateria.description || "Nenhuma ementa detalhada disponível para esta matéria."}"
+                      &quot;{selectedMateria.description || "Nenhuma ementa detalhada disponível para esta matéria."}&quot;
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

@@ -57,7 +57,7 @@ export default function DisponibilidadeB1({ personnelList, vacations, escalas }:
             }
             return { person: p, status: 'disponível', detail: 'Expediente / folga' };
         });
-    }, [personnelList, onVacationIds, todayEscalaIds, today]);
+    }, [personnelList, onVacationIds, todayEscalaIds, today, vacations]);
 
     const grouped = useMemo(() => {
         const g: Record<AvailabilityStatus, PersonStatus[]> = {
