@@ -83,9 +83,11 @@ export async function gerarRelatorioMensal(
   const viaturasOp = viaturas.filter((v: any) => v.status === 'active');
   const viaturasMan = viaturas.filter((v: any) => v.status === 'maintenance');
 
-  const custoCompras = allPurchases.reduce(
-    (acc: number, p: any) => acc + ((p.unit_price || 0) * (p.quantity || 1)), 0
-  );
+  const custoCompras = allPurchases.reduce((acc: number, p: any) => {
+    const unitPrice = typeof p.unit_price === 'number' ? p.unit_price : parseFloat(p.unit_price) || 0;
+    const quantity = typeof p.quantity === 'number' ? p.quantity : parseInt(p.quantity, 10) || 1;
+    return acc + (unitPrice * quantity);
+  }, 0);
 
   const totalKm = viaturas.reduce(
     (acc: number, v: any) => acc + (v.current_km || 0), 0
