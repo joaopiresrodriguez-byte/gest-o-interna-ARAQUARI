@@ -220,13 +220,18 @@ export const PersonnelService = {
     },
 
     addRankHistory: async (entry: Omit<RankHistory, 'id'>): Promise<RankHistory> => {
-        const { data, error } = await supabase
-            .from('rank_history')
-            .insert(entry)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await supabase
+                .from('rank_history')
+                .insert(entry)
+                .select()
+                .single();
+            if (error) throw new Error(`Erro ao registrar histórico de posto: ${error.message}`);
+            return data;
+        } catch (error) {
+            console.error('addRankHistory failed:', error);
+            throw error;
+        }
     },
 
     // ===== SERVICE SWAPS =====
@@ -305,14 +310,19 @@ export const PersonnelService = {
     },
 
     addDisciplinaryRecord: async (record: Omit<DisciplinaryRecord, 'id'>): Promise<DisciplinaryRecord> => {
-        const { data, error } = await supabase
-            .from('disciplinary_records')
-            .insert({ ...record, sync_status: 'pending' })
-            .select()
-            .single();
-        if (error) throw error;
-        if (data?.id) triggerSync('disciplinary_records', data.id).catch(() => {});
-        return data;
+        try {
+            const { data, error } = await supabase
+                .from('disciplinary_records')
+                .insert({ ...record, sync_status: 'pending' })
+                .select()
+                .single();
+            if (error) throw new Error(`Erro ao registrar ocorrência disciplinar: ${error.message}`);
+            if (data?.id) triggerSync('disciplinary_records', data.id).catch(() => {});
+            return data;
+        } catch (error) {
+            console.error('addDisciplinaryRecord failed:', error);
+            throw error;
+        }
     },
 
     deleteDisciplinaryRecord: async (id: string): Promise<void> => {
@@ -368,13 +378,18 @@ export const PersonnelService = {
     },
 
     addBulletinNote: async (note: Omit<BulletinNote, 'id'>): Promise<BulletinNote> => {
-        const { data, error } = await supabase
-            .from('bulletin_notes')
-            .insert(note)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await supabase
+                .from('bulletin_notes')
+                .insert(note)
+                .select()
+                .single();
+            if (error) throw new Error(`Erro ao salvar nota de boletim: ${error.message}`);
+            return data;
+        } catch (error) {
+            console.error('addBulletinNote failed:', error);
+            throw error;
+        }
     },
 
     // ===== BULLETIN VERSIONS =====
@@ -389,13 +404,18 @@ export const PersonnelService = {
     },
 
     addBulletinVersion: async (version: Omit<BulletinVersion, 'id'>): Promise<BulletinVersion> => {
-        const { data, error } = await supabase
-            .from('bulletin_versions')
-            .insert(version)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await supabase
+                .from('bulletin_versions')
+                .insert(version)
+                .select()
+                .single();
+            if (error) throw new Error(`Erro ao registrar versão de boletim: ${error.message}`);
+            return data;
+        } catch (error) {
+            console.error('addBulletinVersion failed:', error);
+            throw error;
+        }
     },
 
     // ===== SIGRH EXPORTS =====
