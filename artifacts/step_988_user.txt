@@ -1,0 +1,38 @@
+<USER_REQUEST>
+AUDITORIA E MIGRAÇÃO: INTEGRAÇÃO GOOGLE
+
+DIAGNÓSTICO — NÃO ALTERE NADA.
+Apenas leia e retorne tudo abaixo.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BLOCO 1 — MAPA DA INTEGRAÇÃO ATUAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Liste TODOS os arquivos do projeto
+que contenham qualquer uma dessas 
+palavras-chave:
+
+google | drive | sheets | gapi |
+googleapis | DriveSync | SheetSync |
+VITE_GOOGLE | spreadsheet | oauth
+
+Retorne: nome do arquivo + caminho
+completo de cada um encontrado.
+
+2. Para cada arquivo encontrado, 
+mostre o conteúdo completo.
+
+3. Liste todas as variáveis de 
+ambiente no .env e .env.local
+que contenham:
+GOOGLE | DRIVE | SHEET | CLIENT |
+SECRET | PRIVATE_KEY | SERVICE
+
+(mostre os nomes mas oculte 
+os valores reais com ***)
+
+4. Execute no Supabase:
+
+-- Tabelas com referência a google/drive:
+SELECT table_name, column_name
+<truncated 11422 bytes>

@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
-import { GoogleSheetsService } from '../services/googleSheetsService';
+import { syncCalendar } from '../services/syncScheduler';
 import { supabase } from '../services/supabase';
-import { syncCursoDrive } from '../services/driveSync';
 import { formatLocalDate, parseLocalDate } from '../utils/dateUtils';
 
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
@@ -18,7 +17,7 @@ import NotificacoesB1 from '../components/b1/NotificacoesB1';
 import DashboardComandante from '../components/b1/DashboardComandante';
 import ScaleConfigPanel from '../components/b1/ScaleConfigPanel';
 import ScaleCalendar from '../components/b1/ScaleCalendar';
-import { GoogleCalendarService } from '../services/googleCalendarService';
+
 import { ScaleReportingService } from '../services/scaleReportingService';
 
 type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
@@ -261,13 +260,7 @@ const PessoalB1: React.FC = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  useEffect(() => {
-    // Handle Google OAuth callback — extract and store token
-    const token = GoogleCalendarService.extractTokenFromHash();
-    if (token) {
-      toast.success('✅ Google Calendar autorizado! Use o botão de sincronização para publicar.');
-    }
-  }, []);
+  // Calendar auth is now handled server-side (Service Account via Edge Function)
 
   useEffect(() => {
     if (tab === 'DISCIPLINA') loadDisciplinary();
@@ -313,12 +306,7 @@ const PessoalB1: React.FC = () => {
           category: 'Operacional' as const,
         }));
         const results = await Promise.allSettled(
-          cursosPayload.map(async c => {
-            const res = await PersonnelService.addCourse(c);
-            GoogleSheetsService.syncCourse(c, cleanedData.name || '', cleanedData.rank || cleanedData.graduation || '').catch(() => {});
-            syncCursoDrive({ name: cleanedData.name || '', rank: cleanedData.rank || cleanedData.graduation }, c).catch(() => {});
-            return res;
-          })
+          cursosPayload.map(c => PersonnelService.addCourse(c))
         );
         const failed = results.filter(r => r.status === 'rejected').length;
         if (failed > 0) toast.warning(`Militar salvo, mas ${failed} curso(s) falharam.`);
@@ -326,7 +314,7 @@ const PessoalB1: React.FC = () => {
         setCursosForm([]);
       }
 
-      GoogleSheetsService.syncPersonnel({ ...formData, ...cleanedData }).then(ok => { if (ok) toast.info('📊 Sincronizado com Google Sheets.'); });
+      // Sync via Edge Function is triggered automatically by personnelService.addPersonnel / updatePersonnel
       setFormData(emptyForm());
       setEditId(null);
       loadData();
@@ -577,40 +565,25 @@ const PessoalB1: React.FC = () => {
   };
 
   const handleSyncCalendar = async (months: { mes: number; ano: number }[]) => {
-    const token = GoogleCalendarService.getToken();
-    if (!token) {
-      toast.info('Redirecionando para autenticação Google...');
-      GoogleCalendarService.initAuth();
-      return;
-    }
-
     setCalendarSyncing(true);
-    setCalendarProgress('Preparando...');
-
+    setCalendarProgress('Enviando para servidor...');
     try {
-      const { totalSucesso, totalErros, todosErros } = await GoogleCalendarService.publicarMultiplosMeses(
-        months,
+      const result = await syncCalendar({
+        action: 'upsert',
         escalas,
-        personnelList,
-        token,
-        (current, total, label) => {
-          setCalendarProgress(`Publicando ${label}... (${current}/${total})`);
-        },
-      );
-
-      if (totalSucesso === 0 && totalErros === 0) {
-        toast.error('⚠️ Nenhuma escala encontrada para esse período. Clique em "Projetar e Publicar Escala" primeiro!');
-        setCalendarProgress('⚠️ Nenhuma escala publicada para sincronizar.');
-      } else if (totalErros === 0) {
-        toast.success(`✅ ${totalSucesso} eventos criados no Google Calendar!`);
-        setCalendarProgress(`✅ ${months.length} mês(es) publicado(s) com sucesso!`);
+        personnel: personnelList,
+        mes: months[0]?.mes,
+        ano: months[0]?.ano,
+      });
+      if (result.ok) {
+        toast.success(`✅ Escala de ${months.length} mês(es) enviada para o Google Calendar!`);
+        setCalendarProgress('✅ Sincronização concluída!');
       } else {
-        toast.error(`${totalSucesso} eventos criados, ${totalErros} erros. Detalhe: ${todosErros[0]}`);
-        setCalendarProgress(`${totalSucesso} eventos criados com ${totalErros} erros.`);
-        console.error("Erros do GCal:", todosErros);
+        toast.error('Falha na sincronização: ' + (result.error || 'Erro desconhecido'));
+        setCalendarProgress('');
       }
     } catch (error: any) {
-      toast.error('Erro na sincronização: ' + error.message);
+      toast.error('Erro ao contactar servidor: ' + error.message);
       setCalendarProgress('');
     } finally {
       setCalendarSyncing(false);
@@ -871,9 +844,10 @@ const PessoalB1: React.FC = () => {
                           <h3 className="font-black text-sm uppercase text-stone-400">Escala Publicada — {scaleMonth}</h3>
                           <button
                             onClick={async () => {
-                              const ok = await GoogleSheetsService.syncMonthlyScale(scaleMonth, escalas, personnelList);
-                              if (ok) toast.success('Planilha mestre sincronizada!');
-                              else toast.error('Falha ao sincronizar planilha.');
+                              toast.info('📊 Sincronização via servidor iniciada...');
+                              syncCalendar({ action: 'upsert', escalas, mes: Number(scaleMonth.split('-')[1]), ano: Number(scaleMonth.split('-')[0]) }).then(r => {
+                                if (r.ok) toast.success('Planilha mestre sincronizada!'); else toast.error('Falha ao sincronizar.');
+                              }).catch(() => {});
                             }}
                             className="flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white font-black rounded-xl text-xs hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200"
                           >

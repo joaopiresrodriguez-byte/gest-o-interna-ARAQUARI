@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { SupabaseService, SocialPost, Personnel, Occurrence } from '../services/SupabaseService';
-import { GoogleSheetsService } from '../services/googleSheetsService';
 import { toast } from 'sonner';
 
 type TabKey = 'DIVULGAÇÃO' | 'OCORRÊNCIAS' | 'ANIVERSARIANTES';
@@ -129,11 +128,7 @@ const SocialB5: React.FC = () => {
         status: 'registered',
       };
       await SupabaseService.addOccurrence(newOcc);
-
-      // Google Sheets sync
-      GoogleSheetsService.syncOccurrence(newOcc).then(ok => {
-        if (ok) toast.info('📊 Ocorrência sincronizada com Google Sheets.');
-      });
+      // Sync via Edge Function triggered automatically by DB webhook
 
       toast.success('Ocorrência registrada com sucesso!');
       resetOccForm();

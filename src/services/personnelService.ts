@@ -72,10 +72,9 @@ export const PersonnelService = {
             // Busca a matrícula antes de deletar para sincronizar com o Sheets
             const record = await personnelBase.getById(id);
             await personnelBase.delete(id);
-            // Remove da planilha de forma assíncrona usando a matrícula como chave
+            // Sinaliza à Edge Function para remover linha da planilha
             if (record?.matricula) {
-                const sheetsId = import.meta.env.VITE_SHEETS_EFETIVO_ID as string | undefined;
-                deleteFromSheets('CadastroEfetivo', 0, record.matricula, sheetsId).catch(() => {});
+                deleteFromSheets('personnel', record.matricula).catch(() => {});
             }
         } catch (error) {
             console.error('Error deleting personnel:', error);

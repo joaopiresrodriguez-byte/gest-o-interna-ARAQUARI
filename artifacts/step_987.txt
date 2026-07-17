@@ -1,0 +1,19 @@
+🤖 **Applying knowledge of `@[backend-specialist]`...**
+
+Aqui está o progresso detalhado de onde paramos, o passo a passo para as ações manuais que necessitam de privilégios administrativos no Supabase, e o relatório atualizado das recomendações.
+
+---
+
+### 1. Ações Executadas Automaticamente com Sucesso
+
+* **Limpeza do Bucket `ssci-anexos`**: O objeto órfão `.emptyFolderPlaceholder` de 0 bytes foi removido com sucesso via chamada de API.
+* **Remoção de Tabelas Legadas/Duplicadas (SQL Migration)**: Executamos uma migração que removeu com segurança as tabelas vazias (0 linhas) e sem uso ativo no código:
+  1. `mission` (removida)
+  2. `courses` (removida - a chave estrangeira em `training_schedule` foi limpa previamente)
+  3. `escala_excecoes` (removida)
+  4. `escala_membros` (removida)
+  5. `purchase` (removida)
+  6. `vehicle_checklists` (removida)
+
+> [!NOTE]
+<truncated 2870 bytes>

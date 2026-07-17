@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { PersonnelService } from '../../services/personnelService';
-import { GoogleSheetsService } from '../../services/googleSheetsService';
 import { EpiDelivery, Personnel } from '../../services/types';
 import { toast } from 'sonner';
 
@@ -71,8 +70,7 @@ export default function EpiB1({ personnelList }: Props) {
         setSaving(true);
         try {
             await PersonnelService.addEpiDelivery({ ...form, personnel_id: Number(form.personnel_id) });
-            const person = personnelList.find(p => p.id === Number(form.personnel_id));
-            GoogleSheetsService.syncEpi(form, person?.name || '', person?.rank || '').catch(() => { });
+            // Sync via Edge Function triggered automatically by DB webhook
             toast.success('Item registrado com sucesso');
             setShowForm(false);
             setForm(emptyForm());

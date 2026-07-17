@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { PersonnelService } from '../../services/personnelService';
-import { GoogleSheetsService } from '../../services/googleSheetsService';
 import { B1Course, Personnel } from '../../services/types';
 import { toast } from 'sonner';
-import { syncCursoDrive } from '../../services/driveSync';
 
 const CATEGORIES = ['Operacional', 'Administrativo', 'Saúde', 'Liderança', 'Especialização Técnica', 'Outros'] as const;
 
@@ -146,9 +144,7 @@ export default function CursosB1({ personnelList }: Props) {
         setSaving(true);
         try {
             await PersonnelService.addCourse({ ...form, personnel_id: Number(form.personnel_id) });
-            const person = personnelList.find(p => p.id === Number(form.personnel_id));
-            GoogleSheetsService.syncCourse(form, person?.name || '', person?.graduation || person?.rank || '').catch(() => { });
-            syncCursoDrive({ name: person?.name || '', rank: person?.rank || person?.graduation }, form).catch(() => { });
+            // Sync via Edge Function triggered automatically by DB webhook
             toast.success('Curso registrado com sucesso!');
             closeModal();
             await load();

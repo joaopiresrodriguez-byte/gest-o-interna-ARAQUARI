@@ -7,7 +7,6 @@ import {
   RelatorioMensal,
   RelatorioSalvo,
 } from '../../services/b4RelatorioService';
-import { GoogleSheetsService } from '../../services/googleSheetsService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -67,10 +66,7 @@ const RelatoriosMensais: React.FC = () => {
 
       await salvarRelatorio(resultado);
 
-      // Fire-and-forget Google Sheets sync
-      GoogleSheetsService.syncRelatorioB4(resultado).then(ok => {
-        if (ok) toast.info('📊 Relatório sincronizado com Google Sheets.');
-      });
+      // Sync via Edge Function is triggered automatically by DB webhook
 
       toast.success(`Relatório de ${MESES[mes - 1]}/${ano} gerado!`);
       loadHistorico();
