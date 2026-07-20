@@ -17,6 +17,7 @@ const SSCI = lazy(() => import('./pages/SSCI'));
 const Login = lazy(() => import('./pages/Login'));
 const GestaoUsuarios = lazy(() => import('./pages/GestaoUsuarios'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const ExtratoPublico = lazy(() => import('./pages/ExtratoPublico'));
 
 import ChangePasswordModal from './components/ChangePasswordModal';
 
@@ -231,7 +232,17 @@ const App: React.FC = () => {
       <AuthProvider>
         <Toaster position="top-right" richColors />
         <RouteErrorBoundary>
-          <ProtectedApp />
+          <Routes>
+            <Route
+              path="/extrato/:tipo/:id"
+              element={
+                <Suspense fallback={<LoadingFallback message="Carregando extrato público..." />}>
+                  <ExtratoPublico />
+                </Suspense>
+              }
+            />
+            <Route path="/*" element={<ProtectedApp />} />
+          </Routes>
         </RouteErrorBoundary>
       </AuthProvider>
     </BrowserRouter>

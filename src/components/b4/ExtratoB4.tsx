@@ -10,29 +10,62 @@ interface ExtratoB4Props {
   onClose: () => void;
 }
 
+interface QrCodeImageProps {
+  url: string;
+  size?: number;
+  className?: string;
+}
+
+// ─── Componente Helper para Renderizar QR Code em Imagem Base64 ────────────
+
+const QrCodeImage: React.FC<QrCodeImageProps> = ({ url, size = 80, className }) => {
+  const [imgSrc, setImgSrc] = useState<string>('');
+
+  useEffect(() => {
+    QRCode.toDataURL(url, {
+      width: size,
+      margin: 1,
+      color: { dark: '#1a1a1a', light: '#ffffff' },
+    })
+      .then(setImgSrc)
+      .catch(console.error);
+  }, [url, size]);
+
+  if (!imgSrc) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className="bg-gray-100 animate-pulse rounded-md flex items-center justify-center text-[9px] text-gray-400"
+      >
+        ...
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt="QR Code"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: 'block', margin: '0 auto' }}
+    />
+  );
+};
+
 // ─── Etiqueta QR individual ─────────────────────────────────────────────────
 
 const EtiquetaQR: React.FC<{ item: Vehicle }> = ({ item }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const qrUrl = `${window.location.origin}/patrimonio/item/${item.id}`;
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, qrUrl, {
-        width: 80,
-        margin: 1,
-        color: { dark: '#1a1a1a', light: '#ffffff' },
-      }).catch(console.error);
-    }
-  }, [qrUrl]);
 
   return (
     <div
       className="flex flex-col items-center gap-1 p-2 border border-gray-300 rounded-lg bg-white"
       style={{ width: '110px', minHeight: '130px', pageBreakInside: 'avoid' }}
     >
-      <canvas ref={canvasRef} style={{ width: 80, height: 80 }} />
-      <p className="text-[8px] font-black text-center leading-tight text-gray-800 break-words" style={{ maxWidth: '96px' }}>
+      <QrCodeImage url={qrUrl} size={80} />
+      <p className="text-[8px] font-black text-center leading-tight text-gray-800 break-words mt-1" style={{ maxWidth: '96px' }}>
         {item.name}
       </p>
       {item.patrimonio_number && (
@@ -47,24 +80,13 @@ const EtiquetaQR: React.FC<{ item: Vehicle }> = ({ item }) => {
 // ─── Linha de item no extrato tabular ────────────────────────────────────────
 
 const ItemRow: React.FC<{ item: Vehicle; index: number }> = ({ item, index }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const qrUrl = `${window.location.origin}/patrimonio/item/${item.id}`;
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, qrUrl, {
-        width: 48,
-        margin: 1,
-        color: { dark: '#1a1a1a', light: '#ffffff' },
-      }).catch(console.error);
-    }
-  }, [qrUrl]);
 
   return (
     <tr className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} style={{ pageBreakInside: 'avoid' }}>
       <td className="px-3 py-2 text-xs font-bold text-center text-gray-600 border border-gray-200">{index + 1}</td>
-      <td className="px-3 py-2 border border-gray-200">
-        <canvas ref={canvasRef} style={{ width: 48, height: 48 }} />
+      <td className="px-3 py-2 border border-gray-200 w-16">
+        <QrCodeImage url={qrUrl} size={48} />
       </td>
       <td className="px-3 py-2 border border-gray-200">
         <p className="text-xs font-bold text-gray-900">{item.name}</p>
@@ -99,6 +121,8 @@ const ExtratoB4: React.FC<ExtratoB4Props> = ({ local, items, onClose }) => {
     day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
+  const urlExtrato = `${window.location.origin}/extrato/${local.tipo}/${local.id}`;
+
   const handlePrint = () => {
     const printContent = printRef.current?.innerHTML;
     if (!printContent) return;
@@ -131,7 +155,7 @@ const ExtratoB4: React.FC<ExtratoB4Props> = ({ local, items, onClose }) => {
           .inativo { background: #fee2e2; color: #991b1b; }
           .etiqueta-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
           .etiqueta { border: 1px solid #d1d5db; border-radius: 6px; padding: 6px; width: 110px; text-align: center; page-break-inside: avoid; }
-          canvas { display: block; margin: 0 auto; }
+          img { display: block; margin: 0 auto; }
         </style>
       </head>
       <body>
@@ -159,15 +183,22 @@ const ExtratoB4: React.FC<ExtratoB4Props> = ({ local, items, onClose }) => {
       >
         {/* Header do modal */}
         <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-700 to-red-900 rounded-t-2xl">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="material-symbols-outlined text-red-200 text-[18px]">{tipoIcon}</span>
-              <span className="text-red-200 text-xs font-bold uppercase tracking-widest">{tipoLabel}</span>
+          <div className="flex items-center gap-4">
+            {/* QR Code Geral do Extrato para Visualização Rápida */}
+            <div className="bg-white p-1.5 rounded-xl shadow-inner flex flex-col items-center flex-shrink-0">
+              <QrCodeImage url={urlExtrato} size={64} />
+              <span className="text-[8px] font-black text-red-900 mt-0.5 uppercase tracking-wide">QR Extrato</span>
             </div>
-            <h2 className="text-2xl font-black text-white">{local.nome}</h2>
-            <p className="text-red-300 text-xs mt-0.5">
-              {items.length} item(s) registrado(s) · Gerado em {geracaoData}
-            </p>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-red-200 text-[18px]">{tipoIcon}</span>
+                <span className="text-red-200 text-xs font-bold uppercase tracking-widest">{tipoLabel}</span>
+              </div>
+              <h2 className="text-2xl font-black text-white">{local.nome}</h2>
+              <p className="text-red-300 text-xs mt-0.5">
+                {items.length} item(s) registrado(s) · Gerado em {geracaoData}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Toggle de visualização */}
@@ -213,13 +244,20 @@ const ExtratoB4: React.FC<ExtratoB4Props> = ({ local, items, onClose }) => {
           {/* Cabeçalho do extrato (visível na impressão) */}
           <div className="header mb-6">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-black text-gray-900">
-                  Extrato de Patrimônio — {local.nome}
-                </h1>
-                <p className="text-xs text-gray-500 mt-1">
-                  Corpo de Bombeiros Militar de Santa Catarina · {tipoLabel} · {items.length} item(s) · {geracaoData}
-                </p>
+              <div className="flex items-center gap-4">
+                {/* QR Code Geral do Extrato para Impressão */}
+                <div className="border border-gray-300 p-1 rounded-lg bg-white flex flex-col items-center flex-shrink-0" style={{ width: '74px' }}>
+                  <QrCodeImage url={urlExtrato} size={64} />
+                  <span className="text-[7px] font-bold text-gray-500 mt-0.5 uppercase tracking-wide text-center">QR Extrato</span>
+                </div>
+                <div>
+                  <h1 className="text-xl font-black text-gray-900">
+                    Extrato de Patrimônio — {local.nome}
+                  </h1>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Corpo de Bombeiros Militar de Santa Catarina · {tipoLabel} · {items.length} item(s) · {geracaoData}
+                  </p>
+                </div>
               </div>
               <div className="text-right text-xs text-gray-400">
                 <p className="font-bold">B4 — Logística e Patrimônio</p>
