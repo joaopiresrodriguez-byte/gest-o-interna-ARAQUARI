@@ -8,6 +8,15 @@ export interface Mission {
     completed: boolean;
 }
 
+export interface LocalEquipamento {
+    id: string;
+    nome: string;
+    tipo: 'ambiente' | 'viatura';
+    descricao?: string;
+    ativo: boolean;
+    created_at?: string;
+}
+
 export interface Vehicle {
     id: string;
     name: string;
@@ -23,10 +32,13 @@ export interface Vehicle {
     year?: string;
     oil_type?: string;
     location?: string;
+    local_id?: string;
     nf_number?: string;
     patrimonio_number?: string;
     patrimonio_type?: string;
     atividades?: string[];
+    // Joined
+    local?: LocalEquipamento;
 }
 
 export interface Personnel {

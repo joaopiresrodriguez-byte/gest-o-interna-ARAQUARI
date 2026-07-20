@@ -1,10 +1,10 @@
 import { supabase } from './supabase';
-import { Vehicle, ChecklistItem, DailyChecklist, PendingNotice } from './types';
+import { Vehicle, ChecklistItem, DailyChecklist, PendingNotice, LocalEquipamento } from './types';
 import { BaseService } from './baseService';
 import { triggerSync } from './syncScheduler';
 
 // Campos específicos para otimizar queries
-const VEHICLE_FIELDS = 'id, name, type, plate, status, details, current_km, last_revision, brand, renavam, chassis, year, oil_type, location, nf_number, patrimonio_number, patrimonio_type, atividades';
+const VEHICLE_FIELDS = 'id, name, type, plate, status, details, current_km, last_revision, brand, renavam, chassis, year, oil_type, location, local_id, nf_number, patrimonio_number, patrimonio_type, atividades, local:locais_equipamento(id, nome, tipo, descricao, ativo)';
 const CHECKLIST_ITEM_FIELDS = 'id, category, item_name, viatura_id, description, is_active, sort_order';
 const DAILY_CHECKLIST_FIELDS = 'id, item_id, viatura_id, inspection_date, status, notes, responsible, created_at';
 
@@ -163,6 +163,43 @@ export const FleetService = {
             return await checklistItemsBase.create(item);
         } catch (error) {
             console.error('Error adding checklist item:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Buscar locais de equipamento cadastrados
+     */
+    getLocaisEquipamento: async (): Promise<LocalEquipamento[]> => {
+        try {
+            const { data, error } = await supabase
+                .from('locais_equipamento')
+                .select('*')
+                .eq('ativo', true)
+                .order('tipo', { ascending: true })
+                .order('nome', { ascending: true });
+            if (error) throw error;
+            return (data as LocalEquipamento[]) || [];
+        } catch (error) {
+            console.error('Error fetching locais_equipamento:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Adicionar novo local de equipamento
+     */
+    addLocalEquipamento: async (local: Omit<LocalEquipamento, 'id' | 'created_at'>): Promise<LocalEquipamento> => {
+        try {
+            const { data, error } = await supabase
+                .from('locais_equipamento')
+                .insert([local])
+                .select()
+                .single();
+            if (error) throw error;
+            return data as LocalEquipamento;
+        } catch (error) {
+            console.error('Error adding local_equipamento:', error);
             throw error;
         }
     },

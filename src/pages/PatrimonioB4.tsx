@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist } from '../services/SupabaseService';
+import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist, LocalEquipamento } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 import { useAuth } from '../context/AuthContext';
 import RelatoriosMensais from '../components/b4/RelatoriosMensais';
+import ExtratoB4 from '../components/b4/ExtratoB4';
 
 // ─── Helper sub-components ───────────────────────────────────────────────────
 
@@ -119,6 +120,7 @@ const PatrimonioB4: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes' | 'conferencias' | 'relatorios'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
+  const [locais, setLocais] = useState<LocalEquipamento[]>([]);
   const [initialNotices, setInitialNotices] = useState<PendingNotice[]>([]);
   const { notices } = useRealtimeNotices(initialNotices);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -126,6 +128,12 @@ const PatrimonioB4: React.FC = () => {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [dailyChecklists, setDailyChecklists] = useState<DailyChecklist[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Extrato modal state
+  const [extratoLocal, setExtratoLocal] = useState<LocalEquipamento | null>(null);
+  const [newLocalNome, setNewLocalNome] = useState("");
+  const [newLocalTipo, setNewLocalTipo] = useState<'ambiente' | 'viatura'>('ambiente');
+  const [showAddLocal, setShowAddLocal] = useState(false);
 
   // Manual Purchase State
   const [showManualPurchase, setShowManualPurchase] = useState(false);
@@ -146,6 +154,7 @@ const PatrimonioB4: React.FC = () => {
   const [newItemYear, setNewItemYear] = useState("");
   const [newItemOilType, setNewItemOilType] = useState("");
   const [newItemLocation, setNewItemLocation] = useState("");
+  const [newItemLocalId, setNewItemLocalId] = useState("");
   // Equipamento-specific fields
   const [newItemNfNumber, setNewItemNfNumber] = useState("");
   // Common patrimônio fields
@@ -185,6 +194,10 @@ const PatrimonioB4: React.FC = () => {
     loadData();
   }, [activeTab]);
 
+  useEffect(() => {
+    SupabaseService.getLocaisEquipamento().then(setLocais).catch(() => {});
+  }, []);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -206,6 +219,23 @@ const PatrimonioB4: React.FC = () => {
       console.error("Error loading B4 data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddLocal = async () => {
+    if (!newLocalNome.trim()) return toast.error("Nome do local é obrigatório");
+    try {
+      const created = await SupabaseService.addLocalEquipamento({
+        nome: newLocalNome.trim(),
+        tipo: newLocalTipo,
+        ativo: true,
+      });
+      setLocais(prev => [...prev, created].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setNewLocalNome("");
+      setShowAddLocal(false);
+      toast.success(`Local "${created.nome}" cadastrado!`);
+    } catch {
+      toast.error("Erro ao cadastrar local.");
     }
   };
 
@@ -264,6 +294,8 @@ const PatrimonioB4: React.FC = () => {
     const itemId = `ITEM-${Date.now()}`;
 
     // 1. Add to Fleet (Patrimony)
+    const localSelecionado = locais.find(l => l.id === newItemLocalId);
+
     const newItem: Vehicle = {
       id: itemId,
       name: newItemName,
@@ -276,7 +308,8 @@ const PatrimonioB4: React.FC = () => {
       chassis: newItemChassis || undefined,
       year: newItemYear || undefined,
       oil_type: newItemOilType || undefined,
-      location: newItemLocation || undefined,
+      location: localSelecionado?.nome || newItemLocation || undefined,
+      local_id: newItemLocalId || undefined,
       nf_number: newItemNfNumber || undefined,
       patrimonio_number: newItemPatrimonioNumber || undefined,
       patrimonio_type: newItemPatrimonioType || undefined,
@@ -315,6 +348,7 @@ const PatrimonioB4: React.FC = () => {
       setNewItemYear("");
       setNewItemOilType("");
       setNewItemLocation("");
+      setNewItemLocalId("");
       setNewItemNfNumber("");
       setNewItemPatrimonioNumber("");
       setNewItemPatrimonioType("");
@@ -469,6 +503,19 @@ const PatrimonioB4: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Extrato B4 Modal */}
+      {extratoLocal && (
+        <ExtratoB4
+          local={extratoLocal}
+          items={fleet.filter(item => {
+            // Prioridade: match por local_id; fallback por location string
+            if (item.local_id) return item.local_id === extratoLocal.id;
+            return item.location?.toLowerCase() === extratoLocal.nome.toLowerCase();
+          })}
+          onClose={() => setExtratoLocal(null)}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-[1200px] mx-auto flex flex-col gap-8">
@@ -635,7 +682,7 @@ const PatrimonioB4: React.FC = () => {
                       />
                     </div>
 
-                    {/* Location Filter */}
+                    {/* Location Filter — relacional */}
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 material-symbols-outlined text-[16px]">location_on</span>
                       <select
@@ -644,8 +691,12 @@ const PatrimonioB4: React.FC = () => {
                         className="pl-8 pr-3 h-10 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown appearance-none cursor-pointer"
                       >
                         <option value="todos">Todas Localizações</option>
-                        {uniqueLocations.map(loc => (
-                          <option key={loc} value={loc}>{loc}</option>
+                        {locais.map(loc => (
+                          <option key={loc.id} value={loc.nome}>{loc.nome}</option>
+                        ))}
+                        {/* fallback: locais ainda não na tabela */}
+                        {uniqueLocations.filter(ul => !locais.find(l => l.nome.toLowerCase() === ul.toLowerCase())).map(loc => (
+                          <option key={loc} value={loc}>{loc} ⚠</option>
                         ))}
                       </select>
                     </div>
@@ -681,6 +732,83 @@ const PatrimonioB4: React.FC = () => {
                     <span className="ml-auto text-[10px] font-black uppercase text-gray-400">
                       {filteredFleet.length} item(s)
                     </span>
+                  </div>
+
+                  {/* Painel: Locais Cadastrados com botão de Extrato */}
+                  <div className="bg-white border border-rustic-border rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-rustic-border bg-stone-50">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-green-700 text-[18px]">location_city</span>
+                        <h3 className="font-black text-xs uppercase tracking-widest text-rustic-brown">Extrato por Local / Viatura</h3>
+                      </div>
+                      {profile?.p_logistica === 'editor' && (
+                        <button
+                          onClick={() => setShowAddLocal(p => !p)}
+                          className="flex items-center gap-1 text-[10px] font-bold text-green-700 hover:text-green-900 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                          {showAddLocal ? 'Cancelar' : 'Novo Local'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Mini-form para cadastrar novo local */}
+                    {showAddLocal && (
+                      <div className="flex gap-2 p-3 border-b border-rustic-border bg-green-50 items-end">
+                        <div className="flex-1">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Nome</label>
+                          <input
+                            value={newLocalNome}
+                            onChange={e => setNewLocalNome(e.target.value)}
+                            placeholder="Ex: Sala de Treinamento, ABT-01"
+                            className="w-full h-9 px-3 rounded-lg border border-rustic-border text-sm bg-white mt-0.5"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Tipo</label>
+                          <select
+                            value={newLocalTipo}
+                            onChange={e => setNewLocalTipo(e.target.value as 'ambiente' | 'viatura')}
+                            className="h-9 px-3 rounded-lg border border-rustic-border text-sm bg-white mt-0.5"
+                          >
+                            <option value="ambiente">Ambiente</option>
+                            <option value="viatura">Viatura</option>
+                          </select>
+                        </div>
+                        <button
+                          onClick={handleAddLocal}
+                          className="h-9 px-4 bg-green-700 text-white text-xs font-bold rounded-lg hover:bg-green-800 transition-colors"
+                        >
+                          Cadastrar
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 p-4">
+                      {locais.map(local => {
+                        const count = fleet.filter(item =>
+                          item.local_id === local.id ||
+                          (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
+                        ).length;
+                        return (
+                          <button
+                            key={local.id}
+                            onClick={() => setExtratoLocal(local)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rustic-border bg-stone-50 hover:border-green-400 hover:bg-green-50 transition-all group"
+                          >
+                            <span className="material-symbols-outlined text-[16px] text-green-600 group-hover:text-green-700">
+                              {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
+                            </span>
+                            <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800">{local.nome}</span>
+                            <span className="text-[10px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{count}</span>
+                            <span className="material-symbols-outlined text-[14px] text-gray-400 group-hover:text-green-600">receipt_long</span>
+                          </button>
+                        );
+                      })}
+                      {locais.length === 0 && (
+                        <p className="text-xs text-gray-400 italic">Nenhum local cadastrado. Adicione usando o botão acima.</p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Listing — flat or grouped */}
@@ -889,7 +1017,19 @@ const PatrimonioB4: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização Atual da Viatura</label>
-                          <input value={newItemLocation} onChange={e => setNewItemLocation(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Quartel Araquari, Oficina, Manutenção" />
+                          <select
+                            value={newItemLocalId}
+                            onChange={e => setNewItemLocalId(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm font-medium"
+                          >
+                            <option value="">Selecione um local...</option>
+                            {locais.map(l => (
+                              <option key={l.id} value={l.id}>
+                                {l.nome} ({l.tipo === 'viatura' ? 'Viatura' : 'Ambiente'})
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-gray-400 italic">Se o local desejado não existir, cadastre-o primeiro no painel da aba Listagem.</p>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
@@ -924,7 +1064,19 @@ const PatrimonioB4: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização Atual do Equipamento</label>
-                          <input value={newItemLocation} onChange={e => setNewItemLocation(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Ex: Viatura ABT-01, Quartel, Empréstimo" />
+                          <select
+                            value={newItemLocalId}
+                            onChange={e => setNewItemLocalId(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm font-medium"
+                          >
+                            <option value="">Selecione um local...</option>
+                            {locais.map(l => (
+                              <option key={l.id} value={l.id}>
+                                {l.nome} ({l.tipo === 'viatura' ? 'Viatura' : 'Ambiente'})
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-gray-400 italic">Se o local desejado não existir, cadastre-o primeiro no painel da aba Listagem.</p>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
