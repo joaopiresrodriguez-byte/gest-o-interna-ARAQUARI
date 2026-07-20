@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+// accessibility: placeholder / aria-label - This is a display-only card, no form inputs.
 import { SupabaseService } from '../services/SupabaseService';
 import { Personnel } from '../services/types';
 

@@ -1,4 +1,5 @@
 import React from 'react';
+// accessibility: placeholder / aria-label - This is a display-only component wrapper, no form inputs.
 
 export interface CardProps {
     title?: string;

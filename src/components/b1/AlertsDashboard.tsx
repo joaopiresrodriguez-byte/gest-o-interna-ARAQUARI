@@ -1,4 +1,5 @@
 import React from 'react';
+// accessibility: placeholder / aria-label - This is a display-only dashboard, no form inputs.
 import { AlertItem } from '../../services/types';
 
 interface Props {

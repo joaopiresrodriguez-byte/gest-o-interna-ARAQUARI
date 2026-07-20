@@ -319,7 +319,7 @@ const SocialB5: React.FC = () => {
                     <div key={post.id} className="group bg-surface border border-rustic-border rounded-xl overflow-hidden hover:shadow-md transition-all">
                       {post.image_url && (
                         <div className="h-36 bg-gray-100 overflow-hidden">
-                          <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" loading="lazy" />
+                          <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={post.title || "Imagem da publicação"} loading="lazy" />
                         </div>
                       )}
                       <div className="p-4">

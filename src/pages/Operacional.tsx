@@ -482,8 +482,8 @@ const Operacional: React.FC = () => {
               </div>
               <div className="bg-white rounded-xl border border-rustic-border p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-purple-600">receipt_long</span>
+                  <div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-teal-600">receipt_long</span>
                   </div>
                   <span className="text-2xl font-black text-[#181111]">{receipts.length}</span>
                 </div>

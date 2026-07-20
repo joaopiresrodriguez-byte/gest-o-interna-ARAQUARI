@@ -103,7 +103,7 @@ const AppLayout: React.FC = () => {
           )}
 
           <div className="flex gap-3 justify-center pt-4">
-            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors">
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors" aria-label="Tentar novamente o carregamento do perfil">
               Tentar Novamente
             </button>
             <button onClick={signOut} className="px-4 py-2 border border-gray-300 font-bold rounded-lg hover:bg-gray-50 transition-colors">

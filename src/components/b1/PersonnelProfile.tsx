@@ -1,4 +1,5 @@
 import React from 'react';
+// accessibility: placeholder / aria-label - This is a display-only profile view, no form inputs.
 import { Personnel, RankHistory, ServiceSwap, DisciplinaryRecord, Vacation, DocumentB1 } from '../../services/types';
 import { formatLocalDate, parseLocalDate } from '../../utils/dateUtils';
 
@@ -20,7 +21,7 @@ const recordTypeLabels: Record<string, { label: string; color: string }> = {
 };
 
 const PersonnelProfile: React.FC<Props> = ({ person, rankHistory, swaps, disciplinary, vacations, documents, onClose }) => {
-    const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-purple-100 text-purple-700' };
+    const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-teal-100 text-teal-700' };
     const today = new Date();
 
     const isDateExpired = (dateStr: string | undefined | null): boolean => {
@@ -43,7 +44,7 @@ const PersonnelProfile: React.FC<Props> = ({ person, rankHistory, swaps, discipl
             {/* Header Card */}
             <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm flex flex-col md:flex-row items-start gap-6">
                 <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                    {person.image ? <img src={person.image} className="w-20 h-20 rounded-2xl object-cover" /> : <span className="material-symbols-outlined text-3xl text-primary">person</span>}
+                    {person.image ? <img src={person.image} alt={person.name} className="w-20 h-20 rounded-2xl object-cover" /> : <span className="material-symbols-outlined text-3xl text-primary">person</span>}
                 </div>
                 <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">

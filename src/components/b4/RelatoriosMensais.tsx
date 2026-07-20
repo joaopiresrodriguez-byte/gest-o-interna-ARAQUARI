@@ -235,7 +235,7 @@ const RelatoriosMensais: React.FC = () => {
             <MetricCard label="Operacionais" value={activeReport.viaturasOperacionais} icon="check_circle" color="#15803d" />
             <MetricCard label="Em Manutenção" value={activeReport.viaturasManutencao} icon="build" color="#c2410c" />
             <MetricCard label="Aquisições" value={activeReport.totalManutencoes} icon="shopping_cart" color="#1d4ed8" />
-            <MetricCard label="Custo Aquisições" value={formatCurrency(activeReport.custoManutencoes)} icon="payments" color="#6d28d9" />
+            <MetricCard label="Custo Aquisições" value={formatCurrency(activeReport.custoManutencoes)} icon="payments" color="#0d9488" />
             <MetricCard label="Combustível" value={`${activeReport.totalCombustivel} L`} icon="local_gas_station" color="#0e7490" />
             <MetricCard label="Ocorrências" value={activeReport.ocorrenciasAtendidas} icon="emergency" color="#1e293b" />
             <MetricCard label="KM da Frota" value={activeReport.kmRodados.toLocaleString('pt-BR')} icon="speed" color="#15803d" />

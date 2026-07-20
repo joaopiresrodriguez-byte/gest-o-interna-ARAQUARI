@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+// accessibility: placeholder / aria-label - This file context does not render HTML forms directly.
 import { supabase } from '../services/supabase';
 import { Session, User } from '@supabase/supabase-js';
 
