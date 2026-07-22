@@ -31,12 +31,15 @@ const Login: React.FC = () => {
     const [success, setSuccess] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('login');
+    const [otpToken, setOtpToken] = useState('');
+    const [showOtpInput, setShowOtpInput] = useState(false);
 
     React.useEffect(() => {
         const hash = window.location.hash;
         if (hash.includes('error_code=otp_expired') || hash.includes('otp_expired') || hash.includes('invalid+or+has+expired')) {
-            setError('⚠️ O link de recuperação de senha expirou ou já foi utilizado. Digite seu email abaixo para receber um novo link.');
+            setError('⚠️ O link por clique expirou ou foi pré-verificado. Digite seu e-mail para reenviar ou insira o código de 6 dígitos recebido.');
             setViewMode('forgot');
+            setShowOtpInput(true);
             window.history.replaceState(null, '', window.location.pathname);
         }
     }, []);
@@ -45,6 +48,8 @@ const Login: React.FC = () => {
         setError(null);
         setSuccess(null);
         setViewMode(mode);
+        setShowOtpInput(false);
+        setOtpToken('');
     };
 
     const handleAuth = async (e: React.FormEvent) => {
@@ -56,13 +61,27 @@ const Login: React.FC = () => {
         try {
             if (viewMode === 'forgot') {
                 const targetEmail = email.trim().toLowerCase();
+
+                if (showOtpInput && otpToken.trim()) {
+                    // Validar código OTP diretamente
+                    const { error } = await supabase.auth.verifyOtp({
+                        email: targetEmail,
+                        token: otpToken.trim(),
+                        type: 'recovery',
+                    });
+                    if (error) throw error;
+                    setSuccess('Código verificado! Redirecionando...');
+                    return;
+                }
+
                 const redirectUrl = `${window.location.origin}`;
                 console.log('Sending password reset email to:', targetEmail, 'redirectTo:', redirectUrl);
                 const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
                     redirectTo: redirectUrl,
                 });
                 if (error) throw error;
-                setSuccess(`Email de recuperação enviado para ${targetEmail}! Verifique sua caixa de entrada (e a pasta de Spam/Lixo Eletrônico).`);
+                setShowOtpInput(true);
+                setSuccess(`E-mail de recuperação enviado para ${targetEmail}! Verifique sua caixa de entrada (ou insira abaixo o código de 6 dígitos recebido no e-mail).`);
             } else if (viewMode === 'signup') {
                 const { error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
@@ -81,7 +100,7 @@ const Login: React.FC = () => {
     const getTitle = () => {
         switch (viewMode) {
             case 'signup': return 'Criar Conta';
-            case 'forgot': return 'Recuperar Senha';
+            case 'forgot': return showOtpInput && otpToken ? 'Verificar Código' : 'Recuperar Senha';
             default: return 'Acessar Sistema';
         }
     };
@@ -135,6 +154,28 @@ const Login: React.FC = () => {
                             />
                         </div>
                     </div>
+
+                    {viewMode === 'forgot' && showOtpInput && (
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-2">
+                            <label className="block text-xs font-bold text-amber-900 uppercase">
+                                Código de Segurança (6 dígitos / Token)
+                            </label>
+                            <p className="text-[11px] text-amber-800 leading-tight">
+                                Se o link no e-mail expirar devido a filtros de segurança, digite aqui o código de 6 dígitos recebido no e-mail:
+                            </p>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 material-symbols-outlined">pin</span>
+                                <input
+                                    type="text"
+                                    maxLength={10}
+                                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all font-mono font-bold text-gray-800 tracking-widest placeholder-gray-400"
+                                    placeholder="Digite o código"
+                                    value={otpToken}
+                                    onChange={(e) => setOtpToken(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {viewMode !== 'forgot' && (
                         <div>
