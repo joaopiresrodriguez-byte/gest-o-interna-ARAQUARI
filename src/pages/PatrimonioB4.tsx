@@ -6,6 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import RelatoriosMensais from '../components/b4/RelatoriosMensais';
 import ExtratoB4 from '../components/b4/ExtratoB4';
 
+import { useEdicao } from '../hooks/useEdicao';
+import { ModalEdicao } from '../components/shared/ModalEdicao';
+
 // ─── Helper sub-components ───────────────────────────────────────────────────
 
 const Detail: React.FC<{ label: string; value?: string; icon?: string }> = ({ label, value, icon }) => (
@@ -23,11 +26,12 @@ interface ItemCardProps {
   notices: PendingNotice[];
   profile: any;
   onSelect: (item: Vehicle) => void;
+  onEdit?: (item: Vehicle) => void;
   onDelete: (id: string) => void;
   onResolve: (id: string) => void;
 }
 
-const ItemCard: React.FC<ItemCardProps> = ({ item, notices, profile, onSelect, onDelete, onResolve }) => {
+const ItemCard: React.FC<ItemCardProps> = ({ item, notices, profile, onSelect, onEdit, onDelete, onResolve }) => {
   const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || n.description.includes(item.name)));
 
   return (
@@ -45,12 +49,24 @@ const ItemCard: React.FC<ItemCardProps> = ({ item, notices, profile, onSelect, o
         <div className="flex gap-2 items-center">
           <span className="text-[10px] font-bold text-rustic-brown/30 font-mono">{item.type}</span>
           {profile?.p_logistica === 'editor' && (
-            <button
-              onClick={e => { e.stopPropagation(); onDelete(item.id); }}
-              className="text-gray-300 hover:text-red-500 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[16px]">delete</span>
-            </button>
+            <>
+              {onEdit && (
+                <button
+                  onClick={e => { e.stopPropagation(); onEdit(item); }}
+                  className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
+                  title="Editar Item B4"
+                >
+                  ✏️
+                </button>
+              )}
+              <button
+                onClick={e => { e.stopPropagation(); onDelete(item.id); }}
+                className="text-gray-300 hover:text-red-500 transition-colors"
+                title="Excluir Item B4"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -128,6 +144,46 @@ const PatrimonioB4: React.FC = () => {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [dailyChecklists, setDailyChecklists] = useState<DailyChecklist[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Hook de edição universal para Equipamentos / Viaturas (fleet)
+  const {
+    itemEditando: fleetItemEditando,
+    salvando: salvandoFleetItem,
+    erro: erroFleetItem,
+    abrirEdicao: abrirEdicaoFleetItem,
+    cancelarEdicao: cancelarEdicaoFleetItem,
+    atualizarCampo: atualizarCampoFleetItem,
+    salvarEdicao: salvarEdicaoFleetItem,
+    editando: editandoFleetItem,
+  } = useEdicao<Vehicle>('fleet');
+
+  const handleSalvarFleetItem = async () => {
+    const ok = await salvarEdicaoFleetItem();
+    if (ok) {
+      toast.success('Item B4 atualizado!');
+      loadData();
+    }
+  };
+
+  // Hook de edição universal para Locais B4 (locais_equipamento)
+  const {
+    itemEditando: localEditando,
+    salvando: salvandoLocal,
+    erro: erroLocal,
+    abrirEdicao: abrirEdicaoLocal,
+    cancelarEdicao: cancelarEdicaoLocal,
+    atualizarCampo: atualizarCampoLocal,
+    salvarEdicao: salvarEdicaoLocal,
+    editando: editandoLocal,
+  } = useEdicao<LocalEquipamento>('locais_equipamento');
+
+  const handleSalvarLocal = async () => {
+    const ok = await salvarEdicaoLocal();
+    if (ok) {
+      toast.success('Local de equipamento atualizado!');
+      loadData();
+    }
+  };
 
   // Extrato modal state
   const [extratoLocal, setExtratoLocal] = useState<LocalEquipamento | null>(null);
@@ -791,18 +847,28 @@ const PatrimonioB4: React.FC = () => {
                           (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
                         ).length;
                         return (
-                          <button
-                            key={local.id}
-                            onClick={() => setExtratoLocal(local)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rustic-border bg-stone-50 hover:border-green-400 hover:bg-green-50 transition-all group"
-                          >
-                            <span className="material-symbols-outlined text-[16px] text-green-600 group-hover:text-green-700">
-                              {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
-                            </span>
-                            <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800">{local.nome}</span>
-                            <span className="text-[10px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{count}</span>
-                            <span className="material-symbols-outlined text-[14px] text-gray-400 group-hover:text-green-600">receipt_long</span>
-                          </button>
+                          <div key={local.id} className="flex items-center gap-1">
+                            <button
+                              onClick={() => setExtratoLocal(local)}
+                              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rustic-border bg-stone-50 hover:border-green-400 hover:bg-green-50 transition-all group"
+                            >
+                              <span className="material-symbols-outlined text-[16px] text-green-600 group-hover:text-green-700">
+                                {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
+                              </span>
+                              <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800">{local.nome}</span>
+                              <span className="text-[10px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{count}</span>
+                              <span className="material-symbols-outlined text-[14px] text-gray-400 group-hover:text-green-600">receipt_long</span>
+                            </button>
+                            {profile?.p_logistica === 'editor' && (
+                              <button
+                                onClick={() => abrirEdicaoLocal(local)}
+                                className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors text-xs"
+                                title="Editar Local"
+                              >
+                                ✏️
+                              </button>
+                            )}
+                          </div>
                         );
                       })}
                       {locais.length === 0 && (
@@ -823,7 +889,7 @@ const PatrimonioB4: React.FC = () => {
                             <div className="flex-1 h-px bg-rustic-border/40" />
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {items.map(item => <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />)}
+                            {items.map(item => <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onEdit={abrirEdicaoFleetItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />)}
                           </div>
                         </div>
                       ))}
@@ -837,7 +903,7 @@ const PatrimonioB4: React.FC = () => {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {filteredFleet.map(item => (
-                        <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />
+                        <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onEdit={abrirEdicaoFleetItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />
                       ))}
                       {filteredFleet.length === 0 && (
                         <div className="col-span-3 text-center py-16 text-gray-400">
@@ -1349,8 +1415,176 @@ const PatrimonioB4: React.FC = () => {
             </div>
           </div>
         </div>
-      </div >
-    </div >
+      </div>
+
+      {/* Modal de Edição de Equipamento / Viatura B4 */}
+      <ModalEdicao
+        titulo={`Editar ${fleetItemEditando?.type || 'Item B4'}: ${fleetItemEditando?.name || ''}`}
+        aberto={editandoFleetItem}
+        salvando={salvandoFleetItem}
+        erro={erroFleetItem}
+        onSalvar={handleSalvarFleetItem}
+        onCancelar={cancelarEdicaoFleetItem}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nome / Descrição Curta</label>
+            <input
+              value={fleetItemEditando?.name || ''}
+              onChange={e => atualizarCampoFleetItem('name', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Tipo</label>
+              <select
+                value={fleetItemEditando?.type || 'Equipamento'}
+                onChange={e => atualizarCampoFleetItem('type', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="Equipamento">Equipamento</option>
+                <option value="Viatura">Viatura</option>
+                <option value="EPI">EPI</option>
+                <option value="Ferramenta">Ferramenta</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Status</label>
+              <select
+                value={fleetItemEditando?.status || 'active'}
+                onChange={e => atualizarCampoFleetItem('status', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="active">Ativo</option>
+                <option value="inactive">Inativo</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nº Patrimônio / Série</label>
+              <input
+                value={fleetItemEditando?.patrimonio_number || ''}
+                onChange={e => atualizarCampoFleetItem('patrimonio_number', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Local de Armazenamento</label>
+              <select
+                value={fleetItemEditando?.local_id || ''}
+                onChange={e => {
+                  const locId = e.target.value;
+                  atualizarCampoFleetItem('local_id', locId);
+                  const selectedLoc = locais.find(l => l.id === locId);
+                  if (selectedLoc) {
+                    atualizarCampoFleetItem('location', selectedLoc.nome);
+                  }
+                }}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="">Selecione um local...</option>
+                {locais.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome} ({l.tipo})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {fleetItemEditando?.type === 'Viatura' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Placa</label>
+                <input
+                  value={fleetItemEditando?.plate || ''}
+                  onChange={e => atualizarCampoFleetItem('plate', e.target.value)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Marca / Modelo</label>
+                <input
+                  value={fleetItemEditando?.brand || ''}
+                  onChange={e => atualizarCampoFleetItem('brand', e.target.value)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Ano</label>
+                <input
+                  value={fleetItemEditando?.year || ''}
+                  onChange={e => atualizarCampoFleetItem('year', e.target.value)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                />
+              </div>
+            </div>
+          )}
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Observações / Detalhes</label>
+            <textarea
+              value={fleetItemEditando?.details || ''}
+              onChange={e => atualizarCampoFleetItem('details', e.target.value)}
+              rows={3}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', resize: 'none' }}
+            />
+          </div>
+        </div>
+      </ModalEdicao>
+
+      {/* Modal de Edição de Local B4 */}
+      <ModalEdicao
+        titulo={`Editar Local B4: ${localEditando?.nome || ''}`}
+        aberto={editandoLocal}
+        salvando={salvandoLocal}
+        erro={erroLocal}
+        onSalvar={handleSalvarLocal}
+        onCancelar={cancelarEdicaoLocal}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nome do Local</label>
+            <input
+              value={localEditando?.nome || ''}
+              onChange={e => atualizarCampoLocal('nome', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Tipo de Local</label>
+            <select
+              value={localEditando?.tipo || 'ambiente'}
+              onChange={e => atualizarCampoLocal('tipo', e.target.value as any)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            >
+              <option value="ambiente">Ambiente / Setor do Quartel</option>
+              <option value="viatura">Viatura</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Descrição / Detalhes</label>
+            <input
+              value={localEditando?.descricao || ''}
+              onChange={e => atualizarCampoLocal('descricao', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Status</label>
+            <select
+              value={localEditando?.ativo !== false ? 'true' : 'false'}
+              onChange={e => atualizarCampoLocal('ativo', e.target.value === 'true')}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            >
+              <option value="true">Ativo</option>
+              <option value="false">Inativo</option>
+            </select>
+          </div>
+        </div>
+      </ModalEdicao>
+    </div>
   );
 };
 

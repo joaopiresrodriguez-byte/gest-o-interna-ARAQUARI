@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
+import { ModalEdicao } from '../shared/ModalEdicao';
 
 interface Militar {
   id: number;
@@ -38,6 +39,12 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
   const [guarnicoes, setGuarnicoes] = useState<Guarnicao[]>([]);
   const [militaresDisponiveis, setMilitares] = useState<Militar[]>([]);
   const [carregando, setCarregando] = useState(true);
+
+  // Modal de edição para mover militar
+  const [militarTransferindo, setMilitarTransferindo] = useState<{ militar: Militar; guarnicaoOrigemId: string } | null>(null);
+  const [guarnicaoDestinoId, setGuarnicaoDestinoId] = useState<string>('');
+  const [salvandoTransferencia, setSalvandoTransferencia] = useState(false);
+  const [erroTransferencia, setErroTransferencia] = useState<string | null>(null);
 
   useEffect(() => {
     carregarDados();
@@ -149,6 +156,42 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
     else console.error(error);
   }
 
+  async function handleSalvarTransferencia() {
+    if (!militarTransferindo || !guarnicaoDestinoId) return;
+    setSalvandoTransferencia(true);
+    setErroTransferencia(null);
+
+    try {
+      // 1. Remova da guarnição atual
+      const { error: errorDel } = await supabase
+        .from('guarnicao_membros')
+        .delete()
+        .eq('guarnicao_id', militarTransferindo.guarnicaoOrigemId)
+        .eq('militar_id', militarTransferindo.militar.id);
+
+      if (errorDel) throw errorDel;
+
+      // 2. Insira na nova guarnição (se selecionada)
+      if (guarnicaoDestinoId !== 'none') {
+        const { error: errorIns } = await supabase
+          .from('guarnicao_membros')
+          .insert({
+            guarnicao_id: guarnicaoDestinoId,
+            militar_id: militarTransferindo.militar.id
+          });
+        if (errorIns) throw errorIns;
+      }
+
+      setMilitarTransferindo(null);
+      setGuarnicaoDestinoId('');
+      carregarDados();
+    } catch (err: any) {
+      setErroTransferencia(err.message || 'Erro ao transferir militar');
+    } finally {
+      setSalvandoTransferencia(false);
+    }
+  }
+
   function getMilitaresLivres() {
     const idsEscalados = guarnicoes.flatMap(g => g.membros.map(m => m.id));
     return militaresDisponiveis.filter(m => !idsEscalados.includes(m.id));
@@ -191,11 +234,24 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
                       <span className="text-gray-400 mr-1">{m.posto_graduacao}</span>
                       {m.nome_guerra || m.nome_completo.split(' ')[0]}
                     </span>
-                    <button
-                      onClick={() => removerMilitar(guarnicao.id, m.id)}
-                      className="text-red-400 hover:text-red-600 ml-1 flex-shrink-0 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[14px]">close</span>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          setMilitarTransferindo({ militar: m, guarnicaoOrigemId: guarnicao.id });
+                          setGuarnicaoDestinoId(guarnicao.id);
+                          setErroTransferencia(null);
+                        }}
+                        title="Mover de Guarnição"
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 flex items-center justify-center p-0.5"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => removerMilitar(guarnicao.id, m.id)}
+                        className="text-red-400 hover:text-red-600 flex-shrink-0 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-[14px]">close</span>
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -232,6 +288,43 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
           </span>
         ))}
       </div>
+
+      {/* Modal de Edição de Guarnição de Militar */}
+      <ModalEdicao
+        titulo={`Mover Guarnição: ${militarTransferindo?.militar.posto_graduacao || ''} ${militarTransferindo?.militar.nome_guerra || militarTransferindo?.militar.nome_completo || ''}`}
+        aberto={!!militarTransferindo}
+        salvando={salvandoTransferencia}
+        erro={erroTransferencia}
+        onSalvar={handleSalvarTransferencia}
+        onCancelar={() => setMilitarTransferindo(null)}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#64748b' }}>
+              Selecione a nova Guarnição
+            </label>
+            <select
+              value={guarnicaoDestinoId}
+              onChange={e => setGuarnicaoDestinoId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '14px',
+                backgroundColor: 'white'
+              }}
+            >
+              {guarnicoes.map(g => (
+                <option key={g.id} value={g.id}>
+                  Guarnição {g.codigo} ({g.nome})
+                </option>
+              ))}
+              <option value="none">Nenhuma (Remover de Guarnições)</option>
+            </select>
+          </div>
+        </div>
+      </ModalEdicao>
     </div>
   );
 }

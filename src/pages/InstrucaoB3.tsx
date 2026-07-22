@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { SupabaseService, MateriaInstrucao, Training, MateriaApresentacao, MateriaVideo, Personnel } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { B3CursosService } from '../services/b3CursosService';
+import { useEdicao } from '../hooks/useEdicao';
+import { ModalEdicao } from '../components/shared/ModalEdicao';
 
 const InstrucaoB3: React.FC = () => {
   const [materias, setMaterias] = useState<MateriaInstrucao[]>([]);
@@ -11,6 +13,26 @@ const InstrucaoB3: React.FC = () => {
   const [uploading, setUploading] = useState(false);
 
   const { profile, user } = useAuth();
+
+  // Hook de edição universal para Matérias B3
+  const {
+    itemEditando: materiaEditando,
+    salvando: salvandoMateria,
+    erro: erroMateria,
+    abrirEdicao: abrirEdicaoMateria,
+    cancelarEdicao: cancelarEdicaoMateria,
+    atualizarCampo: atualizarCampoMateria,
+    salvarEdicao: salvarEdicaoMateria,
+    editando: editandoMateria,
+  } = useEdicao<MateriaInstrucao>('materias_instrucao');
+
+  const handleSalvarEdicaoMateria = async () => {
+    const ok = await salvarEdicaoMateria();
+    if (ok) {
+      toast.success('Matéria de instrução atualizada!');
+      loadData();
+    }
+  };
 
   // Main Tab State
   const [mainTab, setMainTab] = useState<'acervo' | 'formacao'>('acervo');
@@ -561,15 +583,24 @@ const InstrucaoB3: React.FC = () => {
                           <h4 className="text-xl font-black text-[#2D2926] mt-1 group-hover:text-[#C62828] transition-colors">{m.name}</h4>
                           <span className="text-xs font-bold text-[#8C8379] italic">{m.category}</span>
                         </div>
-                        <div className="flex gap-4">
+                        <div className="flex gap-4 items-center">
                           {profile?.p_instrucao === 'editor' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteMateria(m.id!); }}
-                              className="text-gray-300 hover:text-red-500 transition-colors"
-                              title="Excluir Matéria"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
-                            </button>
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); abrirEdicaoMateria(m); }}
+                                className="text-blue-500 hover:text-blue-700 transition-colors p-1"
+                                title="Editar Matéria"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteMateria(m.id!); }}
+                                className="text-gray-300 hover:text-red-500 transition-colors"
+                                title="Excluir Matéria"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </>
                           )}
                           <div className="flex flex-col items-center">
                             <span className="text-2xl font-black text-[#C62828]">{m.credit_hours}</span>
@@ -987,6 +1018,93 @@ const InstrucaoB3: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Edição de Matéria B3 */}
+      <ModalEdicao
+        titulo="Editar Matéria de Instrução"
+        aberto={editandoMateria}
+        salvando={salvandoMateria}
+        erro={erroMateria}
+        onSalvar={handleSalvarEdicaoMateria}
+        onCancelar={cancelarEdicaoMateria}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nome da Matéria</label>
+            <input
+              value={materiaEditando?.name || ''}
+              onChange={e => atualizarCampoMateria('name', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Categoria</label>
+              <select
+                value={materiaEditando?.category || 'Geral'}
+                onChange={e => atualizarCampoMateria('category', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="Geral">Geral</option>
+                <option value="APH">APH</option>
+                <option value="Combate a Incêndio">Combate a Incêndio</option>
+                <option value="Salvamento">Salvamento</option>
+                <option value="Operações Especiais">Operações Especiais</option>
+                <option value="Prevenção">Prevenção</option>
+                <option value="Administrativa">Administrativa</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nível</label>
+              <select
+                value={materiaEditando?.level || 'basico'}
+                onChange={e => atualizarCampoMateria('level', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="basico">Básico</option>
+                <option value="intermediario">Intermediário</option>
+                <option value="avancado">Avançado</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Carga Horária (h)</label>
+              <input
+                type="number"
+                value={materiaEditando?.credit_hours || ''}
+                onChange={e => atualizarCampoMateria('credit_hours', Number(e.target.value))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Instrutor Responsável</label>
+              <input
+                value={materiaEditando?.instructor || ''}
+                onChange={e => atualizarCampoMateria('instructor', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Descrição / Ementa</label>
+            <textarea
+              value={materiaEditando?.description || ''}
+              onChange={e => atualizarCampoMateria('description', e.target.value)}
+              rows={3}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', resize: 'none' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Observações</label>
+            <input
+              value={materiaEditando?.notes || ''}
+              onChange={e => atualizarCampoMateria('notes', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+        </div>
+      </ModalEdicao>
     </div>
   );
 };

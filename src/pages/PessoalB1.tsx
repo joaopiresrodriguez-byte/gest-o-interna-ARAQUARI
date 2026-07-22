@@ -5,6 +5,8 @@ import { PersonnelService } from '../services/personnelService';
 import { syncCalendar } from '../services/syncScheduler';
 import { supabase } from '../services/supabase';
 import { formatLocalDate, parseLocalDate } from '../utils/dateUtils';
+import { useEdicao } from '../hooks/useEdicao';
+import { ModalEdicao } from '../components/shared/ModalEdicao';
 
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
@@ -86,6 +88,26 @@ const PessoalB1: React.FC = () => {
   const [search, setSearch] = useState('');
   const [formData, setFormData] = useState<Partial<Personnel>>(emptyForm());
   const [editId, setEditId] = useState<number | null>(null);
+
+  // Hook de edição universal para Militares B1
+  const {
+    itemEditando: militarEditando,
+    salvando: salvandoMilitar,
+    erro: erroMilitar,
+    abrirEdicao: abrirEdicaoMilitar,
+    cancelarEdicao: cancelarEdicaoMilitar,
+    atualizarCampo: atualizarCampoMilitar,
+    salvarEdicao: salvarEdicaoMilitar,
+    editando: editandoMilitar,
+  } = useEdicao<Personnel>('personnel');
+
+  const handleSalvarEdicaoMilitar = async () => {
+    const ok = await salvarEdicaoMilitar();
+    if (ok) {
+      toast.success('Militar atualizado com sucesso!');
+      loadData();
+    }
+  };
 
   // Vacation form
   const [vacPersonnelId, setVacPersonnelId] = useState<number | ''>('');
@@ -680,8 +702,11 @@ const PessoalB1: React.FC = () => {
                             <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={isDateExpired(p.cnh_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cnh_expiry_date)}</span> : '—'}</td>
                             <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                               <div className="flex gap-1 justify-center">
-                                <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">edit</span></button>
-                                <button onClick={() => handleDeletePersonnel(p.id!)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-400"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                                <button onClick={() => abrirEdicaoMilitar(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500" title="Editar Militar">
+                                  ✏️
+                                </button>
+                                <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-stone-100 rounded-lg text-gray-500" title="Editar Completo"><span className="material-symbols-outlined text-[16px]">edit</span></button>
+                                <button onClick={() => handleDeletePersonnel(p.id!)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-400" title="Excluir"><span className="material-symbols-outlined text-[16px]">delete</span></button>
                               </div>
                             </td>
                           </tr>
@@ -1316,6 +1341,154 @@ const PessoalB1: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Modal de Edição Universal de Militar */}
+      <ModalEdicao
+        titulo={`Editar Militar: ${militarEditando?.name || ''}`}
+        aberto={editandoMilitar}
+        salvando={salvandoMilitar}
+        erro={erroMilitar}
+        onSalvar={handleSalvarEdicaoMilitar}
+        onCancelar={cancelarEdicaoMilitar}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nome Completo</label>
+            <input
+              value={militarEditando?.name || ''}
+              onChange={e => atualizarCampoMilitar('name', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nome de Guerra</label>
+              <input
+                value={militarEditando?.war_name || ''}
+                onChange={e => atualizarCampoMilitar('war_name', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Posto / Graduação</label>
+              <select
+                value={militarEditando?.graduation || militarEditando?.rank || 'Sd'}
+                onChange={e => {
+                  atualizarCampoMilitar('graduation', e.target.value);
+                  atualizarCampoMilitar('rank', e.target.value);
+                }}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Status</label>
+              <select
+                value={militarEditando?.status || 'Ativo'}
+                onChange={e => atualizarCampoMilitar('status', e.target.value as any)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>E-mail</label>
+              <input
+                type="email"
+                value={militarEditando?.email || ''}
+                onChange={e => atualizarCampoMilitar('email', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Telefone</label>
+              <input
+                value={militarEditando?.phone || ''}
+                onChange={e => atualizarCampoMilitar('phone', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Data Nascimento</label>
+              <input
+                type="date"
+                value={militarEditando?.birth_date || ''}
+                onChange={e => atualizarCampoMilitar('birth_date', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>CPF</label>
+              <input
+                value={militarEditando?.cpf || ''}
+                onChange={e => atualizarCampoMilitar('cpf', formatCpf(e.target.value))}
+                maxLength={14}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Categoria CNH</label>
+              <select
+                value={militarEditando?.cnh_category || ''}
+                onChange={e => atualizarCampoMilitar('cnh_category', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="">Nenhuma</option>
+                {['A', 'B', 'AB', 'C', 'D', 'E', 'AD', 'AE'].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Validade CNH</label>
+              <input
+                type="date"
+                value={militarEditando?.cnh_expiry_date || ''}
+                onChange={e => atualizarCampoMilitar('cnh_expiry_date', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Vencimento Toxicológico</label>
+              <input
+                type="date"
+                value={militarEditando?.toxicological_expiry_date || ''}
+                onChange={e => atualizarCampoMilitar('toxicological_expiry_date', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Possui CVE Ativo</label>
+              <select
+                value={militarEditando?.cve_active || 'Não'}
+                onChange={e => atualizarCampoMilitar('cve_active', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="Sim">Sim</option>
+                <option value="Não">Não</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Validade CVE</label>
+              <input
+                type="date"
+                value={militarEditando?.cve_expiry_date || ''}
+                onChange={e => atualizarCampoMilitar('cve_expiry_date', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+        </div>
+      </ModalEdicao>
     </div>
   );
 };
