@@ -17,6 +17,17 @@ export interface LocalEquipamento {
     created_at?: string;
 }
 
+export interface CompartimentoViatura {
+    id: string;
+    viatura_id: string;
+    nome: string;
+    descricao?: string;
+    posicao?: string;
+    ordem: number;
+    ativo: boolean;
+    created_at?: string;
+}
+
 export interface Vehicle {
     id: string;
     name: string;
@@ -33,12 +44,14 @@ export interface Vehicle {
     oil_type?: string;
     location?: string;
     local_id?: string;
+    compartimento_id?: string;
     nf_number?: string;
     patrimonio_number?: string;
     patrimonio_type?: string;
     atividades?: string[];
     // Joined
     local?: LocalEquipamento;
+    compartimento?: CompartimentoViatura;
 }
 
 export interface Personnel {

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist, LocalEquipamento } from '../services/SupabaseService';
+import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist, LocalEquipamento, CompartimentoViatura } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 import { useAuth } from '../context/AuthContext';
 import RelatoriosMensais from '../components/b4/RelatoriosMensais';
 import ExtratoB4 from '../components/b4/ExtratoB4';
+import GerenciarCompartimentos from '../components/b4/GerenciarCompartimentos';
+import VisualizacaoViatura from '../components/b4/VisualizacaoViatura';
+import { supabase } from '../services/supabase';
 
 import { useEdicao } from '../hooks/useEdicao';
 import { ModalEdicao } from '../components/shared/ModalEdicao';
@@ -29,9 +32,21 @@ interface ItemCardProps {
   onEdit?: (item: Vehicle) => void;
   onDelete: (id: string) => void;
   onResolve: (id: string) => void;
+  onGerenciarCompartimentos?: (item: Vehicle) => void;
+  onVisualizarViatura?: (item: Vehicle) => void;
 }
 
-const ItemCard: React.FC<ItemCardProps> = ({ item, notices, profile, onSelect, onEdit, onDelete, onResolve }) => {
+const ItemCard: React.FC<ItemCardProps> = ({
+  item,
+  notices,
+  profile,
+  onSelect,
+  onEdit,
+  onDelete,
+  onResolve,
+  onGerenciarCompartimentos,
+  onVisualizarViatura,
+}) => {
   const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || n.description.includes(item.name)));
 
   return (
@@ -48,6 +63,24 @@ const ItemCard: React.FC<ItemCardProps> = ({ item, notices, profile, onSelect, o
         </span>
         <div className="flex gap-2 items-center">
           <span className="text-[10px] font-bold text-rustic-brown/30 font-mono">{item.type}</span>
+          {item.type === 'Viatura' && onVisualizarViatura && (
+            <button
+              onClick={e => { e.stopPropagation(); onVisualizarViatura(item); }}
+              className="text-stone-600 hover:text-stone-900 transition-colors p-1 rounded hover:bg-stone-100"
+              title="Visualizar Viatura e Compartimentos"
+            >
+              👁️
+            </button>
+          )}
+          {item.type === 'Viatura' && onGerenciarCompartimentos && (
+            <button
+              onClick={e => { e.stopPropagation(); onGerenciarCompartimentos(item); }}
+              className="text-amber-600 hover:text-amber-800 transition-colors p-1 rounded hover:bg-amber-50"
+              title="Gerenciar Compartimentos"
+            >
+              📦
+            </button>
+          )}
           {onEdit && (
             <button
               onClick={e => { e.stopPropagation(); onEdit(item); }}
@@ -238,6 +271,32 @@ const PatrimonioB4: React.FC = () => {
   const [newItemStatus] = useState<Vehicle['status']>('active');
   const [newItemDetails, setNewItemDetails] = useState("");
   const [newItemViaturaId, setNewItemViaturaId] = useState("");
+  const [tipoLocal, setTipoLocal] = useState<'ambiente' | 'viatura' | ''>('');
+  const [newItemCompartimentoId, setNewItemCompartimentoId] = useState('');
+  const [compartimentos, setCompartimentos] = useState<CompartimentoViatura[]>([]);
+  const [gerenciarCompViatura, setGerenciarCompViatura] = useState<Vehicle | null>(null);
+  const [visualizarViaturaObj, setVisualizarViaturaObj] = useState<Vehicle | null>(null);
+
+  // Buscar compartimentos ao selecionar viatura:
+  async function onSelecionarViatura(id: string) {
+    setNewItemViaturaId(id);
+    setNewItemCompartimentoId('');
+
+    if (!id) {
+      setCompartimentos([]);
+      return;
+    }
+
+    const { data } = await supabase
+      .from('compartimentos_viatura')
+      .select('*')
+      .eq('viatura_id', id)
+      .eq('ativo', true)
+      .order('ordem');
+
+    setCompartimentos(data || []);
+  }
+
   // Viatura-specific fields
   const [newItemBrand, setNewItemBrand] = useState("");
   const [newItemPlate, setNewItemPlate] = useState("");
@@ -406,10 +465,29 @@ const PatrimonioB4: React.FC = () => {
       patrimonio_number: newItemPatrimonioNumber || undefined,
       patrimonio_type: newItemPatrimonioType || undefined,
       atividades: newItemAtividades,
+      compartimento_id: newItemCompartimentoId || undefined,
     };
 
     try {
       await SupabaseService.addVehicle(newItem);
+
+      // Também insere na tabela equipamentos se for equipamento
+      if (newItemType === 'Equipamento' || newItemType === 'Material') {
+        try {
+          await supabase.from('equipamentos').insert({
+            nome: newItemName,
+            tipo: newItemType,
+            numero_serie: newItemPatrimonioNumber || undefined,
+            quantidade: 1,
+            status: 'Ok',
+            viatura_id: newItemViaturaId || undefined,
+            compartimento_id: newItemCompartimentoId || undefined,
+            local_id: newItemLocalId || undefined,
+          });
+        } catch (e) {
+          console.warn('Inserção direta em equipamentos ignorada se tabela não existir:', e);
+        }
+      }
 
       // Sync is triggered automatically via Supabase DB webhook → Edge Function
 
@@ -433,6 +511,9 @@ const PatrimonioB4: React.FC = () => {
       setNewItemName("");
       setNewItemDetails("");
       setNewItemViaturaId("");
+      setTipoLocal("");
+      setNewItemCompartimentoId("");
+      setCompartimentos([]);
       setNewItemBrand("");
       setNewItemPlate("");
       setNewItemRenavam("");
@@ -1177,22 +1258,112 @@ const PatrimonioB4: React.FC = () => {
                             <input value={newItemNfNumber} onChange={e => setNewItemNfNumber(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Número da Nota Fiscal" />
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Localização Atual do Equipamento</label>
-                          <select
-                            value={newItemLocalId}
-                            onChange={e => setNewItemLocalId(e.target.value)}
-                            className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm font-medium"
-                          >
-                            <option value="">Selecione um local...</option>
-                            {locais.map(l => (
-                              <option key={l.id} value={l.id}>
-                                {l.nome} ({l.tipo === 'viatura' ? 'Viatura' : 'Ambiente'})
-                              </option>
-                            ))}
-                          </select>
-                          <p className="text-[10px] text-gray-400 italic">Se o local desejado não existir, cadastre-o primeiro no painel da aba Listagem.</p>
+                        {/* BLOCO C: Seleção de Tipo de Localização / Ambiente / Viatura / Compartimento */}
+                        <div className="space-y-4 pt-2">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo de Localização</label>
+                            <select
+                              value={tipoLocal}
+                              onChange={e => {
+                                setTipoLocal(e.target.value as any);
+                                setNewItemViaturaId('');
+                                setNewItemCompartimentoId('');
+                                setNewItemLocalId('');
+                                setCompartimentos([]);
+                              }}
+                              className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm font-medium"
+                            >
+                              <option value="">Selecione...</option>
+                              <option value="ambiente">🏠 Ambiente</option>
+                              <option value="viatura">🚒 Viatura</option>
+                            </select>
+                          </div>
+
+                          {tipoLocal === 'ambiente' && (
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Ambiente</label>
+                              <select
+                                value={newItemLocalId}
+                                onChange={e => setNewItemLocalId(e.target.value)}
+                                className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm font-medium"
+                              >
+                                <option value="">Selecione o ambiente...</option>
+                                {locais.map(l => (
+                                  <option key={l.id} value={l.id}>
+                                    {l.nome}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {tipoLocal === 'viatura' && (
+                            <>
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Viatura</label>
+                                <select
+                                  value={newItemViaturaId}
+                                  onChange={e => onSelecionarViatura(e.target.value)}
+                                  className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm font-medium"
+                                >
+                                  <option value="">Selecione a viatura...</option>
+                                  {fleet.filter(v => v.type === 'Viatura').map(v => (
+                                    <option key={v.id} value={v.id}>
+                                      {v.name} {v.plate ? `— ${v.plate}` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {newItemViaturaId && (
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">
+                                    Compartimento
+                                    <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>
+                                      (opcional)
+                                    </span>
+                                  </label>
+
+                                  {compartimentos.length === 0 ? (
+                                    <div style={{
+                                      padding: '10px',
+                                      background: '#fef9c3',
+                                      borderRadius: '6px',
+                                      fontSize: '13px',
+                                      color: '#854d0e',
+                                    }}>
+                                      ⚠️ Esta viatura não tem compartimentos cadastrados.{' '}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const v = fleet.find(item => item.id === newItemViaturaId);
+                                          if (v) setGerenciarCompViatura(v);
+                                        }}
+                                        className="underline font-bold hover:text-amber-900"
+                                      >
+                                        Cadastrar agora
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <select
+                                      value={newItemCompartimentoId}
+                                      onChange={e => setNewItemCompartimentoId(e.target.value)}
+                                      className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm font-medium"
+                                    >
+                                      <option value="">Sem compartimento específico</option>
+                                      {compartimentos.map(c => (
+                                        <option key={c.id} value={c.id}>
+                                          {c.nome} {c.posicao && ` — ${c.posicao}`}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Número de Patrimônio</label>
@@ -1815,6 +1986,53 @@ const PatrimonioB4: React.FC = () => {
           </div>
         </div>
       </ModalEdicao>
+
+      {/* Modal Gerenciar Compartimentos */}
+      {gerenciarCompViatura && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(30,15,10,0.55)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setGerenciarCompViatura(null)}
+        >
+          <div
+            className="w-full max-w-2xl overflow-y-auto max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <GerenciarCompartimentos
+              viatura={gerenciarCompViatura}
+              onClose={() => setGerenciarCompViatura(null)}
+              onUpdated={() => loadData()}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modal / Painel Visualização de Viatura e Compartimentos */}
+      {visualizarViaturaObj && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(30,15,10,0.55)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setVisualizarViaturaObj(null)}
+        >
+          <div
+            className="w-full max-w-4xl bg-stone-100 p-6 rounded-3xl overflow-y-auto max-h-[90vh] shadow-2xl border border-rustic-border"
+            onClick={e => e.stopPropagation()}
+          >
+            <VisualizacaoViatura
+              viatura={visualizarViaturaObj}
+              onBack={() => setVisualizarViaturaObj(null)}
+              onAddItem={(viaturaId, compId) => {
+                setVisualizarViaturaObj(null);
+                setActiveTab('cadastro');
+                setNewItemType('Equipamento');
+                setTipoLocal('viatura');
+                onSelecionarViatura(viaturaId);
+                if (compId) setNewItemCompartimentoId(compId);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

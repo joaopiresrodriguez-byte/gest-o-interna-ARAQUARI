@@ -147,6 +147,10 @@ const TABELA_CONFIG: Record<string, { aba: string; mapeamento: (record: any) => 
     aba: 'Instrucoes B3',
     mapeamento: (r) => [r.id, r.nome || r.name, r.categoria || r.category, r.nivel || r.level, r.carga_horaria || r.credit_hours, r.instrutor || r.instructor, r.descricao || r.description],
   },
+  compartimentos_viatura: {
+    aba: 'Compartimentos',
+    mapeamento: (r) => [r.id, r.viatura_id, r.nome, r.posicao, r.ordem, r.ativo],
+  },
 };
 
 serve(async (req) => {

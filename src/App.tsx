@@ -241,6 +241,14 @@ const App: React.FC = () => {
                 </Suspense>
               }
             />
+            <Route
+              path="/extrato/compartimento/:id"
+              element={
+                <Suspense fallback={<LoadingFallback message="Carregando extrato público do compartimento..." />}>
+                  <ExtratoPublico />
+                </Suspense>
+              }
+            />
             <Route path="/*" element={<ProtectedApp />} />
           </Routes>
         </RouteErrorBoundary>

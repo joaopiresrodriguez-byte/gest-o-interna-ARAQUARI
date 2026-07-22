@@ -29,6 +29,81 @@ export function ExtratoPublico() {
           return;
         }
 
+        if (tipo === 'compartimento') {
+          const { data: comp } = await supabase
+            .from('compartimentos_viatura')
+            .select(`
+              id, nome, posicao, viatura_id
+            `)
+            .eq('id', id)
+            .single();
+
+          if (comp) {
+            let viaturaNome = '';
+            let viaturaPlaca = '';
+            
+            if (comp.viatura_id) {
+              const { data: viat } = await supabase
+                .from('viaturas')
+                .select('nome, placa')
+                .eq('id', comp.viatura_id)
+                .single();
+
+              if (!viat) {
+                const { data: fleetViat } = await supabase
+                  .from('fleet')
+                  .select('name, plate')
+                  .eq('id', comp.viatura_id)
+                  .single();
+
+                if (fleetViat) {
+                  viaturaNome = fleetViat.name;
+                  viaturaPlaca = fleetViat.plate || '';
+                }
+              } else {
+                viaturaNome = viat.nome;
+                viaturaPlaca = viat.placa || '';
+              }
+            }
+
+            const headerInfo = viaturaNome ? `${viaturaNome} ${viaturaPlaca ? `(${viaturaPlaca})` : ''}` : '';
+            setTitulo(`${comp.nome} ${headerInfo ? `— ${headerInfo}` : ''}`);
+            setLocalTipo('Compartimento');
+          } else {
+            setErro('Compartimento não encontrado.');
+            setCarregando(false);
+            return;
+          }
+
+          // Buscar equipamentos vinculados
+          const { data: eqData } = await supabase
+            .from('equipamentos')
+            .select('id, nome, tipo, numero_serie, quantidade, status')
+            .eq('compartimento_id', id)
+            .order('nome');
+
+          if (eqData && eqData.length > 0) {
+            setItens(eqData.map(e => ({
+              id: e.id,
+              name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
+              type: e.tipo || 'Equipamento',
+              patrimonio_number: e.numero_serie,
+              status: e.status || 'Ok',
+            })));
+          } else {
+            const { data: fleetData } = await supabase
+              .from('fleet')
+              .select('id, name, type, patrimonio_number, status, brand, plate')
+              .eq('compartimento_id', id)
+              .order('name');
+
+            setItens(fleetData || []);
+          }
+
+          setCarregando(false);
+          return;
+        }
+
         // 1. Buscar dados do local (ambiente ou viatura) na tabela locais_equipamento
         const { data: local, error: errorLocal } = await supabase
           .from('locais_equipamento')
