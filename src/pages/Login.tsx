@@ -55,11 +55,14 @@ const Login: React.FC = () => {
 
         try {
             if (viewMode === 'forgot') {
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/`,
+                const targetEmail = email.trim().toLowerCase();
+                const redirectUrl = `${window.location.origin}`;
+                console.log('Sending password reset email to:', targetEmail, 'redirectTo:', redirectUrl);
+                const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+                    redirectTo: redirectUrl,
                 });
                 if (error) throw error;
-                setSuccess('Email de recuperação enviado! Verifique sua caixa de entrada.');
+                setSuccess(`Email de recuperação enviado para ${targetEmail}! Verifique sua caixa de entrada (e a pasta de Spam/Lixo Eletrônico).`);
             } else if (viewMode === 'signup') {
                 const { error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
