@@ -48,26 +48,22 @@ const ItemCard: React.FC<ItemCardProps> = ({ item, notices, profile, onSelect, o
         </span>
         <div className="flex gap-2 items-center">
           <span className="text-[10px] font-bold text-rustic-brown/30 font-mono">{item.type}</span>
-          {profile?.p_logistica === 'editor' && (
-            <>
-              {onEdit && (
-                <button
-                  onClick={e => { e.stopPropagation(); onEdit(item); }}
-                  className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
-                  title="Editar Item B4"
-                >
-                  ✏️
-                </button>
-              )}
-              <button
-                onClick={e => { e.stopPropagation(); onDelete(item.id); }}
-                className="text-gray-300 hover:text-red-500 transition-colors"
-                title="Excluir Item B4"
-              >
-                <span className="material-symbols-outlined text-[16px]">delete</span>
-              </button>
-            </>
+          {onEdit && (
+            <button
+              onClick={e => { e.stopPropagation(); onEdit(item); }}
+              className="text-blue-500 hover:text-blue-700 transition-colors p-1 rounded hover:bg-blue-50"
+              title="Editar Item B4"
+            >
+              ✏️
+            </button>
           )}
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(item.id); }}
+            className="text-gray-300 hover:text-red-500 transition-colors p-1"
+            title="Excluir Item B4"
+          >
+            <span className="material-symbols-outlined text-[16px]">delete</span>
+          </button>
         </div>
       </div>
 
@@ -181,6 +177,46 @@ const PatrimonioB4: React.FC = () => {
     const ok = await salvarEdicaoLocal();
     if (ok) {
       toast.success('Local de equipamento atualizado!');
+      loadData();
+    }
+  };
+
+  // Hook de edição universal para Missões Diárias (daily_missions)
+  const {
+    itemEditando: missionEditando,
+    salvando: salvandoMission,
+    erro: erroMission,
+    abrirEdicao: abrirEdicaoMission,
+    cancelarEdicao: cancelarEdicaoMission,
+    atualizarCampo: atualizarCampoMission,
+    salvarEdicao: salvarEdicaoMission,
+    editando: editandoMission,
+  } = useEdicao<DailyMission>('daily_missions');
+
+  const handleSalvarMission = async () => {
+    const ok = await salvarEdicaoMission();
+    if (ok) {
+      toast.success('Missão atualizada com sucesso!');
+      loadData();
+    }
+  };
+
+  // Hook de edição universal para Compras / Solicitações (purchases)
+  const {
+    itemEditando: purchaseEditando,
+    salvando: salvandoPurchase,
+    erro: erroPurchase,
+    abrirEdicao: abrirEdicaoPurchase,
+    cancelarEdicao: cancelarEdicaoPurchase,
+    atualizarCampo: atualizarCampoPurchase,
+    salvarEdicao: salvarEdicaoPurchase,
+    editando: editandoPurchase,
+  } = useEdicao<Purchase>('purchases');
+
+  const handleSalvarPurchase = async () => {
+    const ok = await salvarEdicaoPurchase();
+    if (ok) {
+      toast.success('Solicitação de compra atualizada!');
       loadData();
     }
   };
@@ -681,12 +717,13 @@ const PatrimonioB4: React.FC = () => {
                                 }`}>
                                 {mission.priority}
                               </span>
-                              <div className="flex gap-1">
-                                {profile?.p_logistica === 'editor' && (
-                                  <button onClick={() => handleDeleteMission(mission.id!)} className="text-gray-300 hover:text-red-500 transition-colors">
-                                    <span className="material-symbols-outlined text-[18px]">delete</span>
-                                  </button>
-                                )}
+                              <div className="flex gap-1 items-center">
+                                <button onClick={() => abrirEdicaoMission(mission)} className="text-blue-500 hover:text-blue-700 p-0.5" title="Editar Missão">
+                                  ✏️
+                                </button>
+                                <button onClick={() => handleDeleteMission(mission.id!)} className="text-gray-300 hover:text-red-500 transition-colors p-0.5" title="Excluir Missão">
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                                </button>
                               </div>
                             </div>
                             <div>
@@ -934,12 +971,24 @@ const PatrimonioB4: React.FC = () => {
                             <h2 className="text-2xl font-black text-[#3e2723] mt-1">{selectedItem.name}</h2>
                             <p className="text-xs text-rustic-brown/50 mt-0.5 font-mono">{selectedItem.id}</p>
                           </div>
-                          <button
-                            onClick={() => setSelectedItem(null)}
-                            className="p-2 rounded-lg hover:bg-stone-100 text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            <span className="material-symbols-outlined">close</span>
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                const itemToEdit = selectedItem;
+                                setSelectedItem(null);
+                                abrirEdicaoFleetItem(itemToEdit);
+                              }}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs transition-colors"
+                            >
+                              ✏️ Editar
+                            </button>
+                            <button
+                              onClick={() => setSelectedItem(null)}
+                              className="p-2 rounded-lg hover:bg-stone-100 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                              <span className="material-symbols-outlined">close</span>
+                            </button>
+                          </div>
                         </div>
 
                         {/* Modal Body */}
@@ -1314,11 +1363,14 @@ const PatrimonioB4: React.FC = () => {
                               </td>
                               <td className="py-3 px-4 text-right">R$ {(p.unit_price || 0).toFixed(2)}</td>
                               <td className="py-3 px-4 text-right">
-                                {profile?.p_logistica === 'editor' && (
-                                  <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded">
+                                <div className="flex gap-2 justify-end items-center">
+                                  <button onClick={() => abrirEdicaoPurchase(p)} className="text-blue-500 hover:text-blue-700 p-0.5" title="Editar Solicitação">
+                                    ✏️
+                                  </button>
+                                  <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded" title="Excluir">
                                     <span className="material-symbols-outlined text-[18px]">delete</span>
                                   </button>
-                                )}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -1581,6 +1633,185 @@ const PatrimonioB4: React.FC = () => {
               <option value="true">Ativo</option>
               <option value="false">Inativo</option>
             </select>
+          </div>
+        </div>
+      </ModalEdicao>
+
+      {/* Modal de Edição de Missão Diária */}
+      <ModalEdicao
+        titulo={`Editar Missão: ${missionEditando?.title || ''}`}
+        aberto={editandoMission}
+        salvando={salvandoMission}
+        erro={erroMission}
+        onSalvar={handleSalvarMission}
+        onCancelar={cancelarEdicaoMission}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Título da Missão</label>
+            <input
+              value={missionEditando?.title || ''}
+              onChange={e => atualizarCampoMission('title', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Descrição</label>
+            <textarea
+              value={missionEditando?.description || ''}
+              onChange={e => atualizarCampoMission('description', e.target.value)}
+              rows={3}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', resize: 'none' }}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Data da Missão</label>
+              <input
+                type="date"
+                value={missionEditando?.mission_date || ''}
+                onChange={e => atualizarCampoMission('mission_date', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Prioridade</label>
+              <select
+                value={missionEditando?.priority || 'media'}
+                onChange={e => atualizarCampoMission('priority', e.target.value as any)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="baixa">Baixa</option>
+                <option value="media">Média</option>
+                <option value="alta">Alta</option>
+                <option value="urgente">Urgente</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Horário de Início</label>
+              <input
+                type="time"
+                value={missionEditando?.start_time || ''}
+                onChange={e => atualizarCampoMission('start_time', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Horário de Fim</label>
+              <input
+                type="time"
+                value={missionEditando?.end_time || ''}
+                onChange={e => atualizarCampoMission('end_time', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Status</label>
+              <select
+                value={missionEditando?.status || 'agendada'}
+                onChange={e => atualizarCampoMission('status', e.target.value as any)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="agendada">Agendada</option>
+                <option value="em_andamento">Em Andamento</option>
+                <option value="concluida">Concluída</option>
+                <option value="cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nome do Responsável</label>
+              <input
+                value={missionEditando?.responsible_name || ''}
+                onChange={e => atualizarCampoMission('responsible_name', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Observações</label>
+            <input
+              value={missionEditando?.notes || ''}
+              onChange={e => atualizarCampoMission('notes', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+        </div>
+      </ModalEdicao>
+
+      {/* Modal de Edição de Solicitação de Compra */}
+      <ModalEdicao
+        titulo={`Editar Solicitação: ${purchaseEditando?.item || ''}`}
+        aberto={editandoPurchase}
+        salvando={salvandoPurchase}
+        erro={erroPurchase}
+        onSalvar={handleSalvarPurchase}
+        onCancelar={cancelarEdicaoPurchase}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Item / Material</label>
+            <input
+              value={purchaseEditando?.item || ''}
+              onChange={e => atualizarCampoPurchase('item', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Quantidade</label>
+              <input
+                type="number"
+                value={purchaseEditando?.quantity || 1}
+                onChange={e => atualizarCampoPurchase('quantity', Number(e.target.value))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Preço Unitário (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={purchaseEditando?.unit_price || 0}
+                onChange={e => atualizarCampoPurchase('unit_price', Number(e.target.value))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Status</label>
+              <select
+                value={purchaseEditando?.status || 'Pendente'}
+                onChange={e => atualizarCampoPurchase('status', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              >
+                <option value="Pendente">Pendente</option>
+                <option value="Em Cotação">Em Cotação</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Comprado">Comprado</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Fornecedor</label>
+              <input
+                value={purchaseEditando?.supplier || ''}
+                onChange={e => atualizarCampoPurchase('supplier', e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Solicitante</label>
+            <input
+              value={purchaseEditando?.requester || ''}
+              onChange={e => atualizarCampoPurchase('requester', e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+            />
           </div>
         </div>
       </ModalEdicao>
