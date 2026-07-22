@@ -90,7 +90,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (mounted) setLoading(false);
         };
 
-        // Get initial session and start listener
+        // Detect password recovery mode or error hash directly from URL hash
+        const hash = window.location.hash;
+        if (hash.includes('type=recovery')) {
+            setIsPasswordRecovery(true);
+        }
+
+        // Get initial session explicitly to ensure loading state resolves
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error) {
+                console.warn('Error fetching initial session:', error);
+            }
+            if (mounted) {
+                handleAuthChange(session);
+                setLoading(false);
+            }
+        }).catch(err => {
+            console.error('Failed to get session:', err);
+            if (mounted) setLoading(false);
+        });
+
+        // Start auth state listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             console.log("Auth Event:", _event, session?.user?.email);
             if (_event === 'PASSWORD_RECOVERY') {

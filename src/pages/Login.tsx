@@ -32,6 +32,15 @@ const Login: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('login');
 
+    React.useEffect(() => {
+        const hash = window.location.hash;
+        if (hash.includes('error_code=otp_expired') || hash.includes('otp_expired') || hash.includes('invalid+or+has+expired')) {
+            setError('⚠️ O link de recuperação de senha expirou ou já foi utilizado. Digite seu email abaixo para receber um novo link.');
+            setViewMode('forgot');
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+    }, []);
+
     const switchView = (mode: ViewMode) => {
         setError(null);
         setSuccess(null);
