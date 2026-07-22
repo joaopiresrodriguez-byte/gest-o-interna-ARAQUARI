@@ -63,14 +63,20 @@ const Login: React.FC = () => {
                 const targetEmail = email.trim().toLowerCase();
 
                 if (showOtpInput && otpToken.trim()) {
+                    let cleanToken = otpToken.trim();
+                    if (cleanToken.includes('token=')) {
+                        const match = cleanToken.match(/token=([^&]+)/);
+                        if (match) cleanToken = match[1];
+                    }
+
                     // Validar código OTP diretamente
                     const { error } = await supabase.auth.verifyOtp({
                         email: targetEmail,
-                        token: otpToken.trim(),
+                        token: cleanToken,
                         type: 'recovery',
                     });
                     if (error) throw error;
-                    setSuccess('Código verificado! Redirecionando...');
+                    setSuccess('Código verificado com sucesso! Carregando formulário para nova senha...');
                     return;
                 }
 
