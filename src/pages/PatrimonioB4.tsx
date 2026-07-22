@@ -154,6 +154,28 @@ const ItemCard: React.FC<ItemCardProps> = ({
           ))}
         </div>
       )}
+
+      {/* Botões proeminentes de Compartimentos para Viaturas */}
+      {item.type === 'Viatura' && (
+        <div className="mt-3 pt-3 border-t border-stone-200 flex items-center gap-2">
+          {onVisualizarViatura && (
+            <button
+              onClick={e => { e.stopPropagation(); onVisualizarViatura(item); }}
+              className="flex-1 py-1.5 px-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors border border-stone-200"
+            >
+              <span>👁️</span> Ver Itens
+            </button>
+          )}
+          {onGerenciarCompartimentos && (
+            <button
+              onClick={e => { e.stopPropagation(); onGerenciarCompartimentos(item); }}
+              className="flex-1 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors border border-amber-200"
+            >
+              <span>📦</span> Compartimentos
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -1007,7 +1029,20 @@ const PatrimonioB4: React.FC = () => {
                             <div className="flex-1 h-px bg-rustic-border/40" />
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {items.map(item => <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onEdit={abrirEdicaoFleetItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />)}
+                            {items.map(item => (
+                              <ItemCard
+                                key={item.id}
+                                item={item}
+                                notices={notices}
+                                profile={profile}
+                                onSelect={setSelectedItem}
+                                onEdit={abrirEdicaoFleetItem}
+                                onDelete={handleDeleteItem}
+                                onResolve={handleResolveNotice}
+                                onGerenciarCompartimentos={setGerenciarCompViatura}
+                                onVisualizarViatura={setVisualizarViaturaObj}
+                              />
+                            ))}
                           </div>
                         </div>
                       ))}
@@ -1021,7 +1056,18 @@ const PatrimonioB4: React.FC = () => {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {filteredFleet.map(item => (
-                        <ItemCard key={item.id} item={item} notices={notices} profile={profile} onSelect={setSelectedItem} onEdit={abrirEdicaoFleetItem} onDelete={handleDeleteItem} onResolve={handleResolveNotice} />
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          notices={notices}
+                          profile={profile}
+                          onSelect={setSelectedItem}
+                          onEdit={abrirEdicaoFleetItem}
+                          onDelete={handleDeleteItem}
+                          onResolve={handleResolveNotice}
+                          onGerenciarCompartimentos={setGerenciarCompViatura}
+                          onVisualizarViatura={setVisualizarViaturaObj}
+                        />
                       ))}
                       {filteredFleet.length === 0 && (
                         <div className="col-span-3 text-center py-16 text-gray-400">
@@ -1052,7 +1098,31 @@ const PatrimonioB4: React.FC = () => {
                             <h2 className="text-2xl font-black text-[#3e2723] mt-1">{selectedItem.name}</h2>
                             <p className="text-xs text-rustic-brown/50 mt-0.5 font-mono">{selectedItem.id}</p>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {selectedItem.type === 'Viatura' && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    const v = selectedItem;
+                                    setSelectedItem(null);
+                                    setVisualizarViaturaObj(v);
+                                  }}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 font-bold text-xs transition-colors"
+                                >
+                                  👁️ Ver Itens
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const v = selectedItem;
+                                    setSelectedItem(null);
+                                    setGerenciarCompViatura(v);
+                                  }}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs transition-colors"
+                                >
+                                  📦 Compartimentos
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => {
                                 const itemToEdit = selectedItem;
