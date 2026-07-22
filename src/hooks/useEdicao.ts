@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { supabase } from '../services/supabase';
+import { useToast } from './useToast';
 
 export function useEdicao<T extends { id: string }>(tabela: string) {
   const [itemEditando, setItemEditando] = useState<T | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const { mostrarToast } = useToast();
 
   function abrirEdicao(item: T) {
     setItemEditando({ ...item });
@@ -39,10 +41,12 @@ export function useEdicao<T extends { id: string }>(tabela: string) {
 
     if (error) {
       setErro(error.message);
+      mostrarToast('⚠️ Erro ao salvar alterações.', 'erro');
       return false;
     }
 
     setItemEditando(null);
+    mostrarToast('✅ Salvo! Planilha Google atualizada automaticamente.', 'sucesso');
     return true;
   }
 
