@@ -75,31 +75,50 @@ export function ExtratoPublico() {
             return;
           }
 
-          // Buscar equipamentos vinculados
-          const { data: eqData } = await supabase
+          // Buscar equipamentos:
+          const { data: equip } = await supabase
             .from('equipamentos')
             .select('id, nome, tipo, numero_serie, quantidade, status')
             .eq('compartimento_id', id)
             .order('nome');
 
-          if (eqData && eqData.length > 0) {
-            setItens(eqData.map(e => ({
-              id: e.id,
-              name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
-              type: e.tipo || 'Equipamento',
-              patrimonio_number: e.numero_serie,
-              status: e.status || 'Ok',
-            })));
-          } else {
-            const { data: fleetData } = await supabase
-              .from('fleet')
-              .select('id, name, type, patrimonio_number, status, brand, plate')
-              .eq('compartimento_id', id)
-              .order('name');
+          // Fallback para tabela fleet se equipamentos estiver vazia
+          const equipItens = (equip && equip.length > 0)
+            ? equip.map(e => ({
+                id: e.id,
+                name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
+                type: `🔧 ${e.tipo || 'Equipamento'}`,
+                patrimonio_number: e.numero_serie,
+                status: e.status || 'Ok',
+              }))
+            : await (async () => {
+                const { data: fleetData } = await supabase
+                  .from('fleet')
+                  .select('id, name, type, patrimonio_number, status, brand, plate')
+                  .eq('compartimento_id', id)
+                  .order('name');
+                return (fleetData || []).map(f => ({
+                  ...f,
+                  type: `🔧 ${f.type || 'Equipamento'}`,
+                }));
+              })();
 
-            setItens(fleetData || []);
-          }
+          // Buscar materiais de consumo:
+          const { data: consumo } = await supabase
+            .from('materiais_consumo')
+            .select('id, nome, unidade, quantidade, estoque_minimo, categoria')
+            .eq('compartimento_id', id)
+            .order('nome');
 
+          const consumoItens = (consumo || []).map(c => ({
+            id: c.id,
+            name: c.nome,
+            type: `📦 Consumo (${c.categoria || 'Geral'})`,
+            patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
+            status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
+          }));
+
+          setItens([...equipItens, ...consumoItens]);
           setCarregando(false);
           return;
         }
@@ -121,22 +140,35 @@ export function ExtratoPublico() {
         setTitulo(local.nome);
         setLocalTipo(local.tipo === 'viatura' ? 'Viatura' : 'Ambiente');
 
-        // 2. Buscar itens associados a este local na tabela fleet (equipamentos e materiais)
-        // Buscamos itens vinculados via local_id OU com correspondência textual legada (location)
-        const { data: fleetData, error: errorFleet } = await supabase
+        // 2. Buscar itens associados (fleet / equipamentos e materiais de consumo)
+        const { data: fleetData } = await supabase
           .from('fleet')
           .select('id, name, type, patrimonio_number, status, brand, plate, location, local_id')
           .or(`local_id.eq.${id},location.ilike.${local.nome}`)
           .order('name');
 
-        if (errorFleet) {
-          console.error('Erro ao buscar itens da frota:', errorFleet);
-          throw errorFleet;
-        }
+        const { data: consumoData } = await supabase
+          .from('materiais_consumo')
+          .select('id, nome, unidade, quantidade, estoque_minimo, categoria, local_id, viatura_id')
+          .or(local.tipo === 'viatura' ? `viatura_id.eq.${id}` : `local_id.eq.${id}`)
+          .order('nome');
 
-        // Filtramos para evitar que a própria viatura apareça listada dentro de si mesma
-        const itensFiltrados = (fleetData || []).filter(item => item.id !== id);
-        setItens(itensFiltrados);
+        const itensFleet = (fleetData || [])
+          .filter(item => item.id !== id)
+          .map(item => ({
+            ...item,
+            type: `🔧 ${item.type}`,
+          }));
+
+        const itensConsumo = (consumoData || []).map(c => ({
+          id: c.id,
+          name: c.nome,
+          type: `📦 Consumo (${c.categoria || 'Geral'})`,
+          patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
+          status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
+        }));
+
+        setItens([...itensFleet, ...itensConsumo]);
 
       } catch (err: any) {
         console.error('Erro geral na consulta pública:', err);

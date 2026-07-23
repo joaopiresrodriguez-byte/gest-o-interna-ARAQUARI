@@ -151,6 +151,21 @@ const TABELA_CONFIG: Record<string, { aba: string; mapeamento: (record: any) => 
     aba: 'Compartimentos',
     mapeamento: (r) => [r.id, r.viatura_id, r.nome, r.posicao, r.ordem, r.ativo],
   },
+  materiais_consumo: {
+    aba: 'Materiais Consumo',
+    mapeamento: (r) => [
+      r.id,
+      r.nome,
+      r.categoria,
+      r.unidade,
+      r.quantidade,
+      r.estoque_minimo,
+      r.status,
+      r.local_id,
+      r.viatura_id,
+      r.compartimento_id,
+    ],
+  },
 };
 
 serve(async (req) => {
