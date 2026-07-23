@@ -107,7 +107,7 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
   };
 
   const removerCompartimento = async (id: string) => {
-    // Verificar se tem equipamentos em 'equipamentos' ou 'fleet' antes de remover:
+    // Verificar se tem equipamentos/materiais em 'equipamentos', 'fleet' ou 'materiais_consumo' antes de remover:
     const { count: countEq } = await supabase
       .from('equipamentos')
       .select('id', { count: 'exact', head: true })
@@ -118,11 +118,16 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
       .select('id', { count: 'exact', head: true })
       .eq('compartimento_id', id);
 
-    const totalCount = (countEq || 0) + (countFleet || 0);
+    const { count: countConsumo } = await supabase
+      .from('materiais_consumo')
+      .select('id', { count: 'exact', head: true })
+      .eq('compartimento_id', id);
+
+    const totalCount = (countEq || 0) + (countFleet || 0) + (countConsumo || 0);
 
     if (totalCount > 0) {
       throw new Error(
-        `Este compartimento possui ${totalCount} equipamento(s). Mova-os antes de remover.`
+        `Este compartimento possui ${totalCount} item(ns) (equipamentos/materiais). Mova-os antes de remover.`
       );
     }
 
@@ -151,6 +156,7 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
           ordem: Number(ordem) || 0,
         });
         toast.success('Compartimento atualizado!');
+        resetForm();
       } else {
         await criarCompartimento({
           viatura_id: viatura.id,
@@ -159,9 +165,15 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
           descricao,
           ordem: Number(ordem) || 0,
         });
-        toast.success('Compartimento criado!');
+        toast.success('Compartimento criado! Você pode adicionar mais compartimentos.');
+        // Mantém formulário aberto para adição ilimitada contínua:
+        setNome('');
+        setPosicao('');
+        setDescricao('');
+        setOrdem(prev => Number(prev) + 1);
+        setEditingId(null);
+        setExibirForm(true);
       }
-      resetForm();
       if (onUpdated) onUpdated();
     } catch (err: any) {
       console.error('Erro ao salvar compartimento:', err);

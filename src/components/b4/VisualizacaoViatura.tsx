@@ -44,34 +44,45 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
       if (errComp) throw errComp;
       setCompartimentos(dataComp || []);
 
-      // Buscar equipamentos vinculados à viatura ou aos compartimentos dela
-      // Tenta na tabela equipamentos primeiro, fallback para fleet se aplicável
+      // 2. Buscar equipamentos e materiais de consumo vinculados à viatura
       const { data: dataEq } = await supabase
         .from('equipamentos')
         .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id')
-        .or(`viatura_id.eq.${viatura.id}`);
+        .eq('viatura_id', viatura.id);
+
+      const { data: dataConsumo } = await supabase
+        .from('materiais_consumo')
+        .select('id, nome, categoria, unidade, quantidade, estoque_minimo, compartimento_id')
+        .eq('viatura_id', viatura.id);
+
+      const consumoFormatado: EquipamentoItem[] = (dataConsumo || []).map(c => ({
+        id: c.id,
+        nome: `${c.nome} (${c.quantidade} ${c.unidade || 'un'})`,
+        tipo: `📦 Consumo (${c.categoria || 'Geral'})`,
+        quantidade: c.quantidade,
+        status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
+        compartimento_id: c.compartimento_id,
+      }));
 
       if (dataEq && dataEq.length > 0) {
-        setItens(dataEq);
+        setItens([...dataEq, ...consumoFormatado]);
       } else {
-        // Fallback: buscar na tabela fleet
+        // Fallback: buscar na tabela fleet + consumo
         const { data: dataFleet } = await supabase
           .from('fleet')
           .select('id, name, type, status, compartimento_id')
           .eq('viatura_id', viatura.id);
 
-        if (dataFleet) {
-          setItens(
-            dataFleet.map(f => ({
-              id: f.id,
-              nome: f.name,
-              tipo: f.type,
-              status: f.status === 'active' ? 'Ok' : 'Em Manutenção',
-              quantidade: 1,
-              compartimento_id: f.compartimento_id,
-            }))
-          );
-        }
+        const fleetFormatado: EquipamentoItem[] = (dataFleet || []).map(f => ({
+          id: f.id,
+          nome: f.name,
+          tipo: `🔧 ${f.type}`,
+          status: f.status === 'active' ? 'Ok' : 'Em Manutenção',
+          quantidade: 1,
+          compartimento_id: f.compartimento_id,
+        }));
+
+        setItens([...fleetFormatado, ...consumoFormatado]);
       }
     } catch (err: any) {
       console.error('Erro ao carregar visualização da viatura:', err);
