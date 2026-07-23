@@ -1314,14 +1314,16 @@ const PatrimonioB4: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Equipamento-specific fields */}
-                    {newItemType === 'Equipamento' && (
+                    {/* Equipamento / Material specific fields */}
+                    {(newItemType === 'Equipamento' || newItemType === 'Material') && (
                       <div className="space-y-4 p-4 bg-white border border-rustic-border/50 rounded-xl shadow-sm">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2">Dados do Equipamento</h4>
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 border-b border-primary/10 pb-2">
+                          {newItemType === 'Equipamento' ? 'Dados do Equipamento' : 'Dados do Material (Conserto/Consumo)'}
+                        </h4>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Marca</label>
-                            <input value={newItemBrand} onChange={e => setNewItemBrand(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Marca do equipamento" />
+                            <input value={newItemBrand} onChange={e => setNewItemBrand(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Marca / Fabricante" />
                           </div>
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Nº NF de Compra</label>
@@ -1437,7 +1439,7 @@ const PatrimonioB4: React.FC = () => {
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Número de Patrimônio</label>
-                            <input value={newItemPatrimonioNumber} onChange={e => setNewItemPatrimonioNumber(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Nº de Patrimônio" />
+                            <input value={newItemPatrimonioNumber} onChange={e => setNewItemPatrimonioNumber(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm" placeholder="Nº de Patrimônio (opcional)" />
                           </div>
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Tipo de Patrimônio</label>
