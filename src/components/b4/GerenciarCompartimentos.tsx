@@ -47,7 +47,11 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
       setCompartimentos(data || []);
     } catch (err: any) {
       console.error('Erro ao carregar compartimentos:', err);
-      toast.error('Erro ao carregar compartimentos da viatura');
+      if (err?.message?.includes('schema cache') || err?.code === 'PGRST204' || err?.code === '42P01') {
+        toast.error('Tabela compartimentos_viatura não encontrada no banco. Execute a migração no Supabase SQL Editor.');
+      } else {
+        toast.error(`Erro ao carregar compartimentos: ${err.message || 'Erro de conexão'}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -161,7 +165,11 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
       if (onUpdated) onUpdated();
     } catch (err: any) {
       console.error('Erro ao salvar compartimento:', err);
-      toast.error(err.message || 'Erro ao salvar compartimento');
+      if (err?.message?.includes('schema cache') || err?.code === 'PGRST204' || err?.code === '42P01') {
+        toast.error('Tabela "compartimentos_viatura" ainda não existe no Supabase. Por favor, execute a migração SQL no Supabase.');
+      } else {
+        toast.error(`Erro ao salvar compartimento: ${err.message || 'Falha de conexão'}`);
+      }
     } finally {
       setSalvando(false);
     }
