@@ -166,6 +166,23 @@ const TABELA_CONFIG: Record<string, { aba: string; mapeamento: (record: any) => 
       r.compartimento_id,
     ],
   },
+  // ─── Missões do Dia (Operacional) ────────────────────────────────────────────
+  daily_missions: {
+    aba: 'Missões',
+    mapeamento: (r) => [
+      r.id,
+      r.title,
+      r.status,
+      r.observacoes ?? '',
+      r.mission_date,
+      r.start_time ?? '',
+      r.end_time ?? '',
+      r.responsible_name ?? '',
+      r.priority ?? '',
+      r.editado_por_nome ?? '',
+      r.editado_em ? new Date(r.editado_em).toLocaleString('pt-BR') : '',
+    ],
+  },
 };
 
 serve(async (req) => {

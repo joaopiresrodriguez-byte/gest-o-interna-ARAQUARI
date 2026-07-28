@@ -4,6 +4,7 @@ import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { Button, Input, TextArea } from '../components/ui';
+import { STATUS_MISSAO, STATUS_RESULTADO, StatusMissao, atualizarMissao } from '../services/missoesService';
 
 // ============ SUB-COMPONENTS ============
 
@@ -138,11 +139,227 @@ const PRIORITY_CONFIG = {
   baixa: { label: 'BAIXA', color: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500' },
 };
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   agendada: { label: 'Agendada', color: 'bg-blue-100 text-blue-700', icon: 'schedule' },
   em_andamento: { label: 'Em Andamento', color: 'bg-amber-100 text-amber-700', icon: 'play_circle' },
   concluida: { label: 'Concluída', color: 'bg-green-100 text-green-700', icon: 'check_circle' },
   cancelada: { label: 'Cancelada', color: 'bg-gray-100 text-gray-500', icon: 'cancel' },
+  parcialmente_concluida: { label: 'Parcialmente Concluída', color: 'bg-amber-100 text-amber-700', icon: 'warning' },
+  nao_realizada: { label: 'Não Realizada', color: 'bg-red-100 text-red-700', icon: 'cancel' },
+};
+
+// ============ CARD DE MISSÃO COM STATUS + OBSERVAÇÕES + AUDITORIA ============
+
+const CardMissao: React.FC<{
+  missao: DailyMission;
+  isEditor: boolean;
+  onAtualizar: () => void;
+  onIniciar?: () => void;
+  onExcluir?: () => void;
+}> = ({ missao, isEditor, onAtualizar, onIniciar, onExcluir }) => {
+  const [editando, setEditando] = useState(false);
+  const [status, setStatus] = useState<StatusMissao>((missao.status as StatusMissao) || 'agendada');
+  const [observacoes, setObservacoes] = useState(missao.observacoes || '');
+  const [salvando, setSalvando] = useState(false);
+
+  const cfgAtual = STATUS_MISSAO[status] || STATUS_MISSAO.agendada;
+  const priorityCfg = PRIORITY_CONFIG[missao.priority || 'media'];
+
+  async function handleSalvar() {
+    setSalvando(true);
+    try {
+      await atualizarMissao(missao.id!, { status, observacoes });
+      toast.success('Missão atualizada com sucesso!');
+      setEditando(false);
+      onAtualizar();
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err?.message || 'Tente novamente.'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-rustic-border shadow-sm transition-all hover:shadow-md overflow-hidden">
+      {/* CABEÇALHO */}
+      <div
+        className="flex flex-wrap items-start justify-between gap-3 p-5"
+        style={{ borderLeft: `4px solid ${cfgAtual.cor}` }}
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-lg"
+            style={{ background: cfgAtual.fundo }}
+          >
+            {cfgAtual.icone}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-[#181111] text-base truncate">{missao.title}</p>
+            {missao.description && (
+              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{missao.description}</p>
+            )}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${priorityCfg.color}`}>
+                {priorityCfg.label}
+              </span>
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: cfgAtual.fundo, color: cfgAtual.cor }}
+              >
+                {cfgAtual.icone} {cfgAtual.label}
+              </span>
+              {missao.start_time && (
+                <span className="text-[10px] text-gray-400 font-bold">
+                  <span className="material-symbols-outlined text-[12px] align-middle">schedule</span>{' '}
+                  {missao.start_time}{missao.end_time ? ` — ${missao.end_time}` : ''}
+                </span>
+              )}
+              {missao.responsible_name && (
+                <span className="text-[10px] text-gray-400 font-bold">
+                  <span className="material-symbols-outlined text-[12px] align-middle">person</span>{' '}
+                  {missao.responsible_name}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* AÇÕES */}
+        {isEditor && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {missao.status === 'agendada' && onIniciar && (
+              <button
+                onClick={onIniciar}
+                className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
+                title="Iniciar missão"
+              >
+                <span className="material-symbols-outlined text-[20px]">play_circle</span>
+              </button>
+            )}
+            {/* Botão de registrar resultado (para missões em andamento ou agendadas) */}
+            {(missao.status === 'em_andamento' || missao.status === 'agendada') && (
+              <button
+                onClick={() => setEditando(!editando)}
+                className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                title="Registrar resultado"
+              >
+                <span className="material-symbols-outlined text-[20px]">edit_note</span>
+              </button>
+            )}
+            {/* Sempre permitir editar observações em missões finalizadas */}
+            {(missao.status === 'concluida' || missao.status === 'parcialmente_concluida' || missao.status === 'nao_realizada') && (
+              <button
+                onClick={() => setEditando(!editando)}
+                className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Editar observações"
+              >
+                <span className="material-symbols-outlined text-[20px]">edit</span>
+              </button>
+            )}
+            {onExcluir && (
+              <button
+                onClick={onExcluir}
+                className="p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
+                title="Excluir"
+              >
+                <span className="material-symbols-outlined text-[20px]">delete</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* OBSERVAÇÕES (somente leitura) */}
+      {!editando && missao.observacoes && (
+        <div className="px-5 py-3 bg-slate-50 border-t border-rustic-border text-sm text-slate-600">
+          <span className="font-bold text-slate-700">Obs: </span>
+          {missao.observacoes}
+        </div>
+      )}
+
+      {/* RODAPÉ DE AUDITORIA */}
+      {!editando && missao.editado_por_nome && (
+        <div className="px-5 py-2 bg-slate-50 border-t border-rustic-border flex items-center gap-1.5">
+          <span className="text-[11px]">🔏</span>
+          <span className="text-[11px] text-slate-400">
+            Editado por{' '}
+            <strong className="text-slate-500">{missao.editado_por_nome}</strong>
+            {missao.editado_em && (
+              <> em {new Date(missao.editado_em).toLocaleString('pt-BR')}</>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* PAINEL DE EDIÇÃO */}
+      {editando && (
+        <div className="p-5 bg-slate-50 border-t border-rustic-border flex flex-col gap-4">
+
+          {/* SELETOR DE RESULTADO */}
+          <div>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+              Resultado da Missão
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {STATUS_RESULTADO.map((key) => {
+                const cfg = STATUS_MISSAO[key];
+                const selected = status === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setStatus(key)}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all"
+                    style={{
+                      border: selected ? `2px solid ${cfg.cor}` : '2px solid #e2e8f0',
+                      background: selected ? cfg.fundo : 'white',
+                      color: selected ? cfg.cor : '#64748b',
+                    }}
+                  >
+                    <span>{cfg.icone}</span>
+                    <span>{cfg.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* CAMPO OBSERVAÇÕES */}
+          <div>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+              Observações
+            </label>
+            <textarea
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={3}
+              placeholder="Descreva o resultado, ocorrências ou justificativas..."
+              className="w-full px-3 py-2 rounded-lg border border-rustic-border text-sm font-normal resize-vertical focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              style={{ fontFamily: 'inherit', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* BOTÕES */}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setEditando(false); setStatus((missao.status as StatusMissao) || 'agendada'); setObservacoes(missao.observacoes || ''); }}
+              disabled={salvando}
+              className="px-4 py-2 text-sm font-bold border border-rustic-border bg-white rounded-lg hover:bg-gray-50 transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSalvar}
+              disabled={salvando}
+              className="px-4 py-2 text-sm font-bold text-white rounded-lg transition-all"
+              style={{ background: salvando ? '#94a3b8' : '#1d4ed8', cursor: salvando ? 'not-allowed' : 'pointer' }}
+            >
+              {salvando ? '⏳ Salvando...' : '✅ Confirmar'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 type MainTab = 'resumo' | 'missoes' | 'conferencia' | 'recebimentos';
@@ -594,6 +811,8 @@ const Operacional: React.FC = () => {
                   <option value="agendada">Agendadas</option>
                   <option value="em_andamento">Em Andamento</option>
                   <option value="concluida">Concluídas</option>
+                  <option value="parcialmente_concluida">Parcialmente Concluídas</option>
+                  <option value="nao_realizada">Não Realizadas</option>
                   <option value="cancelada">Canceladas</option>
                 </select>
               </div>
@@ -684,61 +903,20 @@ const Operacional: React.FC = () => {
 
                 // Render mission item
                 const mission = item.data as DailyMission;
-                const priorityCfg = PRIORITY_CONFIG[mission.priority || 'media'];
-                const statusCfg = STATUS_CONFIG[mission.status];
 
                 return (
-                  <div key={`mission-${mission.id}`} className="bg-white rounded-xl border border-rustic-border shadow-sm p-5 transition-all hover:shadow-md">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${statusCfg.color}`}>
-                          <span className="material-symbols-outlined">{statusCfg.icon}</span>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold text-[#181111] text-base truncate">{mission.title}</p>
-                          {mission.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{mission.description}</p>}
-                          <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${priorityCfg.color}`}>{priorityCfg.label}</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusCfg.color}`}>{statusCfg.label}</span>
-                            {mission.start_time && (
-                              <span className="text-[10px] text-gray-400 font-bold">
-                                <span className="material-symbols-outlined text-[12px] align-middle">schedule</span> {mission.start_time}{mission.end_time ? ` — ${mission.end_time}` : ''}
-                              </span>
-                            )}
-                            {mission.responsible_name && (
-                              <span className="text-[10px] text-gray-400 font-bold">
-                                <span className="material-symbols-outlined text-[12px] align-middle">person</span> {mission.responsible_name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status buttons */}
-                      {isEditor && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {mission.status === 'agendada' && (
-                            <button onClick={() => handleUpdateMissionStatus(mission.id!, 'em_andamento')} className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors" title="Iniciar">
-                              <span className="material-symbols-outlined text-[20px]">play_circle</span>
-                            </button>
-                          )}
-                          {mission.status === 'em_andamento' && (
-                            <button onClick={() => handleUpdateMissionStatus(mission.id!, 'concluida')} className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition-colors" title="Concluir">
-                              <span className="material-symbols-outlined text-[20px]">check_circle</span>
-                            </button>
-                          )}
-                          {(mission.status === 'agendada' || mission.status === 'em_andamento') && (
-                            <button onClick={() => handleUpdateMissionStatus(mission.id!, 'cancelada')} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors" title="Cancelar">
-                              <span className="material-symbols-outlined text-[20px]">cancel</span>
-                            </button>
-                          )}
-                          <button onClick={() => handleDeleteMission(mission.id!)} className="p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors" title="Excluir">
-                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <CardMissao
+                    key={`mission-${mission.id}`}
+                    missao={mission}
+                    isEditor={isEditor}
+                    onAtualizar={loadAllData}
+                    onIniciar={
+                      mission.status === 'agendada'
+                        ? () => handleUpdateMissionStatus(mission.id!, 'em_andamento')
+                        : undefined
+                    }
+                    onExcluir={() => handleDeleteMission(mission.id!)}
+                  />
                 );
               })}
 

@@ -397,12 +397,17 @@ export interface DailyMission {
     responsible_id?: string;
     responsible_name?: string;
     priority?: 'urgente' | 'alta' | 'media' | 'baixa';
-    status: 'agendada' | 'em_andamento' | 'concluida' | 'cancelada';
+    status: 'agendada' | 'em_andamento' | 'concluida' | 'cancelada' | 'parcialmente_concluida' | 'nao_realizada';
     notes?: string;
     created_by?: string;
     registration_date?: string;
     updated_at?: string;
     created_at?: string;
+    // Campos de observação e auditoria de edição
+    observacoes?: string;
+    editado_por_id?: string;
+    editado_por_nome?: string;
+    editado_em?: string;
 }
 
 export interface SSCIChatSession {
