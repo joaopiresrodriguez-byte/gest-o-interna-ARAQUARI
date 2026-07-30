@@ -7,6 +7,8 @@ import { supabase } from '../services/supabase';
 import { formatLocalDate, parseLocalDate } from '../utils/dateUtils';
 import { useEdicao } from '../hooks/useEdicao';
 import { ModalEdicao } from '../components/shared/ModalEdicao';
+import { ActionButton } from '../components/ui/Icons';
+
 
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
@@ -700,15 +702,29 @@ const PessoalB1: React.FC = () => {
                             <td className="px-4 py-3 text-center text-[10px] text-gray-500">{p.email || '—'}</td>
                             <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={isDateExpired(p.cve_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cve_expiry_date)}</span> : '—'}</td>
                             <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={isDateExpired(p.cnh_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cnh_expiry_date)}</span> : '—'}</td>
-                            <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
-                              <div className="flex gap-1 justify-center">
-                                <button onClick={() => abrirEdicaoMilitar(p)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500" title="Editar Militar">
-                                  ✏️
-                                </button>
-                                <button onClick={() => handleEdit(p)} className="p-1.5 hover:bg-stone-100 rounded-lg text-gray-500" title="Editar Completo"><span className="material-symbols-outlined text-[16px]">edit</span></button>
-                                <button onClick={() => handleDeletePersonnel(p.id!)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-400" title="Excluir"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                             <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                              <div className="flex gap-1 justify-center items-center">
+                                <ActionButton
+                                  variant="alteration"
+                                  size="sm"
+                                  onClick={() => abrirEdicaoMilitar(p)}
+                                  title="Alterar dados rápidos do Militar"
+                                />
+                                <ActionButton
+                                  variant="edit"
+                                  size="sm"
+                                  onClick={() => handleEdit(p)}
+                                  title="Editar perfil completo"
+                                />
+                                <ActionButton
+                                  variant="delete"
+                                  size="sm"
+                                  onClick={() => handleDeletePersonnel(p.id!)}
+                                  title="Excluir Militar"
+                                />
                               </div>
                             </td>
+
                           </tr>
                         );
                       })}</tbody>

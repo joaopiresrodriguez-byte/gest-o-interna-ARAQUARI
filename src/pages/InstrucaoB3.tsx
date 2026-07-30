@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { B3CursosService } from '../services/b3CursosService';
 import { useEdicao } from '../hooks/useEdicao';
 import { ModalEdicao } from '../components/shared/ModalEdicao';
+import { ActionButton } from '../components/ui/Icons';
+
 
 const InstrucaoB3: React.FC = () => {
   const [materias, setMaterias] = useState<MateriaInstrucao[]>([]);
@@ -585,23 +587,22 @@ const InstrucaoB3: React.FC = () => {
                         </div>
                         <div className="flex gap-4 items-center">
                           {profile?.p_instrucao === 'editor' && (
-                            <>
-                              <button
+                            <div className="flex items-center gap-1.5">
+                              <ActionButton
+                                variant="alteration"
+                                size="sm"
                                 onClick={(e) => { e.stopPropagation(); abrirEdicaoMateria(m); }}
-                                className="text-blue-500 hover:text-blue-700 transition-colors p-1"
-                                title="Editar Matéria"
-                              >
-                                ✏️
-                              </button>
-                              <button
+                                title="Alterar/Editar Matéria"
+                              />
+                              <ActionButton
+                                variant="delete"
+                                size="sm"
                                 onClick={(e) => { e.stopPropagation(); handleDeleteMateria(m.id!); }}
-                                className="text-gray-300 hover:text-red-500 transition-colors"
                                 title="Excluir Matéria"
-                              >
-                                <span className="material-symbols-outlined text-[18px]">delete</span>
-                              </button>
-                            </>
+                              />
+                            </div>
                           )}
+
                           <div className="flex flex-col items-center">
                             <span className="text-2xl font-black text-[#C62828]">{m.credit_hours}</span>
                             <span className="text-[10px] font-bold text-[#8C8379] uppercase">Horas</span>

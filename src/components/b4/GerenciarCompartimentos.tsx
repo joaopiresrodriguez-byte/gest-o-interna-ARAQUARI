@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { CompartimentoViatura, Vehicle } from '../../services/types';
 import { toast } from 'sonner';
+import { ActionButton } from '../ui/Icons';
+
 
 interface GerenciarCompartimentosProps {
   viatura: Vehicle;
@@ -252,21 +254,20 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
               </div>
 
               <div className="flex items-center gap-2">
-                <button
+                <ActionButton
+                  variant="alteration"
+                  size="sm"
                   onClick={() => abrirEdicao(comp)}
-                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Editar compartimento"
-                >
-                  ✏️
-                </button>
-                <button
+                  title="Alterar/Editar compartimento"
+                />
+                <ActionButton
+                  variant="delete"
+                  size="sm"
                   onClick={() => handleExcluir(comp.id)}
-                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                   title="Excluir compartimento"
-                >
-                  🗑️
-                </button>
+                />
               </div>
+
             </div>
           ))}
         </div>

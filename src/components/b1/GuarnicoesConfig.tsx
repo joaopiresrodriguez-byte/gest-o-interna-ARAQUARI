@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { ModalEdicao } from '../shared/ModalEdicao';
+import { ActionButton } from '../ui/Icons';
+
 
 interface Militar {
   id: number;
@@ -235,23 +237,25 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
                       {m.nome_guerra || m.nome_completo.split(' ')[0]}
                     </span>
                     <div className="flex items-center gap-1">
-                      <button
+                      <ActionButton
+                        variant="alteration"
+                        size="sm"
                         onClick={() => {
                           setMilitarTransferindo({ militar: m, guarnicaoOrigemId: guarnicao.id });
                           setGuarnicaoDestinoId(guarnicao.id);
                           setErroTransferencia(null);
                         }}
-                        title="Mover de Guarnição"
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 flex items-center justify-center p-0.5"
-                      >
-                        ✏️
-                      </button>
+                        title="Alterar/Mover Guarnição"
+                      />
                       <button
                         onClick={() => removerMilitar(guarnicao.id, m.id)}
-                        className="text-red-400 hover:text-red-600 flex-shrink-0 flex items-center justify-center">
+                        className="text-red-400 hover:text-red-600 flex-shrink-0 flex items-center justify-center p-1 rounded hover:bg-red-50"
+                        title="Remover da guarnição"
+                      >
                         <span className="material-symbols-outlined text-[14px]">close</span>
                       </button>
                     </div>
+
                   </div>
                 ))
               )}

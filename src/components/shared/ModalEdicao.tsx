@@ -1,4 +1,6 @@
 import React from 'react';
+import { OptionSlidersIcon } from '../ui/Icons';
+
 
 interface Props {
   titulo: string;
@@ -57,9 +59,14 @@ export function ModalEdicao({
             margin: 0,
             fontSize: '18px',
             color: '#1e293b',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}>
-            ✏️ {titulo}
+            <OptionSlidersIcon className="text-amber-500" size={20} />
+            {titulo}
           </h3>
+
           <button
             onClick={onCancelar}
             style={{

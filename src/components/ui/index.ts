@@ -8,3 +8,14 @@ export { Input, TextArea } from './Input';
 export type { InputProps, TextAreaProps } from './Input';
 export { Badge } from './Badge';
 export type { BadgeProps } from './Badge';
+export {
+  OptionSlidersIcon,
+  EditPencilIcon,
+  SaveIcon,
+  TrashIcon,
+  ReorderIcon,
+  StatusToggleIcon,
+  ActionButton,
+} from './Icons';
+export type { ActionButtonProps, IconProps } from './Icons';
+

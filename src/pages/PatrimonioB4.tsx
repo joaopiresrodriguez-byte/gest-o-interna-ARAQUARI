@@ -11,6 +11,8 @@ import { supabase } from '../services/supabase';
 
 import { useEdicao } from '../hooks/useEdicao';
 import { ModalEdicao } from '../components/shared/ModalEdicao';
+import { ActionButton } from '../components/ui/Icons';
+
 
 // ─── Helper sub-components ───────────────────────────────────────────────────
 
@@ -82,22 +84,21 @@ const ItemCard: React.FC<ItemCardProps> = ({
             </button>
           )}
           {onEdit && (
-            <button
+            <ActionButton
+              variant="alteration"
+              size="sm"
               onClick={e => { e.stopPropagation(); onEdit(item); }}
-              className="text-blue-500 hover:text-blue-700 transition-colors p-1 rounded hover:bg-blue-50"
-              title="Editar Item B4"
-            >
-              ✏️
-            </button>
+              title="Alterar/Editar Item B4"
+            />
           )}
-          <button
+          <ActionButton
+            variant="delete"
+            size="sm"
             onClick={e => { e.stopPropagation(); onDelete(item.id); }}
-            className="text-gray-300 hover:text-red-500 transition-colors p-1"
             title="Excluir Item B4"
-          >
-            <span className="material-symbols-outlined text-[16px]">delete</span>
-          </button>
+          />
         </div>
+
       </div>
 
       <h3 className="text-base font-bold mb-1 leading-tight">{item.name}</h3>
@@ -821,13 +822,20 @@ const PatrimonioB4: React.FC = () => {
                                 {mission.priority}
                               </span>
                               <div className="flex gap-1 items-center">
-                                <button onClick={() => abrirEdicaoMission(mission)} className="text-blue-500 hover:text-blue-700 p-0.5" title="Editar Missão">
-                                  ✏️
-                                </button>
-                                <button onClick={() => handleDeleteMission(mission.id!)} className="text-gray-300 hover:text-red-500 transition-colors p-0.5" title="Excluir Missão">
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
+                                <ActionButton
+                                  variant="alteration"
+                                  size="sm"
+                                  onClick={() => abrirEdicaoMission(mission)}
+                                  title="Alterar/Editar Missão"
+                                />
+                                <ActionButton
+                                  variant="delete"
+                                  size="sm"
+                                  onClick={() => handleDeleteMission(mission.id!)}
+                                  title="Excluir Missão"
+                                />
                               </div>
+
                             </div>
                             <div>
                               <h4 className="font-bold text-sm leading-tight mb-1">{mission.title}</h4>
@@ -1000,14 +1008,14 @@ const PatrimonioB4: React.FC = () => {
                               <span className="material-symbols-outlined text-[14px] text-gray-400 group-hover:text-green-600">receipt_long</span>
                             </button>
                             {profile?.p_logistica === 'editor' && (
-                              <button
+                              <ActionButton
+                                variant="alteration"
+                                size="sm"
                                 onClick={() => abrirEdicaoLocal(local)}
-                                className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors text-xs"
-                                title="Editar Local"
-                              >
-                                ✏️
-                              </button>
+                                title="Alterar/Editar Local"
+                              />
                             )}
+
                           </div>
                         );
                       })}
@@ -1123,16 +1131,18 @@ const PatrimonioB4: React.FC = () => {
                                 </button>
                               </>
                             )}
-                            <button
+                            <ActionButton
+                              variant="alteration"
+                              size="sm"
+                              label="Alterar/Editar"
                               onClick={() => {
                                 const itemToEdit = selectedItem;
                                 setSelectedItem(null);
                                 abrirEdicaoFleetItem(itemToEdit);
                               }}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs transition-colors"
-                            >
-                              ✏️ Editar
-                            </button>
+                              title="Alterar/Editar Viatura"
+                            />
+
                             <button
                               onClick={() => setSelectedItem(null)}
                               className="p-2 rounded-lg hover:bg-stone-100 text-gray-400 hover:text-gray-600 transition-colors"
@@ -1606,14 +1616,21 @@ const PatrimonioB4: React.FC = () => {
                               </td>
                               <td className="py-3 px-4 text-right">R$ {(p.unit_price || 0).toFixed(2)}</td>
                               <td className="py-3 px-4 text-right">
-                                <div className="flex gap-2 justify-end items-center">
-                                  <button onClick={() => abrirEdicaoPurchase(p)} className="text-blue-500 hover:text-blue-700 p-0.5" title="Editar Solicitação">
-                                    ✏️
-                                  </button>
-                                  <button onClick={() => handleDeletePurchase(p.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded" title="Excluir">
-                                    <span className="material-symbols-outlined text-[18px]">delete</span>
-                                  </button>
+                                <div className="flex gap-1.5 justify-end items-center">
+                                  <ActionButton
+                                    variant="alteration"
+                                    size="sm"
+                                    onClick={() => abrirEdicaoPurchase(p)}
+                                    title="Alterar/Editar Solicitação"
+                                  />
+                                  <ActionButton
+                                    variant="delete"
+                                    size="sm"
+                                    onClick={() => handleDeletePurchase(p.id!)}
+                                    title="Excluir Solicitação"
+                                  />
                                 </div>
+
                               </td>
                             </tr>
                           ))}
