@@ -619,6 +619,11 @@ const PessoalB1: React.FC = () => {
     }
   };
 
+  const normalizeGraduation = (val?: string) => {
+    if (!val) return '';
+    return val.trim().replace(/(\d+)[°º]\s*Sgt/i, '$1º Sgt');
+  };
+
   const filteredPersonnel = personnelList
     .filter(p =>
       !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -626,9 +631,11 @@ const PessoalB1: React.FC = () => {
       (p.graduation || '').toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
-      const rankA = RANK_ORDEM[a.graduation || a.rank || ''] ?? 999;
-      const rankB = RANK_ORDEM[b.graduation || b.rank || ''] ?? 999;
-      if (rankA !== rankB) return rankA - rankB; // mais antigo primeiro
+      const gradA = normalizeGraduation(a.graduation || a.rank);
+      const gradB = normalizeGraduation(b.graduation || b.rank);
+      const rankA = RANK_ORDEM[gradA] ?? 999;
+      const rankB = RANK_ORDEM[gradB] ?? 999;
+      if (rankA !== rankB) return rankA - rankB; // mais antigo primeiro (menor índice = mais antigo)
       return (a.name || '').localeCompare(b.name || '', 'pt-BR'); // empate: alfabético
     });
 
