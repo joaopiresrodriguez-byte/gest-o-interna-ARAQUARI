@@ -101,11 +101,7 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
                   key={key}
                   onClick={async e => {
                     e.stopPropagation();
-                    try {
-                      await salvarConferencia({ viatura_id: id, status: key as StatusConferencia });
-                    } catch (err) {
-                      console.error(err);
-                    }
+                    await salvarConferencia({ viatura_id: id, fleet_item_id: id, status: key as StatusConferencia });
                     onAtualizar();
                   }}
                   title={cfg.label}
@@ -194,25 +190,17 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar }: N3Props) {
   const conf = conferenciaMap[item.id];
   const statusAtual: StatusConferencia | null = conf?.status || null;
 
-  const [salvando, setSalvando] = useState(false);
   const [mostrarObs, setMostrarObs] = useState(false);
   const [observacao, setObservacao] = useState(conf?.observacao || '');
 
   async function conferir(novoStatus: string) {
-    setSalvando(true);
-    try {
-      await salvarConferencia({
-        fleet_item_id: item.id,
-        equipamento_id: item.id,
-        status: novoStatus as StatusConferencia,
-        observacao,
-      });
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSalvando(false);
-      onAtualizar();
-    }
+    await salvarConferencia({
+      fleet_item_id: item.id,
+      equipamento_id: item.id,
+      status: novoStatus as StatusConferencia,
+      observacao,
+    });
+    onAtualizar();
   }
 
   return (
@@ -240,7 +228,6 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar }: N3Props) {
             <button
               key={key}
               onClick={() => conferir(key)}
-              disabled={salvando}
               title={cfg.label}
               style={{
                 padding: '4px 10px',
@@ -248,7 +235,7 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar }: N3Props) {
                 border: statusAtual === key ? `2px solid ${cfg.cor}` : '2px solid #e2e8f0',
                 background: statusAtual === key ? cfg.fundo : 'white',
                 color: statusAtual === key ? cfg.cor : '#94a3b8',
-                cursor: salvando ? 'not-allowed' : 'pointer',
+                cursor: 'pointer',
                 fontSize: '12px',
                 fontWeight: statusAtual === key ? 'bold' : 'normal',
                 transition: 'all 0.15s',
