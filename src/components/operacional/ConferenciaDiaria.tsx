@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
+import { STATUS_CONFERENCIA, buscarConferenciaDia, salvarConferencia, StatusConferencia } from '../../services/conferenciaService';
 
 interface Viatura {
   id: string;
@@ -29,6 +30,9 @@ interface ItemFleet {
   details?: string;
   local_id?: string;
   compartimento_id?: string;
+  numero_serie?: string;
+  quantidade?: number;
+  unidade?: string;
 }
 
 interface DadosConferencia {
@@ -38,7 +42,7 @@ interface DadosConferencia {
   itens: ItemFleet[];
 }
 
-async function buscarConferencia(): Promise<DadosConferencia> {
+async function buscarDados(): Promise<DadosConferencia> {
   const [r1, r2, r3, r4] = await Promise.all([
     supabase.from('fleet').select('id, name, plate, status').eq('type', 'Viatura').order('name'),
     supabase.from('locais_equipamento').select('id, nome, tipo').eq('ativo', true).order('nome'),
@@ -53,32 +57,117 @@ async function buscarConferencia(): Promise<DadosConferencia> {
   };
 }
 
-// Nível 1
-interface N1Props { id: string; titulo: string; icone: string; totalItens: number; abertos: Record<string,boolean>; toggle: (id: string) => void; children: React.ReactNode; }
-function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, children }: N1Props) {
+// Nível 1 — Viatura ou Local
+interface N1Props {
+  id: string;
+  titulo: string;
+  icone: string;
+  totalItens: number;
+  abertos: Record<string, boolean>;
+  toggle: (id: string) => void;
+  conferenciaMap: Record<string, any>;
+  onAtualizar: () => void;
+  isViatura?: boolean;
+  children: React.ReactNode;
+}
+
+function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMap, onAtualizar, isViatura, children }: N1Props) {
   const aberto = abertos[id];
+  const confViatura = conferenciaMap[id];
+
   return (
     <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', marginBottom: '8px', overflow: 'hidden' }}>
-      <button onClick={() => toggle(id)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: aberto ? '#f1f5f9' : 'white', border: 'none', cursor: 'pointer', textAlign: 'left', borderLeft: '4px solid #1d4ed8' }}>
-        <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>{icone} {titulo}</span>
+      <div
+        onClick={() => toggle(id)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '14px 16px',
+          background: aberto ? '#f1f5f9' : 'white',
+          cursor: 'pointer',
+          borderLeft: '4px solid #1d4ed8',
+        }}
+      >
+        <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>
+          {icone} {titulo}
+        </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 10px', borderRadius: '999px' }}>{totalItens} itens</span>
+          {isViatura && (
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+              {Object.entries(STATUS_CONFERENCIA).map(([key, cfg]) => (
+                <button
+                  key={key}
+                  onClick={async e => {
+                    e.stopPropagation();
+                    try {
+                      await salvarConferencia({ viatura_id: id, status: key as StatusConferencia });
+                    } catch (err) {
+                      console.error(err);
+                    }
+                    onAtualizar();
+                  }}
+                  title={cfg.label}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    border: confViatura?.status === key ? `2px solid ${cfg.cor}` : '2px solid transparent',
+                    background: confViatura?.status === key ? cfg.fundo : '#f8fafc',
+                    color: confViatura?.status === key ? cfg.cor : '#94a3b8',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: confViatura?.status === key ? 'bold' : 'normal',
+                  }}
+                >
+                  {cfg.icone}
+                </button>
+              ))}
+            </div>
+          )}
+          <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 10px', borderRadius: '999px' }}>
+            {totalItens} itens
+          </span>
           <span style={{ fontSize: '12px', color: '#94a3b8' }}>{aberto ? '▲' : '▼'}</span>
         </div>
-      </button>
+      </div>
       {aberto && <div style={{ padding: '8px 12px 12px', borderTop: '1px solid #e2e8f0' }}>{children}</div>}
     </div>
   );
 }
 
-// Nível 2
-interface N2Props { id: string; titulo: string; posicao?: string; totalItens: number; abertos: Record<string,boolean>; toggle: (id: string) => void; children: React.ReactNode; }
+// Nível 2 — Compartimento
+interface N2Props {
+  id: string;
+  titulo: string;
+  posicao?: string;
+  totalItens: number;
+  abertos: Record<string, boolean>;
+  toggle: (id: string) => void;
+  children: React.ReactNode;
+}
+
 function NivelDois({ id, titulo, posicao, totalItens, abertos, toggle, children }: N2Props) {
   const key = `comp-${id}`;
   const aberto = abertos[key];
   return (
     <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '6px', marginLeft: '8px' }}>
-      <button onClick={() => toggle(key)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: aberto ? '#f8fafc' : 'white', border: 'none', cursor: 'pointer', textAlign: 'left', borderLeft: '3px solid #0ea5e9', borderRadius: '7px' }}>
+      <button
+        onClick={() => toggle(key)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '10px 14px',
+          background: aberto ? '#f8fafc' : 'white',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+          borderLeft: '3px solid #0ea5e9',
+          borderRadius: '7px',
+        }}
+      >
         <div>
           <span style={{ fontWeight: '600', fontSize: '13px', color: '#334155' }}>📦 {titulo}</span>
           {posicao && <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '8px' }}>{posicao}</span>}
@@ -93,19 +182,119 @@ function NivelDois({ id, titulo, posicao, totalItens, abertos, toggle, children 
   );
 }
 
-// Nível 3
-interface N3Props { item: ItemFleet; }
-function NivelTres({ item }: N3Props) {
-  const ok = item.status === 'active' || item.status === 'ok';
+// Nível 3 — Item Individual
+interface N3Props {
+  item: ItemFleet;
+  tipo?: string;
+  conferenciaMap: Record<string, any>;
+  onAtualizar: () => void;
+}
+
+function NivelTres({ item, tipo, conferenciaMap, onAtualizar }: N3Props) {
+  const conf = conferenciaMap[item.id];
+  const statusAtual: StatusConferencia | null = conf?.status || null;
+
+  const [salvando, setSalvando] = useState(false);
+  const [mostrarObs, setMostrarObs] = useState(false);
+  const [observacao, setObservacao] = useState(conf?.observacao || '');
+
+  async function conferir(novoStatus: string) {
+    setSalvando(true);
+    try {
+      await salvarConferencia({
+        fleet_item_id: item.id,
+        equipamento_id: item.id,
+        status: novoStatus as StatusConferencia,
+        observacao,
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSalvando(false);
+      onAtualizar();
+    }
+  }
+
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', marginBottom: '4px', background: 'white', borderRadius: '6px', border: '1px solid #f1f5f9', marginLeft: '12px' }}>
-      <div>
-        <span style={{ fontSize: '13px', color: '#334155' }}>🔧 {item.name}</span>
-        {item.type && <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '8px' }}>{item.type}</span>}
+    <div style={{ padding: '8px 10px', marginBottom: '4px', background: 'white', borderRadius: '8px', border: '1px solid #f1f5f9', marginLeft: '12px' }}>
+      {/* LINHA PRINCIPAL */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+        {/* NOME E TIPO */}
+        <div style={{ flex: 1 }}>
+          <span style={{ fontSize: '13px', color: '#334155', fontWeight: '500' }}>
+            {tipo === 'consumo' ? '📋' : '🔧'} {item.name}
+          </span>
+          {item.numero_serie && (
+            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '6px' }}>Nº {item.numero_serie}</span>
+          )}
+          {tipo === 'consumo' && item.quantidade && (
+            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '6px' }}>
+              {item.quantidade} {item.unidade || 'un'}
+            </span>
+          )}
+        </div>
+
+        {/* BOTÕES DE STATUS */}
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          {Object.entries(STATUS_CONFERENCIA).map(([key, cfg]) => (
+            <button
+              key={key}
+              onClick={() => conferir(key)}
+              disabled={salvando}
+              title={cfg.label}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: statusAtual === key ? `2px solid ${cfg.cor}` : '2px solid #e2e8f0',
+                background: statusAtual === key ? cfg.fundo : 'white',
+                color: statusAtual === key ? cfg.cor : '#94a3b8',
+                cursor: salvando ? 'not-allowed' : 'pointer',
+                fontSize: '12px',
+                fontWeight: statusAtual === key ? 'bold' : 'normal',
+                transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {cfg.icone} {cfg.label}
+            </button>
+          ))}
+
+          {/* BOTÃO OBSERVAÇÃO */}
+          <button
+            onClick={() => setMostrarObs(!mostrarObs)}
+            title="Adicionar observação"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#94a3b8', padding: '4px' }}
+          >
+            📝
+          </button>
+        </div>
       </div>
-      <span style={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '999px', background: ok ? '#dcfce7' : '#fee2e2', color: ok ? '#166534' : '#991b1b' }}>
-        {ok ? '✅ Ok' : '⚠️ Manutenção'}
-      </span>
+
+      {/* CAMPO OBSERVAÇÃO */}
+      {mostrarObs && (
+        <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
+          <input
+            value={observacao}
+            onChange={e => setObservacao(e.target.value)}
+            placeholder="Observação..."
+            style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+          />
+          <button
+            onClick={() => statusAtual && conferir(statusAtual)}
+            style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: '#1d4ed8', color: 'white', fontSize: '12px', cursor: 'pointer' }}
+          >
+            Salvar
+          </button>
+        </div>
+      )}
+
+      {/* RODAPÉ DE AUDITORIA */}
+      {conf?.conferido_por_nome && (
+        <div style={{ marginTop: '4px', fontSize: '10px', color: '#94a3b8' }}>
+          🔏 Conferido por <strong>{conf.conferido_por_nome}</strong> às{' '}
+          {new Date(conf.conferido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+        </div>
+      )}
     </div>
   );
 }
@@ -113,6 +302,7 @@ function NivelTres({ item }: N3Props) {
 // Componente principal
 const ConferenciaDiaria: React.FC = () => {
   const [dados, setDados] = useState<DadosConferencia>({ viaturas: [], locais: [], compartimentos: [], itens: [] });
+  const [conferenciaMap, setConferenciaMap] = useState<Record<string, any>>({});
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -129,10 +319,22 @@ const ConferenciaDiaria: React.FC = () => {
     setAbertos(allIds);
   }
 
+  async function recarregarConferencia() {
+    const mapa = await buscarConferenciaDia();
+    setConferenciaMap(mapa);
+  }
+
   useEffect(() => {
-    buscarConferencia()
-      .then(d => { setDados(d); setLoading(false); })
-      .catch(e => { setErro(e.message || 'Erro ao carregar.'); setLoading(false); });
+    Promise.all([buscarDados(), buscarConferenciaDia()])
+      .then(([d, mapa]) => {
+        setDados(d);
+        setConferenciaMap(mapa);
+        setLoading(false);
+      })
+      .catch(e => {
+        setErro(e.message || 'Erro ao carregar.');
+        setLoading(false);
+      });
   }, []);
 
   if (loading) return (
@@ -174,7 +376,18 @@ const ConferenciaDiaria: React.FC = () => {
         const totalVtr = itensVtr.length;
 
         return (
-          <NivelUm key={v.id} id={v.id} titulo={`${v.name}${v.plate ? ` — ${v.plate}` : ''}`} icone="🚒" totalItens={totalVtr} abertos={abertos} toggle={toggle}>
+          <NivelUm
+            key={v.id}
+            id={v.id}
+            titulo={`${v.name}${v.plate ? ` — ${v.plate}` : ''}`}
+            icone="🚒"
+            totalItens={totalVtr}
+            abertos={abertos}
+            toggle={toggle}
+            conferenciaMap={conferenciaMap}
+            onAtualizar={recarregarConferencia}
+            isViatura={true}
+          >
             {comps.length === 0 && (
               <p style={{ fontSize: '12px', color: '#94a3b8', padding: '8px 12px' }}>Nenhum compartimento cadastrado.</p>
             )}
@@ -184,7 +397,9 @@ const ConferenciaDiaria: React.FC = () => {
                 <NivelDois key={comp.id} id={comp.id} titulo={comp.nome} posicao={comp.posicao} totalItens={itensComp.length} abertos={abertos} toggle={toggle}>
                   {itensComp.length === 0
                     ? <p style={{ fontSize: '12px', color: '#94a3b8', marginLeft: '12px' }}>Sem itens.</p>
-                    : itensComp.map(item => <NivelTres key={item.id} item={item} />)
+                    : itensComp.map(item => (
+                        <NivelTres key={item.id} item={item} conferenciaMap={conferenciaMap} onAtualizar={recarregarConferencia} />
+                      ))
                   }
                 </NivelDois>
               );
@@ -198,9 +413,22 @@ const ConferenciaDiaria: React.FC = () => {
         const itensLocal = dados.itens.filter(i => i.local_id === local.id);
         if (itensLocal.length === 0) return null;
         return (
-          <NivelUm key={local.id} id={`local-${local.id}`} titulo={local.nome} icone="🏠" totalItens={itensLocal.length} abertos={abertos} toggle={toggle}>
+          <NivelUm
+            key={local.id}
+            id={`local-${local.id}`}
+            titulo={local.nome}
+            icone="🏠"
+            totalItens={itensLocal.length}
+            abertos={abertos}
+            toggle={toggle}
+            conferenciaMap={conferenciaMap}
+            onAtualizar={recarregarConferencia}
+            isViatura={false}
+          >
             <NivelDois id={`local-itens-${local.id}`} titulo="Itens do local" posicao="" totalItens={itensLocal.length} abertos={abertos} toggle={toggle}>
-              {itensLocal.map(item => <NivelTres key={item.id} item={item} />)}
+              {itensLocal.map(item => (
+                <NivelTres key={item.id} item={item} conferenciaMap={conferenciaMap} onAtualizar={recarregarConferencia} />
+              ))}
             </NivelDois>
           </NivelUm>
         );
