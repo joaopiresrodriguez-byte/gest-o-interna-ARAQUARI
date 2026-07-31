@@ -60,6 +60,18 @@ const DashboardAvisos: React.FC = () => {
   const [guReportText, setGuReportText] = useState("");
   const [selectedDate, setSelectedDate] = useState(SupabaseService.getTodayDate());
   const [loading, setLoading] = useState(true);
+  const [expandido, setExpandido] = useState(false);
+
+  // Exibir por padrão apenas 1 ASU + 1 ABTR + 1 AR (ou primeiras ativas)
+  const TIPOS_DESTAQUE = ['ASU', 'ABTR', 'AR'];
+  const vtrsDestaque = fleet.filter(v =>
+    v.name && TIPOS_DESTAQUE.some(tipo => v.name.toUpperCase().startsWith(tipo))
+  );
+  const vtrsResumidas = TIPOS_DESTAQUE.map(tipo =>
+    vtrsDestaque.find(v => v.name.toUpperCase().startsWith(tipo))
+  ).filter(Boolean) as Vehicle[];
+
+  const vtrsExibidas = expandido ? fleet : (vtrsResumidas.length > 0 ? vtrsResumidas : fleet.slice(0, 3));
 
   const getYesterdayDate = (dateStr: string) => {
     const date = new Date(dateStr + 'T12:00:00');
@@ -817,20 +829,62 @@ const DashboardAvisos: React.FC = () => {
                     <p className="text-sm font-medium">Nenhuma viatura cadastrada.</p>
                     <p className="text-xs">Cadastre viaturas no módulo B4.</p>
                   </div>
-                ) : fleet.map(v => (
-                  <div key={v.id} className="flex items-center justify-between p-3 rounded-lg bg-background-light border border-rustic-border/50">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2.5 h-2.5 rounded-full ${v.status === 'active' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
-                      <div>
-                        <span className="font-bold text-[#2c1810] block text-sm">{v.name}</span>
-                        <span className="text-[10px] uppercase font-bold text-rustic-brown/50">{v.type} • {v.plate || '---'}</span>
+                ) : (
+                  <>
+                    {vtrsExibidas.map(v => (
+                      <div key={v.id} className="flex items-center justify-between p-3 rounded-lg bg-background-light border border-rustic-border/50">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2.5 h-2.5 rounded-full ${v.status === 'active' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
+                          <div>
+                            <span className="font-bold text-[#2c1810] block text-sm">{v.name}</span>
+                            <span className="text-[10px] uppercase font-bold text-rustic-brown/50">{v.type} • {v.plate || '---'}</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded border ${v.status === 'active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                          {v.status === 'active' ? 'QAP' : 'BAIXADA'}
+                        </span>
                       </div>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded border ${v.status === 'active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
-                      {v.status === 'active' ? 'QAP' : 'BAIXADA'}
-                    </span>
-                  </div>
-                ))}
+                    ))}
+
+                    {fleet.length > vtrsExibidas.length && !expandido && (
+                      <button
+                        onClick={() => setExpandido(true)}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          marginTop: '8px',
+                          background: 'none',
+                          border: '1px dashed #cbd5e1',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          color: '#64748b',
+                          fontSize: '13px',
+                        }}
+                      >
+                        ▼ Ver todas as viaturas ({fleet.length - vtrsExibidas.length} a mais)
+                      </button>
+                    )}
+
+                    {expandido && (
+                      <button
+                        onClick={() => setExpandido(false)}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          marginTop: '8px',
+                          background: 'none',
+                          border: '1px dashed #cbd5e1',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          color: '#64748b',
+                          fontSize: '13px',
+                        }}
+                      >
+                        ▲ Mostrar menos
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
               <button onClick={() => window.location.href = '/logistica'} className="w-full mt-4 py-2 border border-rustic-border text-rustic-brown text-xs font-bold rounded-lg hover:bg-gray-50 transition-colors">
                 Gerenciar Frota (B4)

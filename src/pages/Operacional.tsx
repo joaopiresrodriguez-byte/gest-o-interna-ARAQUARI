@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { SupabaseService, ProductReceipt, ChecklistItem, DailyMission, Training } from '../services/SupabaseService';
+import { SupabaseService, ProductReceipt, DailyMission, Training } from '../services/SupabaseService';
 import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { Button, Input, TextArea } from '../components/ui';
 import { STATUS_MISSAO, STATUS_RESULTADO, StatusMissao, atualizarMissao } from '../services/missoesService';
+import ConferenciaDiaria from '../components/operacional/ConferenciaDiaria';
 
 // ============ SUB-COMPONENTS ============
 
@@ -236,24 +237,45 @@ const CardMissao: React.FC<{
                 <span className="material-symbols-outlined text-[20px]">play_circle</span>
               </button>
             )}
-            {/* Botão de registrar resultado (para missões em andamento ou agendadas) */}
+            {/* Botão de edição padronizado ✏️ — abre painel de registro/observações */}
             {(missao.status === 'em_andamento' || missao.status === 'agendada') && (
               <button
                 onClick={() => setEditando(!editando)}
-                className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                title="Registrar resultado"
+                title="Editar missão"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  color: '#64748b',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
               >
-                <span className="material-symbols-outlined text-[20px]">edit_note</span>
+                ✏️
               </button>
             )}
-            {/* Sempre permitir editar observações em missões finalizadas */}
             {(missao.status === 'concluida' || missao.status === 'parcialmente_concluida' || missao.status === 'nao_realizada') && (
               <button
                 onClick={() => setEditando(!editando)}
-                className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Editar observações"
+                title="Editar missão"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  color: '#64748b',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
               >
-                <span className="material-symbols-outlined text-[20px]">edit</span>
+                ✏️
               </button>
             )}
             {onExcluir && (
@@ -373,13 +395,6 @@ const Operacional: React.FC = () => {
 
   // Shared data states
   const [loading, setLoading] = useState(false);
-  const [fleet, setFleet] = useState<{ id: string; name: string }[]>([]);
-
-  // Checklist states
-  const [activeChecklistTab, setActiveChecklistTab] = useState<'materiais' | 'equipamentos' | 'viaturas'>('materiais');
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
-  const [selectedViaturaId, setSelectedViaturaId] = useState<string>("");
-  const [reportStatuses, setReportStatuses] = useState<Record<string, { status: 'ok' | 'faltante'; obs: string }>>({});
 
   // Receipt states
   const [receipts, setReceipts] = useState<ProductReceipt[]>([]);
@@ -407,33 +422,20 @@ const Operacional: React.FC = () => {
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [items, recs, fleetData, missionsData, trainingsData] = await Promise.all([
-        SupabaseService.getChecklistItems(activeChecklistTab, selectedViaturaId),
+      const [recs, missionsData, trainingsData] = await Promise.all([
         SupabaseService.getProductsReceipts(),
-        SupabaseService.getFleet(),
         SupabaseService.getDailyMissions({ data: missionForm.mission_date }),
         SupabaseService.getTrainings(),
       ]);
-      setChecklistItems(items);
       setReceipts(recs);
-      setFleet(fleetData.filter(v => v.type === 'Viatura'));
       setMissions(missionsData);
-      // Include both scheduled and canceled trainings to maintain history
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
-
-      const initial: typeof reportStatuses = {};
-      items.forEach(it => {
-        if (!reportStatuses[it.id]) {
-          initial[it.id] = { status: 'ok', obs: '' };
-        }
-      });
-      setReportStatuses(prev => ({ ...initial, ...prev }));
     } catch (error) {
       console.error("Error loading operational data:", error);
     } finally {
       setLoading(false);
     }
-  }, [activeChecklistTab, selectedViaturaId, missionForm.mission_date]);
+  }, [missionForm.mission_date]);
 
   useEffect(() => { loadAllData(); }, [loadAllData]);
 
@@ -521,51 +523,6 @@ const Operacional: React.FC = () => {
     }
   }, [receiptFile, receiptNF, receiptObs, user?.email, loadAllData]);
 
-  // ============ CHECKLIST HANDLERS ============
-
-  const updateReportStatus = useCallback((id: string, status: 'ok' | 'faltante', obs?: string) => {
-    setReportStatuses(prev => ({
-      ...prev,
-      [id]: { ...prev[id], status, obs: obs !== undefined ? obs : prev[id].obs }
-    }));
-  }, []);
-
-  const handleSaveChecklist = useCallback(async () => {
-    setLoading(true);
-    try {
-      const promises = checklistItems.map(item => {
-        const report = reportStatuses[item.id];
-        return SupabaseService.saveDailyChecklist({
-          item_id: item.id,
-          viatura_id: selectedViaturaId || item.viatura_id,
-          status: report.status as any,
-          notes: report.obs,
-          responsible: user?.email || "Usuário não identificado"
-        });
-      });
-      await Promise.all(promises);
-      toast.success("Conferência salva com sucesso!", {
-        description: "As pendências foram enviadas ao módulo B4."
-      });
-
-      // Show notification modal instead of auto-opening
-      const notifData = NotificationService.getConferenceNotificationData({
-        responsible: user?.email || "N/A",
-        viatura: fleet.find(v => v.id === selectedViaturaId)?.name,
-        items: checklistItems,
-        statuses: reportStatuses
-      });
-      setNotifModal({ open: true, data: notifData, type: 'conference' });
-
-      loadAllData();
-    } catch (error) {
-      console.error("Error saving checklist:", error);
-      toast.error("Erro ao salvar conferência.");
-    } finally {
-      setLoading(false);
-    }
-  }, [checklistItems, reportStatuses, selectedViaturaId, user?.email, fleet, loadAllData]);
-
   // ============ COMPUTED VALUES ============
 
   const filteredMissions = useMemo(() => {
@@ -573,12 +530,10 @@ const Operacional: React.FC = () => {
     return missions.filter(m => m.status === missionFilter);
   }, [missions, missionFilter]);
 
-  // Trainings for the selected mission date
   const todayTrainings = useMemo(() => {
     return trainings.filter(t => t.date === missionForm.mission_date);
   }, [trainings, missionForm.mission_date]);
 
-  // Unified list: missions + trainings for the day, sorted by time (missions take priority on equal times)
   const unifiedMissions = useMemo(() => {
     const missionItems = filteredMissions.map(m => ({ type: 'mission' as const, data: m }));
     const trainingItems = todayTrainings.map(t => ({ type: 'training' as const, data: t }));
@@ -587,8 +542,6 @@ const Operacional: React.FC = () => {
       const timeB = b.type === 'mission' ? (b.data.start_time || '99:99') : (b.data as Training).time || '99:99';
       const timeCompare = timeA.localeCompare(timeB);
       if (timeCompare !== 0) return timeCompare;
-
-      // On equal times, mission comes first
       if (a.type === 'mission' && b.type === 'training') return -1;
       if (a.type === 'training' && b.type === 'mission') return 1;
       return 0;
@@ -599,24 +552,15 @@ const Operacional: React.FC = () => {
     const totalMissions = missions.length;
     const completedMissions = missions.filter(m => m.status === 'concluida').length;
     const activeMissions = missions.filter(m => m.status === 'em_andamento').length;
-    const checkedItems = Object.values(reportStatuses).filter(r => r.status === 'ok').length;
-    const totalItems = checklistItems.length;
-    const pendingItems = Object.values(reportStatuses).filter(r => r.status === 'faltante').length;
-    return { totalMissions, completedMissions, activeMissions, checkedItems, totalItems, pendingItems, recentReceipts: receipts.slice(0, 3) };
-  }, [missions, reportStatuses, checklistItems, receipts]);
-
-  const checklistProgress = useMemo(() => {
-    if (checklistItems.length === 0) return 0;
-    const done = Object.keys(reportStatuses).length;
-    return Math.round((done / checklistItems.length) * 100);
-  }, [checklistItems, reportStatuses]);
+    return { totalMissions, completedMissions, activeMissions, recentReceipts: receipts.slice(0, 3) };
+  }, [missions, receipts]);
 
   // ============ TAB CONFIG ============
 
   const TABS: { key: MainTab; label: string; icon: string; badge?: number }[] = [
     { key: 'resumo', label: 'Resumo', icon: 'dashboard' },
     { key: 'missoes', label: 'Missões do Dia', icon: 'target', badge: dashboardStats.activeMissions },
-    { key: 'conferencia', label: 'Conferência', icon: 'checklist', badge: dashboardStats.pendingItems },
+    { key: 'conferencia', label: 'Conferência', icon: 'checklist' },
     { key: 'recebimentos', label: 'Recebimentos', icon: 'local_shipping' },
   ];
 
@@ -687,15 +631,6 @@ const Operacional: React.FC = () => {
                   <span className="text-2xl font-black text-[#181111]">{dashboardStats.completedMissions}</span>
                 </div>
                 <p className="text-xs font-bold text-gray-400 uppercase">Concluídas</p>
-              </div>
-              <div className="bg-white rounded-xl border border-rustic-border p-5 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-amber-600">inventory_2</span>
-                  </div>
-                  <span className="text-2xl font-black text-[#181111]">{dashboardStats.checkedItems}/{dashboardStats.totalItems}</span>
-                </div>
-                <p className="text-xs font-bold text-gray-400 uppercase">Itens Conferidos</p>
               </div>
               <div className="bg-white rounded-xl border border-rustic-border p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-3">
@@ -934,126 +869,16 @@ const Operacional: React.FC = () => {
         {/* ========== TAB: CONFERÊNCIA ========== */}
         {activeTab === 'conferencia' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <section className="bg-white rounded-xl shadow-sm border border-rustic-border flex flex-col">
-              <div className="p-6 pb-0 border-b border-rustic-border">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                  <h3 className="text-lg font-bold text-[#181111] flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">analytics</span>
-                    Conferência Diária do Serviço
-                  </h3>
-                  <div className="flex gap-2">
-                    {(['materiais', 'equipamentos', 'viaturas'] as const).map(tab => (
-                      <button
-                        key={tab}
-                        onClick={() => setActiveChecklistTab(tab)}
-                        className={`px-4 py-2 rounded-lg font-bold text-xs transition-all uppercase tracking-wider ${activeChecklistTab === tab ? 'bg-primary text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Vehicle filter */}
-                <div className="flex flex-col gap-2 p-4 bg-stone-50 rounded-xl border border-rustic-border/50 mb-2">
-                  <label className="text-[10px] font-black uppercase text-rustic-brown/60 ml-1">Conferir Viatura Específica (Filtrar Materiais)</label>
-                  <div className="flex gap-3">
-                    <select
-                      value={selectedViaturaId}
-                      onChange={e => setSelectedViaturaId(e.target.value)}
-                      className="flex-1 h-11 px-4 rounded-xl border border-rustic-border bg-white text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all"
-                    >
-                      <option value="">Todos os Materiais / Sem Viatura Específica</option>
-                      {fleet.map(v => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
-                      ))}
-                    </select>
-                    {selectedViaturaId && (
-                      <button onClick={() => setSelectedViaturaId("")} className="px-4 py-2 text-primary font-bold text-xs hover:bg-red-50 rounded-lg transition-all">
-                        LIMPAR FILTRO
-                      </button>
-                    )}
-                  </div>
-                </div>
+            <section className="bg-white rounded-xl shadow-sm border border-rustic-border">
+              <div className="p-5 border-b border-rustic-border">
+                <h3 className="text-lg font-bold text-[#181111] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">analytics</span>
+                  Conferência Diária do Serviço
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">Viaturas → Compartimentos → Itens</p>
               </div>
-
-              <div className="p-6 bg-[#fcfbfb]">
-                {/* Progress Bar */}
-                {checklistItems.length > 0 && (
-                  <div className="mb-4 p-3 bg-white rounded-lg border border-rustic-border/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-black uppercase text-gray-400">Progresso da Conferência</span>
-                      <span className="text-xs font-black text-[#181111]">{Object.keys(reportStatuses).length} / {checklistItems.length} itens</span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-primary to-secondary-green rounded-full transition-all duration-500" style={{ width: `${checklistProgress}%` }}></div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  {checklistItems.map(item => (
-                    <div key={item.id} className="bg-white rounded-xl border border-rustic-border shadow-sm p-4 transition-all hover:bg-gray-50">
-                      <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activeChecklistTab === 'viaturas' ? 'bg-blue-100 text-blue-600' : activeChecklistTab === 'equipamentos' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
-                            <span className="material-symbols-outlined">{activeChecklistTab === 'viaturas' ? 'emergency' : activeChecklistTab === 'equipamentos' ? 'construction' : 'inventory_2'}</span>
-                          </div>
-                          <div>
-                            <p className="font-bold text-[#181111] text-base">{item.item_name}</p>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase">{item.category}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Button
-                            onClick={() => updateReportStatus(item.id, 'ok')}
-                            variant={reportStatuses[item.id]?.status === 'ok' ? 'success' : 'ghost'}
-                            size="sm"
-                            icon="check_circle"
-                          >
-                            DISPONÍVEL
-                          </Button>
-                          <Button
-                            onClick={() => updateReportStatus(item.id, 'faltante')}
-                            variant={reportStatuses[item.id]?.status === 'faltante' ? 'primary' : 'ghost'}
-                            size="sm"
-                            icon="report"
-                          >
-                            FALTANTE
-                          </Button>
-                        </div>
-                      </div>
-
-                      {reportStatuses[item.id]?.status === 'faltante' && (
-                        <div className="mt-4 pt-4 border-t border-dashed border-gray-200 animate-in fade-in duration-300">
-                          <label className="text-xs font-bold text-primary block mb-2">Relatar Pendência</label>
-                          <input
-                            type="text"
-                            value={reportStatuses[item.id].obs}
-                            onChange={e => updateReportStatus(item.id, 'faltante', e.target.value)}
-                            placeholder="Ex: Equipamento em manutenção..."
-                            className="w-full h-10 px-3 rounded-lg border border-primary/30 bg-red-50/20 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {checklistItems.length === 0 && <p className="text-center py-12 text-gray-400">Nenhum item cadastrado para esta categoria.</p>}
-
-                  {checklistItems.length > 0 && (
-                    isEditor ? (
-                      <Button onClick={handleSaveChecklist} loading={loading} variant="primary" size="lg" fullWidth icon={loading ? undefined : 'task_alt'} className="mt-4">
-                        {loading ? 'SALVANDO...' : 'FINALIZAR E ENVIAR CONFERÊNCIA'}
-                      </Button>
-                    ) : (
-                      <div className="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
-                        <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>
-                        <p className="text-xs font-black uppercase text-amber-700">Você não tem permissão para enviar a conferência.</p>
-                      </div>
-                    )
-                  )}
-                </div>
+              <div className="p-6">
+                <ConferenciaDiaria />
               </div>
             </section>
           </div>

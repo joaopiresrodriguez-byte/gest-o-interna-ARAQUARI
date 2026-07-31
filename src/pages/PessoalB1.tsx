@@ -29,6 +29,10 @@ type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PRONTI
 const tabIcons: Record<Tab, string> = { EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DASHBOARD: 'dashboard' };
 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
+// Mapa de posição hierárquica (0 = mais antigo/alto, índice cresce para mais novo)
+const RANK_ORDEM: Record<string, number> = Object.fromEntries(
+  [...RANKS_BM].reverse().map((r, i) => [r, i])
+);
 const STATUS_OPTIONS = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
 const LEAVE_TYPES = [{ value: 'ferias', label: 'Férias' }, { value: 'desconto_ferias', label: 'Desconto de Férias' }, { value: 'licenca_medica', label: 'Licença Médica' }, { value: 'licenca_especial', label: 'Licença Especial' }, { value: 'afastamento', label: 'Afastamento' }, { value: 'cedido', label: 'Cedido' }, { value: 'outros', label: 'Outros' }];
 
@@ -615,11 +619,18 @@ const PessoalB1: React.FC = () => {
     }
   };
 
-  const filteredPersonnel = personnelList.filter(p =>
-    !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.war_name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (p.graduation || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredPersonnel = personnelList
+    .filter(p =>
+      !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.war_name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.graduation || '').toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      const rankA = RANK_ORDEM[a.graduation || a.rank || ''] ?? 999;
+      const rankB = RANK_ORDEM[b.graduation || b.rank || ''] ?? 999;
+      if (rankA !== rankB) return rankA - rankB; // mais antigo primeiro
+      return (a.name || '').localeCompare(b.name || '', 'pt-BR'); // empate: alfabético
+    });
 
   // ===== RENDER =====
   const formField = (label: string, field: keyof Personnel, type = 'text', options?: string[]) => (
@@ -697,7 +708,20 @@ const PessoalB1: React.FC = () => {
                         return (
                           <tr key={p.id} className="hover:bg-stone-50/50 cursor-pointer" onClick={() => handleViewProfile(p)}>
                             <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
-                            <td className="px-4 py-3 text-center font-bold">{p.graduation || p.rank}</td>
+                            <td className="px-4 py-3 text-center">
+                              {(() => {
+                                const grad = p.graduation || p.rank || '—';
+                                const pos = RANK_ORDEM[grad];
+                                const isOficial = typeof pos === 'number' && pos <= RANK_ORDEM['Cap'];
+                                const isSub = grad === 'Sub Ten' || grad === 'Asp Of';
+                                const bgColor = isOficial ? 'bg-blue-100 text-blue-800' : isSub ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-stone-700';
+                                return (
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${bgColor}`}>
+                                    {grad}
+                                  </span>
+                                );
+                              })()}
+                            </td>
                             <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
                             <td className="px-4 py-3 text-center text-[10px] text-gray-500">{p.email || '—'}</td>
                             <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={isDateExpired(p.cve_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cve_expiry_date)}</span> : '—'}</td>
