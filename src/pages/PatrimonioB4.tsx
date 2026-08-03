@@ -7,6 +7,7 @@ import RelatoriosMensais from '../components/b4/RelatoriosMensais';
 import ExtratoB4 from '../components/b4/ExtratoB4';
 import GerenciarCompartimentos from '../components/b4/GerenciarCompartimentos';
 import VisualizacaoViatura from '../components/b4/VisualizacaoViatura';
+import HistoricoConferencias from '../components/b4/HistoricoConferencias';
 import { supabase } from '../services/supabase';
 
 import { useEdicao } from '../hooks/useEdicao';
@@ -1672,50 +1673,7 @@ const PatrimonioB4: React.FC = () => {
 
                   {/* Daily Checklists History */}
                   <div className="bg-white border border-rustic-border rounded-xl p-6">
-                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary">history</span>
-                      Histórico de Conferências Diárias
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
-                        <thead className="border-b border-rustic-border text-xs font-bold uppercase text-rustic-brown/50">
-                          <tr>
-                            <th className="py-3 px-4">Data</th>
-                            <th className="py-3 px-4">Viatura/Item</th>
-                            <th className="py-3 px-4">Status</th>
-                            <th className="py-3 px-4">Obs</th>
-                            <th className="py-3 px-4">Responsável</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-rustic-border/30">
-                          {dailyChecklists.slice(0, 50).map((checklist) => (
-                            <tr key={checklist.id}>
-                              <td className="py-3 px-4 whitespace-nowrap text-xs text-gray-500">
-                                {checklist.created_at ? new Date(checklist.created_at).toLocaleString('pt-BR') : '-'}
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="flex flex-col">
-                                  <span className="font-bold text-xs">{checklist.vehicle?.name || checklist.viatura_id || '-'}</span>
-                                  <span className="text-[10px] text-gray-500">{checklist.item?.item_name || checklist.item_id}</span>
-                                </div>
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${checklist.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                  {checklist.status}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 text-xs italic text-gray-600 max-w-[200px] truncate">{checklist.notes || '-'}</td>
-                              <td className="py-3 px-4 text-xs">{checklist.responsible || '-'}</td>
-                            </tr>
-                          ))}
-                          {dailyChecklists.length === 0 && (
-                            <tr>
-                              <td colSpan={5} className="py-8 text-center text-gray-400 italic">Nenhum registro de conferência encontrado.</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    <HistoricoConferencias />
                   </div>
                 </div>
               )}

@@ -78,7 +78,11 @@ const HistoricoConferencias: React.FC = () => {
       });
       setRegistros(dados);
     } catch (e: any) {
-      setErro(e.message || 'Erro ao carregar histórico.');
+      if (e.code === '42P01' || e.message?.includes('does not exist')) {
+        setErro('A tabela "historico_conferencias_b4" ainda não foi criada no banco de dados Supabase. Por favor, execute o SQL do BLOCO A no Editor SQL do Supabase.');
+      } else {
+        setErro(e.message || 'Erro ao carregar histórico.');
+      }
     } finally {
       setLoading(false);
     }
@@ -175,8 +179,8 @@ const HistoricoConferencias: React.FC = () => {
         </div>
       )}
       {erro && (
-        <div style={{ padding: '14px', background: '#fee2e2', borderRadius: '8px', color: '#991b1b', fontSize: '13px', marginBottom: '12px' }}>
-          ❌ {erro}
+        <div style={{ padding: '14px', background: '#fee2e2', borderRadius: '8px', color: '#991b1b', fontSize: '13px', marginBottom: '12px', borderLeft: '4px solid #dc2626' }}>
+          ❌ <strong>Atenção:</strong> {erro}
         </div>
       )}
 

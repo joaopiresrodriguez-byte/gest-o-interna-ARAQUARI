@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS historico_conferencias_b4 (
   data_conferencia       DATE         NOT NULL,
   tipo_item              VARCHAR(20)  NOT NULL,
   -- 'equipamento' | 'consumo' | 'viatura'
-  item_id                UUID         NOT NULL,
+  item_id                TEXT         NOT NULL, -- Alterado para TEXT para compatibilidade com IDs string da fleet/locais
   item_nome              VARCHAR(200),
   viatura_nome           VARCHAR(100),
   compartimento_nome     VARCHAR(100),
