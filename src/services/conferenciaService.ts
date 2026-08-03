@@ -105,7 +105,9 @@ export async function buscarConferenciaDia(): Promise<Record<string, any>> {
   }
 }
 
-// Salvar ou atualizar conferência (salva instantaneamente no localStorage e persiste no Supabase via fleet ou conferencia_itens):
+// Salvar ou atualizar conferência com histórico B4 e alerta automático.
+// Para status 'avariado' ou 'nao_encontrado': grava no historico_conferencias_b4
+// e dispara a Edge Function notificar-b4 (WhatsApp + Email).
 export async function salvarConferencia(
   dados: {
     equipamento_id?: string;
@@ -114,6 +116,11 @@ export async function salvarConferencia(
     fleet_item_id?: string;
     status: StatusConferencia;
     observacao?: string;
+    // Contexto para histórico e notificação:
+    item_nome?: string;
+    viatura_nome?: string;
+    compartimento_nome?: string;
+    local_nome?: string;
   }
 ) {
   const itemId = dados.fleet_item_id || dados.viatura_id || dados.equipamento_id || dados.material_id;
@@ -151,9 +158,8 @@ export async function salvarConferencia(
   // 1. Atualizar instantaneamente o cache local do navegador
   setLocalConferenciaItem(itemId, itemConf);
 
-  // 2. Persistir no Supabase remoto
+  // 2. Persistir na tabela conferencia_itens (registro diário operacional)
   try {
-    // Tentar primeiro na tabela conferencia_itens
     const { error: confError } = await supabase
       .from('conferencia_itens')
       .upsert({
@@ -170,7 +176,7 @@ export async function salvarConferencia(
       });
 
     if (confError) {
-      // Se conferencia_itens ainda não existe no schema remote do Supabase, salvar o registro de conferência dentro do campo 'details' da tabela 'fleet' (garantia de 100% de persistência no remoto!)
+      // Fallback: salvar dentro do campo 'details' da tabela fleet
       const { data: fleetItem } = await supabase
         .from('fleet')
         .select('details')
@@ -199,6 +205,59 @@ export async function salvarConferencia(
     }
   } catch (err) {
     console.error('Erro na gravação remota do Supabase:', err);
+  }
+
+  // 3. Histórico B4 + Notificação — apenas para avariado e nao_encontrado
+  if (dados.status === 'avariado' || dados.status === 'nao_encontrado') {
+    const tipoItem = dados.equipamento_id
+      ? 'equipamento'
+      : dados.material_id
+        ? 'consumo'
+        : 'viatura';
+
+    try {
+      await supabase
+        .from('historico_conferencias_b4')
+        .upsert({
+          data_conferencia: hoje,
+          tipo_item: tipoItem,
+          item_id: itemId,
+          item_nome: dados.item_nome || '',
+          viatura_nome: dados.viatura_nome || null,
+          compartimento_nome: dados.compartimento_nome || null,
+          local_nome: dados.local_nome || null,
+          status_conferencia: dados.status,
+          observacao: dados.observacao || null,
+          conferido_por_nome: nomeUsuario,
+          conferido_por_id: user?.id || null,
+          conferido_em: agora,
+          notificacao_enviada: false,
+        }, {
+          onConflict: 'data_conferencia,item_id',
+        });
+    } catch (err) {
+      console.error('Erro ao gravar histórico B4:', err);
+    }
+
+    // 4. Disparar Edge Function para WhatsApp + Email
+    try {
+      await supabase.functions.invoke('notificar-b4', {
+        body: {
+          status: dados.status,
+          item_nome: dados.item_nome || '',
+          tipo_item: tipoItem,
+          viatura_nome: dados.viatura_nome || null,
+          compartimento_nome: dados.compartimento_nome || null,
+          local_nome: dados.local_nome || null,
+          observacao: dados.observacao || null,
+          conferido_por: nomeUsuario,
+          item_id: itemId,
+          data: new Date().toLocaleString('pt-BR'),
+        },
+      });
+    } catch (err) {
+      console.error('Erro ao invocar notificar-b4:', err);
+    }
   }
 
   return true;

@@ -68,10 +68,12 @@ interface N1Props {
   conferenciaMap: Record<string, any>;
   onAtualizar: () => void;
   isViatura?: boolean;
+  // Contexto para histórico B4:
+  viaturaCtx?: { id: string; nome: string; placa?: string };
   children: React.ReactNode;
 }
 
-function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMap, onAtualizar, isViatura, children }: N1Props) {
+function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMap, onAtualizar, isViatura, viaturaCtx, children }: N1Props) {
   const aberto = abertos[id];
   const confViatura = conferenciaMap[id];
 
@@ -101,7 +103,14 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
                   key={key}
                   onClick={async e => {
                     e.stopPropagation();
-                    await salvarConferencia({ viatura_id: id, fleet_item_id: id, status: key as StatusConferencia });
+                    await salvarConferencia({
+                      viatura_id: id,
+                      fleet_item_id: id,
+                      status: key as StatusConferencia,
+                      // Contexto para histórico B4:
+                      item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
+                      viatura_nome: viaturaCtx?.nome || titulo,
+                    });
                     onAtualizar();
                   }}
                   title={cfg.label}
@@ -184,9 +193,13 @@ interface N3Props {
   tipo?: string;
   conferenciaMap: Record<string, any>;
   onAtualizar: () => void;
+  // Contexto para histórico B4 e notificação:
+  viaturaCtx?: { id: string; nome: string; placa?: string };
+  compartimentoCtx?: { id: string; nome: string; posicao?: string };
+  localCtx?: { id: string; nome: string };
 }
 
-function NivelTres({ item, tipo, conferenciaMap, onAtualizar }: N3Props) {
+function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compartimentoCtx, localCtx }: N3Props) {
   const conf = conferenciaMap[item.id];
   const statusAtual: StatusConferencia | null = conf?.status || null;
 
@@ -199,6 +212,11 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar }: N3Props) {
       equipamento_id: item.id,
       status: novoStatus as StatusConferencia,
       observacao,
+      // Contexto para histórico B4 e notificação:
+      item_nome: item.name,
+      viatura_nome: viaturaCtx?.nome || undefined,
+      compartimento_nome: compartimentoCtx?.nome || undefined,
+      local_nome: localCtx?.nome || undefined,
     });
     onAtualizar();
   }
@@ -374,6 +392,7 @@ const ConferenciaDiaria: React.FC = () => {
             conferenciaMap={conferenciaMap}
             onAtualizar={recarregarConferencia}
             isViatura={true}
+            viaturaCtx={{ id: v.id, nome: v.name, placa: v.plate }}
           >
             {comps.length === 0 && (
               <p style={{ fontSize: '12px', color: '#94a3b8', padding: '8px 12px' }}>Nenhum compartimento cadastrado.</p>
@@ -385,7 +404,14 @@ const ConferenciaDiaria: React.FC = () => {
                   {itensComp.length === 0
                     ? <p style={{ fontSize: '12px', color: '#94a3b8', marginLeft: '12px' }}>Sem itens.</p>
                     : itensComp.map(item => (
-                        <NivelTres key={item.id} item={item} conferenciaMap={conferenciaMap} onAtualizar={recarregarConferencia} />
+                        <NivelTres
+                          key={item.id}
+                          item={item}
+                          conferenciaMap={conferenciaMap}
+                          onAtualizar={recarregarConferencia}
+                          viaturaCtx={{ id: v.id, nome: v.name, placa: v.plate }}
+                          compartimentoCtx={{ id: comp.id, nome: comp.nome, posicao: comp.posicao }}
+                        />
                       ))
                   }
                 </NivelDois>
@@ -414,7 +440,13 @@ const ConferenciaDiaria: React.FC = () => {
           >
             <NivelDois id={`local-itens-${local.id}`} titulo="Itens do local" posicao="" totalItens={itensLocal.length} abertos={abertos} toggle={toggle}>
               {itensLocal.map(item => (
-                <NivelTres key={item.id} item={item} conferenciaMap={conferenciaMap} onAtualizar={recarregarConferencia} />
+                <NivelTres
+                  key={item.id}
+                  item={item}
+                  conferenciaMap={conferenciaMap}
+                  onAtualizar={recarregarConferencia}
+                  localCtx={{ id: local.id, nome: local.nome }}
+                />
               ))}
             </NivelDois>
           </NivelUm>

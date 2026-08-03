@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button, Input, TextArea } from '../components/ui';
 import { STATUS_MISSAO, STATUS_RESULTADO, StatusMissao, atualizarMissao } from '../services/missoesService';
 import ConferenciaDiaria from '../components/operacional/ConferenciaDiaria';
+import HistoricoConferencias from '../components/b4/HistoricoConferencias';
 
 // ============ SUB-COMPONENTS ============
 
@@ -879,6 +880,22 @@ const Operacional: React.FC = () => {
               </div>
               <div className="p-6">
                 <ConferenciaDiaria />
+              </div>
+            </section>
+
+            {/* Histórico B4 */}
+            <section className="bg-white rounded-xl shadow-sm border border-rustic-border">
+              <div className="p-5 border-b border-rustic-border">
+                <h3 className="text-lg font-bold text-[#181111] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-amber-600">history</span>
+                  Histórico — Avarias e Não Encontrados
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Itens marcados como avariado ou não encontrado · Notificações WhatsApp e e-mail
+                </p>
+              </div>
+              <div className="p-6">
+                <HistoricoConferencias />
               </div>
             </section>
           </div>
