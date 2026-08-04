@@ -487,11 +487,12 @@ const PatrimonioB4: React.FC = () => {
       oil_type: newItemOilType || undefined,
       location: localSelecionado?.nome || newItemLocation || undefined,
       local_id: newItemLocalId || undefined,
+      viatura_id: newItemViaturaId || undefined,         // ← vínculo com a viatura
       nf_number: newItemNfNumber || undefined,
       patrimonio_number: newItemPatrimonioNumber || undefined,
       patrimonio_type: newItemPatrimonioType || undefined,
       atividades: newItemAtividades,
-      compartimento_id: newItemCompartimentoId || undefined,
+      compartimento_id: newItemCompartimentoId || undefined, // ← vínculo com o compartimento
     };
 
     try {
