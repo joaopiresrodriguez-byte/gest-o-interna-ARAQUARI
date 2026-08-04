@@ -298,6 +298,7 @@ const PatrimonioB4: React.FC = () => {
   const [tipoLocal, setTipoLocal] = useState<'ambiente' | 'viatura' | ''>('');
   const [newItemCompartimentoId, setNewItemCompartimentoId] = useState('');
   const [compartimentos, setCompartimentos] = useState<CompartimentoViatura[]>([]);
+  const [allCompartimentos, setAllCompartimentos] = useState<CompartimentoViatura[]>([]);
   const [gerenciarCompViatura, setGerenciarCompViatura] = useState<Vehicle | null>(null);
   const [visualizarViaturaObj, setVisualizarViaturaObj] = useState<Vehicle | null>(null);
 
@@ -371,6 +372,7 @@ const PatrimonioB4: React.FC = () => {
 
   useEffect(() => {
     SupabaseService.getLocaisEquipamento().then(setLocais).catch(() => {});
+    supabase.from('compartimentos_viatura').select('*').eq('ativo', true).then(({ data }) => setAllCompartimentos(data || []));
   }, []);
 
   const loadData = async () => {
@@ -706,7 +708,19 @@ const PatrimonioB4: React.FC = () => {
         <ExtratoB4
           local={extratoLocal}
           items={fleet.filter(item => {
-            // Prioridade: match por local_id; fallback por location string
+            // Se o local for uma Viatura (tipo === 'viatura')
+            if (extratoLocal.tipo === 'viatura') {
+              // 1. Se for a própria viatura
+              if (item.id === extratoLocal.id) return true;
+              // 2. Se for um item alocado em um dos compartimentos desta viatura
+              const compIdsDaViatura = allCompartimentos.filter(c => c.viatura_id === extratoLocal.id).map(c => c.id);
+              if (item.compartimento_id && compIdsDaViatura.includes(item.compartimento_id)) return true;
+              // 3. Fallback por local_id ou location
+              if (item.local_id) return item.local_id === extratoLocal.id;
+              return item.location?.toLowerCase() === extratoLocal.nome.toLowerCase();
+            }
+
+            // Para ambientes normais
             if (item.local_id) return item.local_id === extratoLocal.id;
             return item.location?.toLowerCase() === extratoLocal.nome.toLowerCase();
           })}
@@ -990,6 +1004,7 @@ const PatrimonioB4: React.FC = () => {
                     )}
 
                     <div className="flex flex-wrap gap-2 p-4">
+                      {/* 1. Locais de ambiente/ambientes cadastrados */}
                       {locais.map(local => {
                         const count = fleet.filter(item =>
                           item.local_id === local.id ||
@@ -1016,12 +1031,45 @@ const PatrimonioB4: React.FC = () => {
                                 title="Alterar/Editar Local"
                               />
                             )}
-
                           </div>
                         );
                       })}
-                      {locais.length === 0 && (
-                        <p className="text-xs text-gray-400 italic">Nenhum local cadastrado. Adicione usando o botão acima.</p>
+
+                      {/* 2. Viaturas cadastradas na frota (com contagem de itens nos compartimentos) */}
+                      {fleet.filter(v => v.type === 'Viatura').map(vtr => {
+                        const compIds = allCompartimentos.filter(c => c.viatura_id === vtr.id).map(c => c.id);
+                        const count = fleet.filter(item =>
+                          (item.compartimento_id && compIds.includes(item.compartimento_id)) ||
+                          item.local_id === vtr.id ||
+                          item.location?.toLowerCase() === vtr.name.toLowerCase()
+                        ).length;
+
+                        const vtrLocalObj: LocalEquipamento = {
+                          id: vtr.id,
+                          nome: `${vtr.name}${vtr.plate ? ` (${vtr.plate})` : ''}`,
+                          tipo: 'viatura',
+                          ativo: true
+                        };
+
+                        return (
+                          <div key={`vtr-${vtr.id}`} className="flex items-center gap-1">
+                            <button
+                              onClick={() => setExtratoLocal(vtrLocalObj)}
+                              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-200 bg-blue-50/50 hover:border-blue-500 hover:bg-blue-100/50 transition-all group"
+                            >
+                              <span className="material-symbols-outlined text-[16px] text-blue-600 group-hover:text-blue-800">
+                                local_shipping
+                              </span>
+                              <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950">{vtr.name}</span>
+                              <span className="text-[10px] font-black bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full">{count}</span>
+                              <span className="material-symbols-outlined text-[14px] text-blue-400 group-hover:text-blue-600">receipt_long</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                      {locais.length === 0 && fleet.filter(v => v.type === 'Viatura').length === 0 && (
+                        <p className="text-xs text-gray-400 italic">Nenhum local ou viatura cadastrado.</p>
                       )}
                     </div>
                   </div>
