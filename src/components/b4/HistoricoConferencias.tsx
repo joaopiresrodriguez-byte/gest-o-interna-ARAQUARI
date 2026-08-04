@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
+import { toast } from 'sonner';
 
 interface RegistroHistorico {
   id: string;
@@ -16,6 +17,9 @@ interface RegistroHistorico {
   conferido_em: string;
   notificacao_enviada: boolean;
   notificacao_enviada_em: string | null;
+  resolvido?: boolean;
+  resolvido_em?: string | null;
+  resolvido_por?: string | null;
 }
 
 async function buscarHistorico(filtros: {
@@ -38,10 +42,12 @@ async function buscarHistorico(filtros: {
 }
 
 function formataData(iso: string) {
-  return new Date(iso).toLocaleDateString('pt-BR');
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
 function formataHora(iso: string) {
+  if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
@@ -58,86 +64,122 @@ const STATUS_CFG = {
     fundo: '#fee2e2',
     borda: '#dc2626',
   },
-} as const;
+};
 
-const HistoricoConferencias: React.FC = () => {
-  const hoje = new Date().toISOString().split('T')[0];
-  const [filtros, setFiltros] = useState({ dataInicio: hoje, dataFim: hoje, status: '' });
+export const HistoricoConferencias: React.FC = () => {
   const [registros, setRegistros] = useState<RegistroHistorico[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
+  const hoje = new Date().toISOString().slice(0, 10);
+  const trintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const [filtros, setFiltros] = useState({
+    dataInicio: trintaDiasAtras,
+    dataFim: hoje,
+    status: '',
+  });
+
   const carregar = useCallback(async () => {
-    setLoading(true);
-    setErro(null);
     try {
-      const dados = await buscarHistorico({
-        dataInicio: filtros.dataInicio || undefined,
-        dataFim: filtros.dataFim || undefined,
-        status: filtros.status || undefined,
-      });
+      setLoading(true);
+      setErro(null);
+      const dados = await buscarHistorico(filtros);
       setRegistros(dados);
     } catch (e: any) {
-      if (e.code === '42P01' || e.message?.includes('does not exist')) {
-        setErro('A tabela "historico_conferencias_b4" ainda não foi criada no banco de dados Supabase. Por favor, execute o SQL do BLOCO A no Editor SQL do Supabase.');
-      } else {
-        setErro(e.message || 'Erro ao carregar histórico.');
-      }
+      console.error('Erro ao buscar histórico:', e);
+      setErro(e.message || 'Não foi possível carregar o histórico de conferências.');
     } finally {
       setLoading(false);
     }
   }, [filtros]);
 
-  // Carrega ao montar
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  const resolverPendencia = async (id: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let nomeUsuario = user?.email || 'Usuário';
+
+      if (user?.id) {
+        const { data: perfil } = await supabase
+          .from('militares')
+          .select('nome_guerra')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (perfil?.nome_guerra) {
+          nomeUsuario = perfil.nome_guerra;
+        }
+      }
+
+      const { error } = await supabase
+        .from('historico_conferencias_b4')
+        .update({
+          resolvido: true,
+          resolvido_em: new Date().toISOString(),
+          resolvido_por: nomeUsuario,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('Pendência marcada como resolvida!');
+      carregar();
+    } catch (err: any) {
+      console.error('Erro ao resolver pendência:', err);
+      toast.error('Erro ao marcar pendência como resolvida');
+    }
+  };
 
   const inputStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    borderRadius: '8px',
-    border: '1px solid #e2e8f0',
-    fontSize: '13px',
-    color: '#334155',
-    background: 'white',
-    outline: 'none',
+    padding: '6px 10px',
+    borderRadius: '6px',
+    border: '1px solid #cbd5e1',
+    fontSize: '12px',
   };
 
   const btnStyle: React.CSSProperties = {
-    padding: '8px 18px',
-    borderRadius: '8px',
+    padding: '6px 14px',
+    borderRadius: '6px',
     border: 'none',
-    background: '#1d4ed8',
-    color: 'white',
-    fontSize: '13px',
-    fontWeight: '600',
+    background: '#1e293b',
+    color: '#fff',
+    fontSize: '12px',
     cursor: 'pointer',
+    fontWeight: 'bold',
   };
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ fontFamily: 'sans-serif', maxWidth: '900px', margin: '0 auto' }}>
       {/* Cabeçalho */}
-      <div style={{ marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: '0 0 4px' }}>
-          📋 Histórico de Conferências B4
-        </h3>
-        <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
-          Registros de itens avariados ou não encontrados nas conferências diárias.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div>
+          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>
+            📋 Histórico de Pendências (B4)
+          </h2>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
+            Itens avariados ou não encontrados registrados durante as conferências diárias
+          </p>
+        </div>
+        <button onClick={carregar} style={btnStyle}>🔄 Atualizar</button>
       </div>
 
       {/* Filtros */}
       <div style={{
         display: 'flex',
+        gap: '12px',
         flexWrap: 'wrap',
-        gap: '10px',
-        alignItems: 'center',
         background: '#f8fafc',
-        border: '1px solid #e2e8f0',
-        borderRadius: '10px',
-        padding: '14px 16px',
+        padding: '12px 16px',
+        borderRadius: '8px',
         marginBottom: '16px',
+        border: '1px solid #e2e8f0',
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>Data início</label>
+          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>De</label>
           <input
             type="date"
             value={filtros.dataInicio}
@@ -146,7 +188,7 @@ const HistoricoConferencias: React.FC = () => {
           />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>Data fim</label>
+          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>Até</label>
           <input
             type="date"
             value={filtros.dataFim}
@@ -205,21 +247,22 @@ const HistoricoConferencias: React.FC = () => {
           <div
             key={reg.id}
             style={{
-              border: `1px solid ${cfg.borda}`,
-              borderLeft: `4px solid ${cfg.borda}`,
+              border: `1px solid ${reg.resolvido ? '#cbd5e1' : cfg.borda}`,
+              borderLeft: `4px solid ${reg.resolvido ? '#166534' : cfg.borda}`,
               borderRadius: '10px',
               padding: '14px 16px',
               marginBottom: '10px',
-              background: cfg.fundo,
+              background: reg.resolvido ? '#f8fafc' : cfg.fundo,
+              opacity: reg.resolvido ? 0.85 : 1,
             }}
           >
             {/* Linha 1: data + status */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
-                {formataData(reg.data_conferencia)}
+                📅 {formataData(reg.data_conferencia)}
               </span>
-              <span style={{ fontSize: '12px', fontWeight: 'bold', color: cfg.cor }}>
-                {cfg.label}
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: reg.resolvido ? '#166534' : cfg.cor }}>
+                {reg.resolvido ? '✅ RESOLVIDO' : cfg.label}
               </span>
             </div>
 
@@ -241,21 +284,35 @@ const HistoricoConferencias: React.FC = () => {
               </div>
             )}
 
-            {/* Rodapé: conferido por + notificação */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', flexWrap: 'wrap', gap: '4px' }}>
+            {/* Rodapé: conferido por + botão de resolução */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
               <span style={{ fontSize: '11px', color: '#64748b' }}>
-                🔏 Por <strong>{reg.conferido_por_nome || '—'}</strong> às {formataHora(reg.conferido_em)}
+                🔏 Registrado por <strong>{reg.conferido_por_nome || '—'}</strong> às {formataHora(reg.conferido_em)}
               </span>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: reg.notificacao_enviada ? '#166534' : '#92400e',
-                background: reg.notificacao_enviada ? '#dcfce7' : '#fef9c3',
-                padding: '2px 8px',
-                borderRadius: '999px',
-              }}>
-                {reg.notificacao_enviada ? '✅ Notificação enviada' : '⏳ Aguardando notificação'}
-              </span>
+
+              {!reg.resolvido && (
+                <button
+                  onClick={() => resolverPendencia(reg.id)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: '#166534',
+                    color: 'white',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  ✅ Marcar como Resolvido
+                </button>
+              )}
+
+              {reg.resolvido && (
+                <div style={{ fontSize: '11px', color: '#166534', fontWeight: '500' }}>
+                  ✅ Resolvido por <strong>{reg.resolvido_por || 'Usuário'}</strong> em {new Date(reg.resolvido_em!).toLocaleString('pt-BR')}
+                </div>
+              )}
             </div>
           </div>
         );
