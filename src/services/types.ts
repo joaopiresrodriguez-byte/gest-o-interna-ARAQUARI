@@ -44,8 +44,7 @@ export interface Vehicle {
     oil_type?: string;
     location?: string;
     local_id?: string;
-    viatura_id?: string;        // FK para a viatura mãe (quando item está em compartimento)
-    compartimento_id?: string;  // FK para o compartimento específico
+    compartimento_id?: string; // FK para compartimentos_viatura(id)
     nf_number?: string;
     patrimonio_number?: string;
     patrimonio_type?: string;

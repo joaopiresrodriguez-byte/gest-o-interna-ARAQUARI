@@ -33,7 +33,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
     try {
       setLoading(true);
 
-      // 1. Buscar compartimentos
+      // 1. Buscar compartimentos desta viatura
       const { data: dataComp, error: errComp } = await supabase
         .from('compartimentos_viatura')
         .select('*')
@@ -46,24 +46,27 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
       setCompartimentos(compsCarregados);
       const compIds = compsCarregados.map(c => c.id);
 
-      // 2. Buscar itens da tabela principal fleet vinculados à viatura
-      //    (por viatura_id OU por compartimento_id de um compartimento desta viatura)
-      const { data: dataFleet } = await supabase
-        .from('fleet')
-        .select('id, name, type, status, compartimento_id, viatura_id')
-        .or(`viatura_id.eq.${viatura.id}${compIds.length > 0 ? `,compartimento_id.in.(${compIds.join(',')})` : ''}`)
-        .neq('type', 'Viatura'); // Não incluir a própria viatura na lista
+      // 2. Buscar itens fleet por compartimento_id (fleet não tem viatura_id direto)
+      //    Se não há compartimentos, não busca itens fleet desta forma
+      let fleetFormatado: EquipamentoItem[] = [];
+      if (compIds.length > 0) {
+        const { data: dataFleet } = await supabase
+          .from('fleet')
+          .select('id, name, type, status, compartimento_id')
+          .in('compartimento_id', compIds)
+          .neq('type', 'Viatura');
 
-      const fleetFormatado: EquipamentoItem[] = (dataFleet || []).map(f => ({
-        id: f.id,
-        nome: f.name,
-        tipo: `🔧 ${f.type}`,
-        status: f.status === 'active' ? 'Ok' : 'Em Manutenção',
-        quantidade: 1,
-        compartimento_id: f.compartimento_id,
-      }));
+        fleetFormatado = (dataFleet || []).map(f => ({
+          id: f.id,
+          nome: f.name,
+          tipo: `🔧 ${f.type}`,
+          status: f.status === 'active' ? 'Ok' : 'Em Manutenção',
+          quantidade: 1,
+          compartimento_id: f.compartimento_id,
+        }));
+      }
 
-      // 3. Buscar na tabela equipamentos (fonte alternativa)
+      // 3. Buscar na tabela equipamentos (tem viatura_id direto)
       const { data: dataEq } = await supabase
         .from('equipamentos')
         .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id')
@@ -94,11 +97,11 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
         compartimento_id: c.compartimento_id,
       }));
 
-      // Combinar: fleet é a fonte principal. equipamentos são adicionados apenas se não estiverem já em fleet (por ID)
+      // Combinar sem duplicatas (fleet é preferencial; equipamentos e consumo são complementares)
       const fleetIds = new Set(fleetFormatado.map(f => f.id));
       const equipNovos = equipFormatado.filter(e => !fleetIds.has(e.id));
-      const consumoIds = new Set([...fleetFormatado.map(f => f.id), ...equipNovos.map(e => e.id)]);
-      const consumoNovos = consumoFormatado.filter(c => !consumoIds.has(c.id));
+      const idsJaIncluidos = new Set([...fleetFormatado.map(f => f.id), ...equipNovos.map(e => e.id)]);
+      const consumoNovos = consumoFormatado.filter(c => !idsJaIncluidos.has(c.id));
 
       setItens([...fleetFormatado, ...equipNovos, ...consumoNovos]);
     } catch (err: any) {
@@ -108,6 +111,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (viatura?.id) {
