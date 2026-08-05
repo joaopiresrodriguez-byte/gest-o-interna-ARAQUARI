@@ -70,7 +70,7 @@ export async function buscarConferenciaDia(): Promise<Record<string, any>> {
       return mapa;
     }
 
-    // 2. Se conferencia_itens não existir no Supabase, carregar os dados persistidos da tabela fleet
+    // 2. Se conferencia_itens não existir no Supabase, carregar dos dados persistidos da tabela fleet
     const { data: fleetData, error: fleetError } = await supabase
       .from('fleet')
       .select('id, details');
@@ -91,7 +91,7 @@ export async function buscarConferenciaDia(): Promise<Record<string, any>> {
               };
             }
           } catch (e) {
-            // Se details não for JSON válido, ignora
+            // Ignora
           }
         }
       }
@@ -106,8 +106,6 @@ export async function buscarConferenciaDia(): Promise<Record<string, any>> {
 }
 
 // Salvar ou atualizar conferência com histórico B4 e alerta automático.
-// Para status 'avariado' ou 'nao_encontrado': grava no historico_conferencias_b4
-// e dispara a Edge Function notificar-b4 (WhatsApp + Email).
 export async function salvarConferencia(
   dados: {
     equipamento_id?: string;
@@ -123,8 +121,9 @@ export async function salvarConferencia(
     local_nome?: string;
   }
 ) {
-  const itemId = dados.fleet_item_id || dados.viatura_id || dados.equipamento_id || dados.material_id;
-  if (!itemId) return false;
+  const rawId = dados.fleet_item_id || dados.viatura_id || dados.equipamento_id || dados.material_id;
+  if (!rawId) return false;
+  const itemId = String(rawId);
 
   const { data: { user } } = await supabase.auth.getUser();
   let nomeUsuario = user?.email?.split('@')[0] || 'Militar';
@@ -207,56 +206,60 @@ export async function salvarConferencia(
     console.error('Erro na gravação remota do Supabase:', err);
   }
 
-  // 3. Histórico B4 + Notificação — apenas para avariado e nao_encontrado
-  if (dados.status === 'avariado' || dados.status === 'nao_encontrado') {
+  // 3. Histórico B4 + Fila de Pendências
+  if (dados.status === 'ok') {
+    // Se o conferente alterou para OK no dia, verifica se existe pendência não resolvida para esse item e regulariza
+    try {
+      await supabase
+        .from('historico_conferencias_b4')
+        .update({
+          resolvido: true,
+          resolvido_em: agora,
+          resolvido_por: `${nomeUsuario} (Conferência OK)`,
+        })
+        .eq('item_id', itemId)
+        .eq('resolvido', false);
+    } catch (e) {
+      console.error('Erro ao resolver pendência prévia no OK:', e);
+    }
+  } else if (dados.status === 'avariado' || dados.status === 'nao_encontrado') {
     const tipoItem = dados.equipamento_id
       ? 'equipamento'
       : dados.material_id
         ? 'consumo'
         : 'viatura';
 
+    const registroB4 = {
+      data_conferencia: hoje,
+      tipo_item: tipoItem,
+      item_id: itemId,
+      item_nome: dados.item_nome || 'Item',
+      viatura_nome: dados.viatura_nome || null,
+      compartimento_nome: dados.compartimento_nome || null,
+      local_nome: dados.local_nome || null,
+      status_conferencia: dados.status,
+      observacao: dados.observacao || null,
+      conferido_por_nome: nomeUsuario,
+      conferido_por_id: user?.id || null,
+      conferido_em: agora,
+      notificacao_enviada: false,
+      resolvido: false,
+    };
+
     try {
-      await supabase
+      // Tentar upsert com fallback se unique constraint falhar
+      const { error: upsertErr } = await supabase
         .from('historico_conferencias_b4')
-        .upsert({
-          data_conferencia: hoje,
-          tipo_item: tipoItem,
-          item_id: itemId,
-          item_nome: dados.item_nome || '',
-          viatura_nome: dados.viatura_nome || null,
-          compartimento_nome: dados.compartimento_nome || null,
-          local_nome: dados.local_nome || null,
-          status_conferencia: dados.status,
-          observacao: dados.observacao || null,
-          conferido_por_nome: nomeUsuario,
-          conferido_por_id: user?.id || null,
-          conferido_em: agora,
-          notificacao_enviada: false,
-        }, {
-          onConflict: 'data_conferencia,item_id',
-        });
+        .upsert(registroB4, { onConflict: 'data_conferencia,item_id' });
+
+      if (upsertErr) {
+        // Fallback: tentar insert simples
+        await supabase
+          .from('historico_conferencias_b4')
+          .insert(registroB4);
+      }
     } catch (err) {
       console.error('Erro ao gravar histórico B4:', err);
-    }
-
-    // 4. Disparar Edge Function para WhatsApp + Email
-    try {
-      await supabase.functions.invoke('notificar-b4', {
-        body: {
-          status: dados.status,
-          item_nome: dados.item_nome || '',
-          tipo_item: tipoItem,
-          viatura_nome: dados.viatura_nome || null,
-          compartimento_nome: dados.compartimento_nome || null,
-          local_nome: dados.local_nome || null,
-          observacao: dados.observacao || null,
-          conferido_por: nomeUsuario,
-          item_id: itemId,
-          data: new Date().toLocaleString('pt-BR'),
-        },
-      });
-    } catch (err) {
-      console.error('Erro ao invocar notificar-b4:', err);
     }
   }
 
