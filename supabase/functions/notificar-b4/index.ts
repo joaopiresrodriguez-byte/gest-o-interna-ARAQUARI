@@ -25,6 +25,8 @@ async function enviarWhatsApp(mensagem: string) {
     headers['Client-Token'] = Z_CLIENT;
   }
 
+  console.log('Sending message via Z-API to:', B4_NUMERO);
+
   const resp = await fetch(url, {
     method: 'POST',
     headers,
