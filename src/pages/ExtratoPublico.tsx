@@ -80,7 +80,8 @@ export function ExtratoPublico() {
             .from('equipamentos')
             .select('id, nome, tipo, numero_serie, quantidade, status')
             .eq('compartimento_id', id)
-            .order('nome');
+            .order('nome')
+            .limit(1000);
 
           // Fallback para tabela fleet se equipamentos estiver vazia
           const equipItens = (equip && equip.length > 0)
@@ -96,7 +97,8 @@ export function ExtratoPublico() {
                   .from('fleet')
                   .select('id, name, type, patrimonio_number, status, brand, plate')
                   .eq('compartimento_id', id)
-                  .order('name');
+                  .order('name')
+                  .limit(1000);
                 return (fleetData || []).map(f => ({
                   ...f,
                   type: `🔧 ${f.type || 'Equipamento'}`,
@@ -108,7 +110,8 @@ export function ExtratoPublico() {
             .from('materiais_consumo')
             .select('id, nome, unidade, quantidade, estoque_minimo, categoria')
             .eq('compartimento_id', id)
-            .order('nome');
+            .order('nome')
+            .limit(1000);
 
           const consumoItens = (consumo || []).map(c => ({
             id: c.id,
@@ -148,7 +151,8 @@ export function ExtratoPublico() {
             .from('compartimentos_viatura')
             .select('id, nome')
             .eq('viatura_id', id)
-            .eq('ativo', true);
+            .eq('ativo', true)
+            .limit(1000);
 
           const compIds = (comps || []).map(c => c.id);
 
@@ -160,7 +164,8 @@ export function ExtratoPublico() {
               .select('id, name, type, patrimonio_number, status, brand, plate')
               .in('compartimento_id', compIds)
               .neq('type', 'Viatura')
-              .order('name');
+              .order('name')
+              .limit(1000);
 
             itensFleet = (fleetItems || []).map(f => ({
               ...f,
@@ -173,7 +178,8 @@ export function ExtratoPublico() {
             .from('equipamentos')
             .select('id, nome, tipo, numero_serie, quantidade, status')
             .eq('viatura_id', id)
-            .order('nome');
+            .order('nome')
+            .limit(1000);
 
           const itensEquip = (equipItems || []).map(e => ({
             id: e.id,
@@ -188,7 +194,8 @@ export function ExtratoPublico() {
             .from('materiais_consumo')
             .select('id, nome, unidade, quantidade, estoque_minimo, categoria')
             .eq('viatura_id', id)
-            .order('nome');
+            .order('nome')
+            .limit(1000);
 
           const itensConsumo = (consumoData || []).map(c => ({
             id: c.id,
@@ -231,13 +238,15 @@ export function ExtratoPublico() {
           .from('fleet')
           .select('id, name, type, patrimonio_number, status, brand, plate, location, local_id')
           .or(`local_id.eq.${id},location.ilike.${local.nome}`)
-          .order('name');
+          .order('name')
+          .limit(1000);
 
         const { data: consumoData } = await supabase
           .from('materiais_consumo')
           .select('id, nome, unidade, quantidade, estoque_minimo, categoria, local_id, viatura_id')
           .or(local.tipo === 'viatura' ? `viatura_id.eq.${id}` : `local_id.eq.${id}`)
-          .order('nome');
+          .order('nome')
+          .limit(1000);
 
         const itensFleet = (fleetData || [])
           .filter(item => item.id !== id)
