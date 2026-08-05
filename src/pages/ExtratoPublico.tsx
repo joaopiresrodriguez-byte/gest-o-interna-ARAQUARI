@@ -123,7 +123,93 @@ export function ExtratoPublico() {
           return;
         }
 
-        // 1. Buscar dados do local (ambiente ou viatura) na tabela locais_equipamento
+        // ── TIPO VIATURA: busca direto na tabela fleet ──────────────────
+        // Este caminho é ativado pelo QR code de viaturas, cujo ID é o
+        // fleet.id da viatura principal (não um UUID de locais_equipamento).
+        if (tipo === 'viatura') {
+          const { data: vtrFleet, error: vtrErr } = await supabase
+            .from('fleet')
+            .select('id, name, plate, type, status')
+            .eq('id', id)
+            .single();
+
+          if (vtrErr || !vtrFleet) {
+            setErro('Viatura não encontrada no sistema.');
+            setCarregando(false);
+            return;
+          }
+
+          const nomeTitulo = `${vtrFleet.name}${vtrFleet.plate ? ` (${vtrFleet.plate})` : ''}`;
+          setTitulo(nomeTitulo);
+          setLocalTipo('Viatura');
+
+          // Buscar compartimentos desta viatura
+          const { data: comps } = await supabase
+            .from('compartimentos_viatura')
+            .select('id, nome')
+            .eq('viatura_id', id)
+            .eq('ativo', true);
+
+          const compIds = (comps || []).map(c => c.id);
+
+          // Buscar itens em fleet vinculados por compartimento_id desta viatura
+          let itensFleet: ItemExtrato[] = [];
+          if (compIds.length > 0) {
+            const { data: fleetItems } = await supabase
+              .from('fleet')
+              .select('id, name, type, patrimonio_number, status, brand, plate')
+              .in('compartimento_id', compIds)
+              .neq('type', 'Viatura')
+              .order('name');
+
+            itensFleet = (fleetItems || []).map(f => ({
+              ...f,
+              type: `🔧 ${f.type}`,
+            }));
+          }
+
+          // Buscar itens em equipamentos vinculados por viatura_id
+          const { data: equipItems } = await supabase
+            .from('equipamentos')
+            .select('id, nome, tipo, numero_serie, quantidade, status')
+            .eq('viatura_id', id)
+            .order('nome');
+
+          const itensEquip = (equipItems || []).map(e => ({
+            id: e.id,
+            name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
+            type: `🔧 ${e.tipo || 'Equipamento'}`,
+            patrimonio_number: e.numero_serie,
+            status: e.status || 'Ok',
+          }));
+
+          // Buscar materiais de consumo vinculados por viatura_id
+          const { data: consumoData } = await supabase
+            .from('materiais_consumo')
+            .select('id, nome, unidade, quantidade, estoque_minimo, categoria')
+            .eq('viatura_id', id)
+            .order('nome');
+
+          const itensConsumo = (consumoData || []).map(c => ({
+            id: c.id,
+            name: c.nome,
+            type: `📦 Consumo (${c.categoria || 'Geral'})`,
+            patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
+            status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
+          }));
+
+          // Combinar sem duplicatas (fleet é preferencial)
+          const fleetIds = new Set(itensFleet.map(f => f.id));
+          const equipNovos = itensEquip.filter(e => !fleetIds.has(e.id));
+          const idsJaIncluidos = new Set([...itensFleet.map(f => f.id), ...equipNovos.map(e => e.id)]);
+          const consumoNovos = itensConsumo.filter(c => !idsJaIncluidos.has(c.id));
+
+          setItens([...itensFleet, ...equipNovos, ...consumoNovos]);
+          setCarregando(false);
+          return;
+        }
+
+        // ── TIPO AMBIENTE: busca em locais_equipamento (fluxo original) ──
         const { data: local, error: errorLocal } = await supabase
           .from('locais_equipamento')
           .select('*')
@@ -180,6 +266,7 @@ export function ExtratoPublico() {
 
     buscar();
   }, [tipo, id]);
+
 
   if (carregando) {
     return (
