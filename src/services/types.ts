@@ -260,6 +260,8 @@ export interface Training {
     materia_id?: string;
     date: string;
     time: string;
+    end_time?: string;
+    location?: string;
     instructor: string;
     status: string;
     materia?: MateriaInstrucao;

@@ -67,9 +67,13 @@ const InstrucaoB3: React.FC = () => {
   const [instrutor, setInstrutor] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
-  // Materials Stage (Before saving materia)
-  const [pendingPDFs, setPendingPDFs] = useState<File[]>([]);
-  const [pendingVideos, setPendingVideos] = useState<File[]>([]);
+  // Materials Stage - Links de Slides e Vídeos (Before saving materia)
+  const [pendingSlideLinks, setPendingSlideLinks] = useState<{ title: string; url: string }[]>([]);
+  const [pendingVideoLinks, setPendingVideoLinks] = useState<{ title: string; url: string }[]>([]);
+  const [newSlideTitle, setNewSlideTitle] = useState("");
+  const [newSlideUrl, setNewSlideUrl] = useState("");
+  const [newVideoTitle, setNewVideoTitle] = useState("");
+  const [newVideoUrl, setNewVideoUrl] = useState("");
 
   // Modal State
   const [selectedMateria, setSelectedMateria] = useState<MateriaInstrucao | null>(null);
@@ -77,9 +81,17 @@ const InstrucaoB3: React.FC = () => {
   const [materiaApresentacoes, setMateriaApresentacoes] = useState<MateriaApresentacao[]>([]);
   const [materiaVideos, setMateriaVideos] = useState<MateriaVideo[]>([]);
 
+  // Modal link inputs
+  const [modalSlideTitle, setModalSlideTitle] = useState("");
+  const [modalSlideUrl, setModalSlideUrl] = useState("");
+  const [modalVideoTitle, setModalVideoTitle] = useState("");
+  const [modalVideoUrl, setModalVideoUrl] = useState("");
+
   // Schedule State
   const [trainingDate, setTrainingDate] = useState("");
   const [trainingTime, setTrainingTime] = useState("");
+  const [trainingEndTime, setTrainingEndTime] = useState("");
+  const [trainingLocation, setTrainingLocation] = useState("");
   const [trainingInstructor, setTrainingInstructor] = useState("");
   const [selectedMateriaId, setSelectedMateriaId] = useState("");
 
@@ -138,6 +150,87 @@ const InstrucaoB3: React.FC = () => {
     }
   }, [mainTab, filtroSiglaCurso, filtroCategoria, filtroMatricula]);
 
+  const handleAddSlideLink = () => {
+    if (!newSlideUrl.trim()) {
+      toast.error("Informe a URL/Link do slide.");
+      return;
+    }
+    const formattedUrl = newSlideUrl.trim().startsWith('http://') || newSlideUrl.trim().startsWith('https://') 
+      ? newSlideUrl.trim() 
+      : `https://${newSlideUrl.trim()}`;
+    setPendingSlideLinks([...pendingSlideLinks, { title: newSlideTitle.trim() || 'Slide de Instrução', url: formattedUrl }]);
+    setNewSlideTitle("");
+    setNewSlideUrl("");
+    toast.success("Link de slide adicionado à lista!");
+  };
+
+  const handleAddVideoLink = () => {
+    if (!newVideoUrl.trim()) {
+      toast.error("Informe a URL/Link do vídeo.");
+      return;
+    }
+    const formattedUrl = newVideoUrl.trim().startsWith('http://') || newVideoUrl.trim().startsWith('https://') 
+      ? newVideoUrl.trim() 
+      : `https://${newVideoUrl.trim()}`;
+    setPendingVideoLinks([...pendingVideoLinks, { title: newVideoTitle.trim() || 'Vídeo de Instrução', url: formattedUrl }]);
+    setNewVideoTitle("");
+    setNewVideoUrl("");
+    toast.success("Link de vídeo adicionado à lista!");
+  };
+
+  const handleAddModalSlideLink = async () => {
+    if (!selectedMateria?.id || !modalSlideUrl.trim()) {
+      toast.error("Informe a URL/Link do slide.");
+      return;
+    }
+    const formattedUrl = modalSlideUrl.trim().startsWith('http://') || modalSlideUrl.trim().startsWith('https://') 
+      ? modalSlideUrl.trim() 
+      : `https://${modalSlideUrl.trim()}`;
+    try {
+      await SupabaseService.addMateriaApresentacao({
+        materia_id: selectedMateria.id,
+        title: modalSlideTitle.trim() || 'Slide de Instrução',
+        file_url: formattedUrl,
+        file_name: 'Link Externo'
+      });
+      toast.success("Link de slide cadastrado!");
+      setModalSlideTitle("");
+      setModalSlideUrl("");
+      const p = await SupabaseService.getMateriaApresentacoes(selectedMateria.id);
+      setMateriaApresentacoes(p);
+      loadData();
+    } catch {
+      toast.error("Erro ao cadastrar link de slide.");
+    }
+  };
+
+  const handleAddModalVideoLink = async () => {
+    if (!selectedMateria?.id || !modalVideoUrl.trim()) {
+      toast.error("Informe a URL/Link do vídeo.");
+      return;
+    }
+    const formattedUrl = modalVideoUrl.trim().startsWith('http://') || modalVideoUrl.trim().startsWith('https://') 
+      ? modalVideoUrl.trim() 
+      : `https://${modalVideoUrl.trim()}`;
+    try {
+      await SupabaseService.addMateriaVideo({
+        materia_id: selectedMateria.id,
+        title: modalVideoTitle.trim() || 'Vídeo de Instrução',
+        file_url: formattedUrl,
+        video_url: formattedUrl,
+        file_name: 'Link Externo'
+      });
+      toast.success("Link de vídeo cadastrado!");
+      setModalVideoTitle("");
+      setModalVideoUrl("");
+      const v = await SupabaseService.getMateriaVideos(selectedMateria.id);
+      setMateriaVideos(v);
+      loadData();
+    } catch {
+      toast.error("Erro ao cadastrar link de vídeo.");
+    }
+  };
+
   const handleSaveMateria = async () => {
     if (!nome || !cargaHoraria) {
       toast.error("Nome e Carga Horária são obrigatórios.");
@@ -171,39 +264,28 @@ const InstrucaoB3: React.FC = () => {
         throw new Error("Falha ao obter ID da matéria criada.");
       }
 
-      // 2. Upload PDFs
-      for (const file of pendingPDFs) {
-        const path = `apresentacoes/${materiaId}/${Date.now()}_${file.name}`;
-        await SupabaseService.uploadFile('materias-apresentacoes', path, file);
-        const url = SupabaseService.getPublicUrl('materias-apresentacoes', path);
-
+      // 2. Save Slide Links
+      for (const slide of pendingSlideLinks) {
         await SupabaseService.addMateriaApresentacao({
           materia_id: materiaId,
-          title: file.name.replace('.pdf', '') || 'Sem título',
-          file_url: url || '',
-          file_name: file.name,
-          size_kb: Math.round(file.size / 1024)
+          title: slide.title || 'Slide de Instrução',
+          file_url: slide.url,
+          file_name: 'Link Externo'
         });
       }
 
-      // 3. Upload Videos
-      for (const file of pendingVideos) {
-        const path = `videos/${materiaId}/${Date.now()}_${file.name}`;
-        await SupabaseService.uploadFile('materias-videos', path, file);
-        const url = SupabaseService.getPublicUrl('materias-videos', path);
-
-        // For now, metadata is basic. Duration/Thumbnails would need heavy frontend logic or edge functions.
+      // 3. Save Video Links
+      for (const video of pendingVideoLinks) {
         await SupabaseService.addMateriaVideo({
           materia_id: materiaId,
-          title: file.name || 'Sem título',
-          file_url: url || '',
-          file_name: file.name,
-          size_mb: parseFloat((file.size / (1024 * 1024)).toFixed(2)),
-          format: file.name.split('.').pop()
+          title: video.title || 'Vídeo de Instrução',
+          file_url: video.url,
+          video_url: video.url,
+          file_name: 'Link Externo'
         });
       }
 
-      toast.success("Matéria e materiais cadastrados com sucesso!");
+      toast.success("Matéria e links de materiais cadastrados com sucesso!");
       resetForm();
       loadData();
     } catch (error) {
@@ -237,7 +319,7 @@ const InstrucaoB3: React.FC = () => {
   };
 
   const handleDeleteApresentacao = async (id: string, materiaId: string) => {
-    if (!confirm("Excluir este arquivo PDF?")) return;
+    if (!confirm("Excluir este link de slide?")) return;
     try {
       await SupabaseService.deleteMateriaApresentacao(id, materiaId);
       if (selectedMateria?.id) {
@@ -251,7 +333,7 @@ const InstrucaoB3: React.FC = () => {
   };
 
   const handleDeleteVideo = async (id: string, materiaId: string) => {
-    if (!confirm("Excluir este vídeo?")) return;
+    if (!confirm("Excluir este link de vídeo?")) return;
     try {
       await SupabaseService.deleteMateriaVideo(id, materiaId);
       if (selectedMateria?.id) {
@@ -272,8 +354,12 @@ const InstrucaoB3: React.FC = () => {
     setDescricao("");
     setInstrutor("");
     setObservacoes("");
-    setPendingPDFs([]);
-    setPendingVideos([]);
+    setPendingSlideLinks([]);
+    setPendingVideoLinks([]);
+    setNewSlideTitle("");
+    setNewSlideUrl("");
+    setNewVideoTitle("");
+    setNewVideoUrl("");
   };
 
   const handleViewDetails = async (materia: MateriaInstrucao) => {
@@ -293,7 +379,7 @@ const InstrucaoB3: React.FC = () => {
 
   const handleSchedule = async () => {
     if (!trainingDate || !trainingTime || !selectedMateriaId || !trainingInstructor) {
-      toast.error("Preencha todos os campos do agendamento.");
+      toast.error("Preencha os campos obrigatórios do agendamento (Data, Horário de Início, Matéria e Instrutor).");
       return;
     }
 
@@ -303,6 +389,8 @@ const InstrucaoB3: React.FC = () => {
         materia_id: selectedMateriaId,
         date: trainingDate,
         time: trainingTime,
+        end_time: trainingEndTime.trim() || undefined,
+        location: trainingLocation.trim() || undefined,
         instructor: trainingInstructor,
         status: 'Scheduled'
       };
@@ -311,6 +399,8 @@ const InstrucaoB3: React.FC = () => {
       toast.success("Treinamento agendado com sucesso!");
       setTrainingDate("");
       setTrainingTime("");
+      setTrainingEndTime("");
+      setTrainingLocation("");
       setTrainingInstructor("");
       setSelectedMateriaId("");
       loadData();
@@ -436,55 +526,117 @@ const InstrucaoB3: React.FC = () => {
                     />
                   </div>
 
-                  {/* Materials Section */}
-                  <div className="space-y-4 pt-4 border-t border-[#E5E1DA]">
+                  {/* Materials Section - Links */}
+                  <div className="space-y-6 pt-4 border-t border-[#E5E1DA]">
                     <h4 className="text-lg font-black text-[#2D2926] flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[#C62828]">folder_open</span>
-                      Materiais Didáticos
+                      <span className="material-symbols-outlined text-[#C62828]">link</span>
+                      Links de Slides e Vídeos
                     </h4>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* PDF Upload */}
-                      <div className="flex flex-col gap-3">
-                        <label className="relative flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-[#D6CFC7] bg-[#FAF9F7] cursor-pointer hover:bg-[#F2EFE9] transition-all">
-                          <span className="material-symbols-outlined text-[#C62828] text-3xl">picture_as_pdf</span>
-                          <span className="text-xs font-bold mt-1">+ Apresentação PDF</span>
-                          <input type="file" multiple accept=".pdf" className="hidden"
-                            onChange={e => e.target.files && setPendingPDFs([...pendingPDFs, ...Array.from(e.target.files)])}
-                          />
-                        </label>
-                        {pendingPDFs.length > 0 && (
-                          <div className="space-y-1">
-                            {pendingPDFs.map((f, i) => (
-                              <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-[11px]">
-                                <span className="truncate max-w-[150px] font-medium">{f.name}</span>
-                                <button onClick={() => setPendingPDFs(pendingPDFs.filter((_, idx) => idx !== i))} className="text-red-500 material-symbols-outlined text-sm">cancel</button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                    {/* Cadastrar Link de Slide */}
+                    <div className="bg-[#FAF9F7] p-4 rounded-xl border border-[#E5E1DA] space-y-3">
+                      <span className="text-xs font-black uppercase text-[#C62828] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base">slideshow</span>
+                        Link de Apresentação / Slides (Canva, Drive, PDF)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          placeholder="Título do Slide (Ex: Aula 01 - APH)"
+                          value={newSlideTitle}
+                          onChange={e => setNewSlideTitle(e.target.value)}
+                          className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#C62828]"
+                        />
+                        <input
+                          type="url"
+                          placeholder="URL / Link (https://...)"
+                          value={newSlideUrl}
+                          onChange={e => setNewSlideUrl(e.target.value)}
+                          className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#C62828]"
+                        />
                       </div>
+                      <button
+                        type="button"
+                        onClick={handleAddSlideLink}
+                        className="w-full h-9 rounded-lg bg-[#C62828] text-white text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#A32020] transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">add_link</span>
+                        Adicionar Link de Slide
+                      </button>
 
-                      {/* Video Upload */}
-                      <div className="flex flex-col gap-3">
-                        <label className="relative flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-[#D6CFC7] bg-[#FAF9F7] cursor-pointer hover:bg-[#F2EFE9] transition-all">
-                          <span className="material-symbols-outlined text-[#2E7D32] text-3xl">movie</span>
-                          <span className="text-xs font-bold mt-1">+ Adicionar Vídeo</span>
-                          <input type="file" multiple accept="video/*" className="hidden"
-                            onChange={e => e.target.files && setPendingVideos([...pendingVideos, ...Array.from(e.target.files)])}
-                          />
-                        </label>
-                        {pendingVideos.length > 0 && (
-                          <div className="space-y-1">
-                            {pendingVideos.map((f, i) => (
-                              <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-[11px]">
-                                <span className="truncate max-w-[150px] font-medium">{f.name}</span>
-                                <button onClick={() => setPendingVideos(pendingVideos.filter((_, idx) => idx !== i))} className="text-red-500 material-symbols-outlined text-sm">cancel</button>
+                      {pendingSlideLinks.length > 0 && (
+                        <div className="space-y-1.5 pt-2">
+                          {pendingSlideLinks.map((slide, i) => (
+                            <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-xs">
+                              <div className="flex flex-col truncate pr-2">
+                                <span className="font-bold text-[#2D2926] truncate">{slide.title}</span>
+                                <span className="text-[10px] text-blue-600 truncate">{slide.url}</span>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                              <button
+                                type="button"
+                                onClick={() => setPendingSlideLinks(pendingSlideLinks.filter((_, idx) => idx !== i))}
+                                className="text-red-500 material-symbols-outlined text-base hover:scale-110 transition-transform"
+                                title="Remover"
+                              >
+                                cancel
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cadastrar Link de Vídeo */}
+                    <div className="bg-[#FAF9F7] p-4 rounded-xl border border-[#E5E1DA] space-y-3">
+                      <span className="text-xs font-black uppercase text-[#2E7D32] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base">smart_display</span>
+                        Link de Vídeo Didático (YouTube, Drive, Vimeo)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          placeholder="Título do Vídeo (Ex: Prática RCP)"
+                          value={newVideoTitle}
+                          onChange={e => setNewVideoTitle(e.target.value)}
+                          className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#2E7D32]"
+                        />
+                        <input
+                          type="url"
+                          placeholder="URL / Link (https://...)"
+                          value={newVideoUrl}
+                          onChange={e => setNewVideoUrl(e.target.value)}
+                          className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#2E7D32]"
+                        />
                       </div>
+                      <button
+                        type="button"
+                        onClick={handleAddVideoLink}
+                        className="w-full h-9 rounded-lg bg-[#2E7D32] text-white text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#205722] transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">add_link</span>
+                        Adicionar Link de Vídeo
+                      </button>
+
+                      {pendingVideoLinks.length > 0 && (
+                        <div className="space-y-1.5 pt-2">
+                          {pendingVideoLinks.map((vid, i) => (
+                            <div key={i} className="flex items-center justify-between bg-white border border-[#E5E1DA] rounded-lg px-3 py-2 text-xs">
+                              <div className="flex flex-col truncate pr-2">
+                                <span className="font-bold text-[#2D2926] truncate">{vid.title}</span>
+                                <span className="text-[10px] text-green-700 truncate">{vid.url}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setPendingVideoLinks(pendingVideoLinks.filter((_, idx) => idx !== i))}
+                                className="text-red-500 material-symbols-outlined text-base hover:scale-110 transition-transform"
+                                title="Remover"
+                              >
+                                cancel
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -495,7 +647,7 @@ const InstrucaoB3: React.FC = () => {
                     {uploading ? (
                       <>
                         <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        Processando Materiais...
+                        Processando Matéria...
                       </>
                     ) : (
                       <>
@@ -527,23 +679,39 @@ const InstrucaoB3: React.FC = () => {
               {profile?.p_instrucao === 'editor' ? (
                 <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Data</label>
-                    <input type="date" value={trainingDate} onChange={e => setTrainingDate(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" />
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Data *</label>
+                    <input type="date" value={trainingDate} onChange={e => setTrainingDate(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm focus:border-[#2E7D32] outline-none" />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Horário</label>
-                    <input type="time" value={trainingTime} onChange={e => setTrainingTime(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#8C8379]">Horário Início *</label>
+                      <input type="time" value={trainingTime} onChange={e => setTrainingTime(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-3 text-sm focus:border-[#2E7D32] outline-none" />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#8C8379]">Horário Fim</label>
+                      <input type="time" value={trainingEndTime} onChange={e => setTrainingEndTime(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-3 text-sm focus:border-[#2E7D32] outline-none" />
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2 md:col-span-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Matéria</label>
-                    <select value={selectedMateriaId} onChange={e => setSelectedMateriaId(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4">
-                      <option value="">Selecione...</option>
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Endereço / Local da Instrução</label>
+                    <input
+                      type="text"
+                      value={trainingLocation}
+                      onChange={e => setTrainingLocation(e.target.value)}
+                      className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm focus:border-[#2E7D32] outline-none"
+                      placeholder="Ex: 7º BBM - Rua José Júlio da Silva, Araquari/SC"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Matéria *</label>
+                    <select value={selectedMateriaId} onChange={e => setSelectedMateriaId(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm focus:border-[#2E7D32] outline-none">
+                      <option value="">Selecione a matéria...</option>
                       {materias.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   </div>
                   <div className="flex flex-col gap-2 md:col-span-2">
-                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Instrutor</label>
-                    <input value={trainingInstructor} onChange={e => setTrainingInstructor(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm" placeholder="Nome Completo" />
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Instrutor Responsável *</label>
+                    <input value={trainingInstructor} onChange={e => setTrainingInstructor(e.target.value)} className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm focus:border-[#2E7D32] outline-none" placeholder="Nome Completo / Posto ou Graduação" />
                   </div>
                   <button onClick={handleSchedule} className="md:col-span-2 h-14 rounded-2xl bg-[#2E7D32] text-white font-black text-lg flex items-center justify-center gap-2 hover:bg-[#205722] transition-all shadow-lg active:scale-95">
                     <span className="material-symbols-outlined">calendar_month</span>
@@ -648,32 +816,67 @@ const InstrucaoB3: React.FC = () => {
               </div>
               <div className="p-6 space-y-4">
                 {trainings.map(t => (
-                  <div key={t.id} className="flex items-center gap-4 bg-white/5 rounded-xl p-4 border border-white/5 hover:bg-white/10 transition-all group">
-                    <div className="flex flex-col items-center justify-center size-14 bg-white text-[#2D2926] rounded-xl flex-shrink-0">
-                      <span className="text-xs font-bold opacity-60 leading-none">DIA</span>
-                      <span className="text-2xl font-black leading-none">{t.date.split('-')[2]}</span>
-                    </div>
-                    <div className="flex flex-1 flex-col truncate">
-                      <h5 className="text-base font-black truncate">{t.materia?.name || "Treinamento"}</h5>
-                      <div className="flex items-center gap-3 mt-1 text-sm opacity-60">
-                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">timer</span> {t.time}</span>
-                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">person</span> {t.instructor}</span>
+                  <div key={t.id} className="flex flex-col bg-white/5 rounded-xl p-4 border border-white/5 hover:bg-white/10 transition-all group gap-3">
+                    <div className="flex items-center gap-4">
+                      <div className="flex flex-col items-center justify-center size-14 bg-white text-[#2D2926] rounded-xl flex-shrink-0">
+                        <span className="text-xs font-bold opacity-60 leading-none">DIA</span>
+                        <span className="text-2xl font-black leading-none">{t.date.split('-')[2]}</span>
+                      </div>
+                      <div className="flex flex-1 flex-col truncate">
+                        <h5 className="text-base font-black truncate">{t.materia?.name || "Treinamento"}</h5>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm opacity-70">
+                          <span className="flex items-center gap-1 whitespace-nowrap">
+                            <span className="material-symbols-outlined text-[16px]">schedule</span>
+                            {t.time}{t.end_time ? ` — ${t.end_time}` : ''}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">person</span>
+                            {t.instructor}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {profile?.p_instrucao === 'editor' && (
+                          <button
+                            onClick={() => handleDeleteTraining(t.id!)}
+                            className="size-9 rounded-full border border-white/20 flex items-center justify-center opacity-40 hover:opacity-100 hover:bg-red-500 transition-all"
+                            title="Remover Treinamento"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {profile?.p_instrucao === 'editor' && (
-                        <button
-                          onClick={() => handleDeleteTraining(t.id!)}
-                          className="size-10 rounded-full border border-white/20 flex items-center justify-center opacity-40 hover:opacity-100 hover:bg-red-500 transition-all"
-                          title="Remover Treinamento"
-                        >
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                        </button>
-                      )}
-                      <div className="size-10 rounded-full border border-white/20 flex items-center justify-center opacity-40 group-hover:opacity-100 group-hover:bg-[#C62828] group-hover:border-transparent transition-all">
-                        <span className="material-symbols-outlined text-sm">chevron_right</span>
+                    {t.location && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-white/10 flex-wrap">
+                        <div className="flex items-center gap-1.5 text-xs opacity-70 flex-1 min-w-0">
+                          <span className="material-symbols-outlined text-[15px] flex-shrink-0">location_on</span>
+                          <span className="truncate">{t.location}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.location)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white text-[10px] font-black uppercase transition-all"
+                            title="Abrir no Google Maps"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">map</span>
+                            Maps
+                          </a>
+                          <a
+                            href={`https://waze.com/ul?q=${encodeURIComponent(t.location)}&navigate=yes`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/80 hover:bg-sky-500 text-white text-[10px] font-black uppercase transition-all"
+                            title="Abrir no Waze"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">navigation</span>
+                            Waze
+                          </a>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ))}
                 {trainings.length === 0 && <p className="text-center opacity-40 italic py-4">Nenhum treinamento agendado.</p>}
@@ -934,60 +1137,87 @@ const InstrucaoB3: React.FC = () => {
               )}
 
               {activeTab === 'apresentacoes' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2">
-                  {materiaApresentacoes.map(pres => (
-                    <div key={pres.id} className="bg-white border border-[#E5E1DA] rounded-2xl p-5 hover:border-[#C62828] hover:shadow-lg transition-all flex flex-col">
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className="size-12 rounded-xl bg-red-50 text-[#C62828] flex items-center justify-center flex-shrink-0">
-                          <span className="material-symbols-outlined">picture_as_pdf</span>
-                        </div>
-                        <div className="flex flex-col truncate">
-                          <h5 className="text-base font-black truncate text-[#2D2926]">{pres.title}</h5>
-                          <span className="text-xs font-bold text-[#8C8379]">{pres.size_kb} KB • PDF</span>
-                        </div>
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                  {profile?.p_instrucao === 'editor' && (
+                    <div className="bg-red-50 border border-red-100 rounded-2xl p-4 space-y-3">
+                      <span className="text-xs font-black uppercase text-[#C62828] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base">add_link</span>
+                        Cadastrar Novo Link de Slides
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="text" placeholder="Título (Ex: Aula 01 - APH)" value={modalSlideTitle} onChange={e => setModalSlideTitle(e.target.value)} className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#C62828]" />
+                        <input type="url" placeholder="URL do Slide (https://...)" value={modalSlideUrl} onChange={e => setModalSlideUrl(e.target.value)} className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#C62828]" />
                       </div>
-                      <div className="flex gap-3 mt-auto">
-                        <a href={pres.file_url} target="_blank" rel="noreferrer" className="flex-1 h-10 rounded-lg bg-[#2D2926] text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:bg-[#C62828] transition-colors">Visualizar</a>
-                        {profile?.p_instrucao === 'editor' && (
-                          <button onClick={() => handleDeleteApresentacao(pres.id!, pres.materia_id)} className="size-10 rounded-lg border-2 border-[#E5E1DA] text-[#8C8379] flex items-center justify-center hover:border-red-500 hover:text-red-500 transition-all">
-                            <span className="material-symbols-outlined text-sm">delete</span>
-                          </button>
-                        )}
-                      </div>
+                      <button onClick={handleAddModalSlideLink} className="w-full h-9 rounded-lg bg-[#C62828] text-white text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#A32020] transition-colors">
+                        <span className="material-symbols-outlined text-sm">add</span> Adicionar Link
+                      </button>
                     </div>
-                  ))}
-                  {materiaApresentacoes.length === 0 && <div className="col-span-full py-20 text-center opacity-40 italic">Nenhum material de apoio em PDF anexado.</div>}
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {materiaApresentacoes.map(pres => (
+                      <div key={pres.id} className="bg-white border border-[#E5E1DA] rounded-2xl p-5 hover:border-[#C62828] hover:shadow-lg transition-all flex flex-col gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="size-11 rounded-xl bg-red-50 text-[#C62828] flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined">slideshow</span>
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <h5 className="text-sm font-black text-[#2D2926] leading-tight">{pres.title}</h5>
+                            <span className="text-[10px] text-blue-600 truncate mt-0.5">{pres.file_url}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-auto">
+                          <a href={pres.file_url} target="_blank" rel="noreferrer" className="flex-1 h-10 rounded-lg bg-[#2D2926] text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1 hover:bg-[#C62828] transition-colors">
+                            <span className="material-symbols-outlined text-sm">open_in_new</span>Acessar Slides
+                          </a>
+                          {profile?.p_instrucao === 'editor' && (
+                            <button onClick={() => handleDeleteApresentacao(pres.id!, pres.materia_id)} className="size-10 rounded-lg border-2 border-[#E5E1DA] text-[#8C8379] flex items-center justify-center hover:border-red-500 hover:text-red-500 transition-all">
+                              <span className="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {materiaApresentacoes.length === 0 && <div className="py-16 text-center opacity-40 italic">Nenhum link de slides cadastrado para esta matéria.</div>}
                 </div>
               )}
 
               {activeTab === 'videos' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-                  {materiaVideos.map(vid => (
-                    <div key={vid.id} className="bg-white border border-[#E5E1DA] rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-sm hover:shadow-xl transition-all h-auto md:h-48 group">
-                      <div className="relative w-full md:w-80 bg-black flex items-center justify-center overflow-hidden">
-                        {vid.thumbnail_url ? (
-                          <img src={vid.thumbnail_url} alt="Thumbnail" className="w-full h-full object-cover opacity-80" loading="lazy" />
-                        ) : (
-                          <div className="flex flex-col items-center gap-2 opacity-30">
-                            <span className="material-symbols-outlined text-5xl text-white">movie</span>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <button className="size-14 rounded-full bg-[#C62828] text-white flex items-center justify-center shadow-2xl scale-90 group-hover:scale-100 transition-all opacity-0 group-hover:opacity-100">
-                            <span className="material-symbols-outlined text-3xl">play_arrow</span>
-                          </button>
-                        </div>
-                        <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-[10px] font-black text-white">{vid.format || 'HD'}</div>
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                  {profile?.p_instrucao === 'editor' && (
+                    <div className="bg-green-50 border border-green-100 rounded-2xl p-4 space-y-3">
+                      <span className="text-xs font-black uppercase text-[#2E7D32] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base">add_link</span>
+                        Cadastrar Novo Link de Vídeo
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="text" placeholder="Título (Ex: Prática RCP)" value={modalVideoTitle} onChange={e => setModalVideoTitle(e.target.value)} className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#2E7D32]" />
+                        <input type="url" placeholder="URL do Vídeo (https://...)" value={modalVideoUrl} onChange={e => setModalVideoUrl(e.target.value)} className="h-10 rounded-lg border border-[#D6CFC7] bg-white px-3 text-xs outline-none focus:border-[#2E7D32]" />
                       </div>
-                      <div className="flex-1 p-6 flex flex-col">
-                        <div className="flex items-start justify-between">
-                          <div className="flex flex-col">
-                            <h5 className="text-xl font-black text-[#2D2926]">{vid.title}</h5>
-                            <p className="text-xs font-bold text-[#8C8379] mt-1">{vid.size_mb} MB • {vid.format?.toUpperCase() || 'MP4'}</p>
+                      <button onClick={handleAddModalVideoLink} className="w-full h-9 rounded-lg bg-[#2E7D32] text-white text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#205722] transition-colors">
+                        <span className="material-symbols-outlined text-sm">add</span> Adicionar Link
+                      </button>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {materiaVideos.map(vid => (
+                      <div key={vid.id} className="bg-white border border-[#E5E1DA] rounded-2xl p-5 hover:border-[#2E7D32] hover:shadow-lg transition-all flex flex-col gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="size-11 rounded-xl bg-green-50 text-[#2E7D32] flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined">smart_display</span>
                           </div>
-                          <div className="flex gap-2">
-                            <button className="size-10 rounded-xl border border-[#E5E1DA] flex items-center justify-center text-[#8C8379] hover:bg-[#C62828] hover:text-white transition-all">
-                              <span className="material-symbols-outlined text-[18px]">download</span>
+                          <div className="flex flex-col min-w-0">
+                            <h5 className="text-sm font-black text-[#2D2926] leading-tight">{vid.title}</h5>
+                            <span className="text-[10px] text-green-700 truncate mt-0.5">{vid.file_url || vid.video_url}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-auto">
+                          <a href={vid.file_url || vid.video_url} target="_blank" rel="noreferrer" className="flex-1 h-10 rounded-lg bg-[#2E7D32] text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1 hover:bg-[#205722] transition-colors">
+                            <span className="material-symbols-outlined text-sm">play_circle</span>Assistir Vídeo
+                          </a>
+                          <div className="flex gap-1">
+                            <button className="size-10 rounded-lg border border-[#E5E1DA] flex items-center justify-center text-[#8C8379] hover:bg-[#C62828] hover:text-white hover:border-transparent transition-all" title="Copiar link">
+                              <span className="material-symbols-outlined text-[18px]">content_copy</span>
                             </button>
                             {profile?.p_instrucao === 'editor' && (
                               <button
@@ -999,19 +1229,9 @@ const InstrucaoB3: React.FC = () => {
                             )}
                           </div>
                         </div>
-
-                        <div className="mt-auto flex items-center justify-between">
-                          <div className="flex items-center gap-1 text-[#2E7D32]">
-                            <span className="material-symbols-outlined text-sm">done_all</span>
-                            <span className="text-[10px] font-black uppercase">Material Verificado</span>
-                          </div>
-                          <button className="flex items-center gap-2 text-xs font-black uppercase text-[#C62828] hover:translate-x-1 transition-transform">
-                            Reproduzir Vídeo <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                   {materiaVideos.length === 0 && <div className="py-20 text-center opacity-40 italic">Nenhum vídeo educativo vinculado a esta matéria.</div>}
                 </div>
               )}

@@ -7,7 +7,7 @@ import { triggerSync } from './syncScheduler';
 const MATERIA_FIELDS = 'id, name, category, level, status, credit_hours, description, instructor, notes, total_presentations, total_videos, created_at, updated_at';
 const APRESENTACAO_FIELDS = 'id, materia_id, title, file_url, file_name, size_kb, page_count, sort_order, uploaded_by, upload_date';
 const VIDEO_FIELDS = 'id, materia_id, title, video_url, file_url, file_name, size_mb, duration_seconds, format, resolution, sort_order, uploaded_by, upload_date';
-const TRAINING_FIELDS = 'id, materia_id, course_id, date, time, instructor, location, status';
+const TRAINING_FIELDS = 'id, materia_id, course_id, date, time, end_time, instructor, location, status';
 
 // Instâncias dos serviços base
 const materiasBase = new BaseService<MateriaInstrucao>('materias_instrucao', MATERIA_FIELDS);
