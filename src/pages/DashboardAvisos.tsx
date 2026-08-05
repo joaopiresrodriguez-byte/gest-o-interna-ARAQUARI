@@ -163,17 +163,13 @@ const DashboardAvisos: React.FC = () => {
     return serviceSwaps.filter(s => s.original_date === selectedDate || s.new_date === selectedDate);
   }, [serviceSwaps, selectedDate]);
 
-  // Find vacations and leaves active in the current month of selectedDate
-  const selectedMonthRef = useMemo(() => selectedDate.slice(0, 7), [selectedDate]);
-  
-  const vacationsThisMonth = useMemo(() => {
+  // Find vacations and leaves active on the selectedDate
+  const vacationsOnDate = useMemo(() => {
     return vacations.filter(v => {
       if (v.leave_type === 'desconto_ferias') return false;
-      const startMonth = v.start_date.slice(0, 7);
-      const endMonth = v.end_date.slice(0, 7);
-      return startMonth <= selectedMonthRef && endMonth >= selectedMonthRef;
+      return v.start_date <= selectedDate && v.end_date >= selectedDate;
     });
-  }, [vacations, selectedMonthRef]);
+  }, [vacations, selectedDate]);
 
   // Helper to resolve personnel name
   const getPersonnelName = (id?: number) => {
@@ -771,20 +767,20 @@ const DashboardAvisos: React.FC = () => {
                 )}
               </div>
 
-              {/* 3. Férias e Afastamentos do Mês */}
+              {/* 3. Férias e Afastamentos Ativos no Dia */}
               <div className="space-y-3 pt-3 border-t border-rustic-border/30">
                 <h3 className="text-xs font-black uppercase text-rustic-brown/70 flex items-center gap-1">
                   <span className="material-symbols-outlined text-[16px]">flight_takeoff</span>
-                  Férias e Afastamentos do Mês
-                  {vacationsThisMonth.length > 0 && (
+                  Férias e Afastamentos Ativos
+                  {vacationsOnDate.length > 0 && (
                     <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full ml-auto">
-                      {vacationsThisMonth.length}
+                      {vacationsOnDate.length}
                     </span>
                   )}
                 </h3>
-                {vacationsThisMonth.length > 0 ? (
+                {vacationsOnDate.length > 0 ? (
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {vacationsThisMonth.map((v, idx) => {
+                    {vacationsOnDate.map((v, idx) => {
                       const name = v.full_name || getPersonnelName(v.personnel_id);
                       const leaveLabel = getLeaveLabel(v.leave_type);
                       return (
@@ -804,7 +800,7 @@ const DashboardAvisos: React.FC = () => {
                     })}
                   </div>
                 ) : (
-                  <p className="text-xs text-rustic-brown/40 italic pl-1">Nenhum afastamento ou férias este mês.</p>
+                  <p className="text-xs text-rustic-brown/40 italic pl-1">Nenhum afastamento ou férias ativo nesta data.</p>
                 )}
               </div>
             </section>
