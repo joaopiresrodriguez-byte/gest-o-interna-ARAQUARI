@@ -443,13 +443,23 @@ export function ExtratoPublico() {
   return (
     <div style={{
       maxWidth: '680px',
+      width: '100%',
       margin: '0 auto',
-      padding: '20px 14px 60px 14px',
+      padding: '20px 14px 100px 14px',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       color: '#1e293b',
       background: '#f8fafc',
-      minHeight: '100vh',
-      boxSizing: 'border-box'
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: '100vh',
+      maxHeight: '100vh',
+      overflowY: 'scroll',
+      WebkitOverflowScrolling: 'touch',
+      boxSizing: 'border-box',
+      zIndex: 9999
     }}>
       {/* CABEÇALHO DA INSTITUIÇÃO */}
       <div style={{
