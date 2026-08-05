@@ -10,15 +10,66 @@ interface ItemExtrato {
   status: string;
   brand?: string;
   plate?: string;
+  compartimento_id?: string;
+  compartimento_nome?: string;
 }
+
+interface CompartimentoGroup {
+  id: string;
+  nome: string;
+  posicao?: string;
+  itens: ItemExtrato[];
+}
+
+// Cores temáticas para os compartimentos (paleta militar/operacional elegante)
+const COMPARTIMENTO_CORES = [
+  { bg: '#fef2f2', border: '#fca5a5', text: '#991b1b', badgeBg: '#fee2e2', icon: '📦' },
+  { bg: '#eff6ff', border: '#93c5fd', text: '#1e40af', badgeBg: '#dbeafe', icon: '🚒' },
+  { bg: '#f0fdf4', border: '#86efac', text: '#166534', badgeBg: '#dcfce7', icon: '🔧' },
+  { bg: '#fffbeb', border: '#fde047', text: '#854d0e', badgeBg: '#fef9c3', icon: '⚡' },
+  { bg: '#faf5ff', border: '#d8b4fe', text: '#6b21a8', badgeBg: '#f3e8ff', icon: '🛡️' },
+  { bg: '#f0fdfa', border: '#99f6e4', text: '#115e59', badgeBg: '#ccfbf1', icon: '🩺' },
+];
 
 export function ExtratoPublico() {
   const { tipo, id } = useParams<{ tipo: string; id: string }>();
   const [itens, setItens] = useState<ItemExtrato[]>([]);
+  const [grupos, setGrupos] = useState<CompartimentoGroup[]>([]);
   const [titulo, setTitulo] = useState('');
   const [localTipo, setLocalTipo] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Estado dos itens conferidos (riscados) com armazenamento no localStorage
+  const storageKey = `extrato_conferido_${tipo}_${id}`;
+  const [conferidos, setConferidos] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Salvar no localStorage sempre que conferidos mudar
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(conferidos));
+    } catch (e) {
+      console.error('Erro ao salvar estado de conferência local:', e);
+    }
+  }, [conferidos, storageKey]);
+
+  const toggleConferido = (itemId: string) => {
+    setConferidos(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId],
+    }));
+  };
+
+  const limparConferidos = () => {
+    setConferidos({});
+  };
 
   useEffect(() => {
     async function buscar() {
@@ -29,19 +80,18 @@ export function ExtratoPublico() {
           return;
         }
 
+        // ── 1. CASO COMPARTIMENTO INDIVIDUAL ─────────────────────────────────
         if (tipo === 'compartimento') {
           const { data: comp } = await supabase
             .from('compartimentos_viatura')
-            .select(`
-              id, nome, posicao, viatura_id
-            `)
+            .select('id, nome, posicao, viatura_id')
             .eq('id', id)
             .single();
 
           if (comp) {
             let viaturaNome = '';
             let viaturaPlaca = '';
-            
+
             if (comp.viatura_id) {
               const { data: viat } = await supabase
                 .from('viaturas')
@@ -75,7 +125,7 @@ export function ExtratoPublico() {
             return;
           }
 
-          // Buscar equipamentos:
+          // Buscar equipamentos
           const { data: equip } = await supabase
             .from('equipamentos')
             .select('id, nome, tipo, numero_serie, quantidade, status')
@@ -83,8 +133,7 @@ export function ExtratoPublico() {
             .order('nome')
             .limit(1000);
 
-          // Fallback para tabela fleet se equipamentos estiver vazia
-          const equipItens = (equip && equip.length > 0)
+          const equipItens: ItemExtrato[] = (equip && equip.length > 0)
             ? equip.map(e => ({
                 id: e.id,
                 name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
@@ -105,7 +154,7 @@ export function ExtratoPublico() {
                 }));
               })();
 
-          // Buscar materiais de consumo:
+          // Buscar materiais de consumo
           const { data: consumo } = await supabase
             .from('materiais_consumo')
             .select('id, nome, unidade, quantidade, estoque_minimo, categoria')
@@ -113,7 +162,7 @@ export function ExtratoPublico() {
             .order('nome')
             .limit(1000);
 
-          const consumoItens = (consumo || []).map(c => ({
+          const consumoItens: ItemExtrato[] = (consumo || []).map(c => ({
             id: c.id,
             name: c.nome,
             type: `📦 Consumo (${c.categoria || 'Geral'})`,
@@ -121,14 +170,18 @@ export function ExtratoPublico() {
             status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
           }));
 
-          setItens([...equipItens, ...consumoItens]);
+          const todosItens = [...equipItens, ...consumoItens];
+          setItens(todosItens);
+          setGrupos([{
+            id: id,
+            nome: 'Itens do Compartimento',
+            itens: todosItens,
+          }]);
           setCarregando(false);
           return;
         }
 
-        // ── TIPO VIATURA: busca direto na tabela fleet ──────────────────
-        // Este caminho é ativado pelo QR code de viaturas, cujo ID é o
-        // fleet.id da viatura principal (não um UUID de locais_equipamento).
+        // ── 2. CASO VIATURA COMPLETA ──────────────────────────────────────────
         if (tipo === 'viatura') {
           const { data: vtrFleet, error: vtrErr } = await supabase
             .from('fleet')
@@ -146,22 +199,28 @@ export function ExtratoPublico() {
           setTitulo(nomeTitulo);
           setLocalTipo('Viatura');
 
-          // Buscar compartimentos desta viatura
+          // Buscar compartimentos desta viatura cadastrados no banco
           const { data: comps } = await supabase
             .from('compartimentos_viatura')
-            .select('id, nome')
+            .select('id, nome, posicao, ordem')
             .eq('viatura_id', id)
             .eq('ativo', true)
+            .order('ordem', { ascending: true })
             .limit(1000);
+
+          const mapaComps: Record<string, string> = {};
+          (comps || []).forEach(c => {
+            mapaComps[c.id] = c.nome;
+          });
 
           const compIds = (comps || []).map(c => c.id);
 
-          // Buscar itens em fleet vinculados por compartimento_id desta viatura
+          // Buscar itens em fleet vinculados à viatura (por compartimento_id)
           let itensFleet: ItemExtrato[] = [];
           if (compIds.length > 0) {
             const { data: fleetItems } = await supabase
               .from('fleet')
-              .select('id, name, type, patrimonio_number, status, brand, plate')
+              .select('id, name, type, patrimonio_number, status, brand, plate, compartimento_id')
               .in('compartimento_id', compIds)
               .neq('type', 'Viatura')
               .order('name')
@@ -170,53 +229,86 @@ export function ExtratoPublico() {
             itensFleet = (fleetItems || []).map(f => ({
               ...f,
               type: `🔧 ${f.type}`,
+              compartimento_id: f.compartimento_id,
+              compartimento_nome: f.compartimento_id ? mapaComps[f.compartimento_id] : undefined,
             }));
           }
 
-          // Buscar itens em equipamentos vinculados por viatura_id
+          // Buscar itens na tabela equipamentos
           const { data: equipItems } = await supabase
             .from('equipamentos')
-            .select('id, nome, tipo, numero_serie, quantidade, status')
+            .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id')
             .eq('viatura_id', id)
             .order('nome')
             .limit(1000);
 
-          const itensEquip = (equipItems || []).map(e => ({
+          const itensEquip: ItemExtrato[] = (equipItems || []).map(e => ({
             id: e.id,
             name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
             type: `🔧 ${e.tipo || 'Equipamento'}`,
             patrimonio_number: e.numero_serie,
             status: e.status || 'Ok',
+            compartimento_id: e.compartimento_id,
+            compartimento_nome: e.compartimento_id ? mapaComps[e.compartimento_id] : undefined,
           }));
 
-          // Buscar materiais de consumo vinculados por viatura_id
+          // Buscar materiais de consumo
           const { data: consumoData } = await supabase
             .from('materiais_consumo')
-            .select('id, nome, unidade, quantidade, estoque_minimo, categoria')
+            .select('id, nome, unidade, quantidade, estoque_minimo, categoria, compartimento_id')
             .eq('viatura_id', id)
             .order('nome')
             .limit(1000);
 
-          const itensConsumo = (consumoData || []).map(c => ({
+          const itensConsumo: ItemExtrato[] = (consumoData || []).map(c => ({
             id: c.id,
             name: c.nome,
             type: `📦 Consumo (${c.categoria || 'Geral'})`,
             patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
             status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
+            compartimento_id: c.compartimento_id,
+            compartimento_nome: c.compartimento_id ? mapaComps[c.compartimento_id] : undefined,
           }));
 
-          // Combinar sem duplicatas (fleet é preferencial)
+          // Combinar todos os itens sem duplicatas
           const fleetIds = new Set(itensFleet.map(f => f.id));
           const equipNovos = itensEquip.filter(e => !fleetIds.has(e.id));
           const idsJaIncluidos = new Set([...itensFleet.map(f => f.id), ...equipNovos.map(e => e.id)]);
           const consumoNovos = itensConsumo.filter(c => !idsJaIncluidos.has(c.id));
+          const todosItens = [...itensFleet, ...equipNovos, ...consumoNovos];
 
-          setItens([...itensFleet, ...equipNovos, ...consumoNovos]);
+          setItens(todosItens);
+
+          // Montar agrupamento por Compartimento
+          const gruposMontados: CompartimentoGroup[] = [];
+
+          // Adicionar compartimentos estruturados em ordem
+          (comps || []).forEach(comp => {
+            const itensDoComp = todosItens.filter(i => i.compartimento_id === comp.id);
+            gruposMontados.push({
+              id: comp.id,
+              nome: comp.nome,
+              posicao: comp.posicao || undefined,
+              itens: itensDoComp,
+            });
+          });
+
+          // Adicionar itens sem compartimento definido no final
+          const semComp = todosItens.filter(i => !i.compartimento_id || !mapaComps[i.compartimento_id]);
+          if (semComp.length > 0) {
+            gruposMontados.push({
+              id: 'sem-compartimento',
+              nome: 'Geral / Sem compartimento atribuído',
+              itens: semComp,
+            });
+          }
+
+          setGrupos(gruposMontados);
           setCarregando(false);
           return;
         }
 
-        // ── TIPO AMBIENTE: busca em locais_equipamento (fluxo original) ──
+        // ── 3. CASO AMBIENTE / LOCAL GERAL ────────────────────────────────────
         const { data: local, error: errorLocal } = await supabase
           .from('locais_equipamento')
           .select('*')
@@ -233,7 +325,6 @@ export function ExtratoPublico() {
         setTitulo(local.nome);
         setLocalTipo(local.tipo === 'viatura' ? 'Viatura' : 'Ambiente');
 
-        // 2. Buscar itens associados (fleet / equipamentos e materiais de consumo)
         const { data: fleetData } = await supabase
           .from('fleet')
           .select('id, name, type, patrimonio_number, status, brand, plate, location, local_id')
@@ -263,7 +354,13 @@ export function ExtratoPublico() {
           status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
         }));
 
-        setItens([...itensFleet, ...itensConsumo]);
+        const todosItens = [...itensFleet, ...itensConsumo];
+        setItens(todosItens);
+        setGrupos([{
+          id: 'ambiente-geral',
+          nome: `Itens do Local (${local.nome})`,
+          itens: todosItens,
+        }]);
 
       } catch (err: any) {
         console.error('Erro geral na consulta pública:', err);
@@ -276,6 +373,9 @@ export function ExtratoPublico() {
     buscar();
   }, [tipo, id]);
 
+  const totalItens = itens.length;
+  const totalConferidos = Object.values(conferidos).filter(Boolean).length;
+  const porcentagemConferido = totalItens > 0 ? Math.round((totalConferidos / totalItens) * 100) : 0;
 
   if (carregando) {
     return (
@@ -321,7 +421,7 @@ export function ExtratoPublico() {
         boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
         border: '1px solid #fee2e2'
       }}>
-        <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#dc2626', marginBottom: '16px' }}>error</span>
+        <span style={{ fontSize: '48px', color: '#dc2626', marginBottom: '16px', display: 'block' }}>⚠️</span>
         <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#991b1b', margin: '0 0 8px' }}>Consulta Inválida</h2>
         <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 24px', lineHeight: '1.5' }}>{erro}</p>
         <a href="/" style={{
@@ -338,158 +438,319 @@ export function ExtratoPublico() {
     );
   }
 
+  let contadorGeralIndex = 0;
+
   return (
     <div style={{
-      maxWidth: '600px',
+      maxWidth: '680px',
       margin: '0 auto',
-      padding: '24px 16px',
+      padding: '20px 14px 60px 14px',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       color: '#1e293b',
-      background: '#ffffff',
-      minHeight: '100vh'
+      background: '#f8fafc',
+      minHeight: '100vh',
+      boxSizing: 'border-box'
     }}>
-      {/* CABEÇALHO */}
+      {/* CABEÇALHO DA INSTITUIÇÃO */}
       <div style={{
-        borderBottom: '3px solid #dc2626',
-        paddingBottom: '20px',
-        marginBottom: '24px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start'
-      }}>
-        <div>
-          <p style={{
-            margin: '0 0 4px',
-            fontSize: '11px',
-            color: '#dc2626',
-            fontWeight: '800',
-            textTransform: 'uppercase',
-            letterSpacing: '1.5px',
-          }}>
-            CBMSC — Araquari/SC
-          </p>
-          <h2 style={{
-            margin: '0 0 6px',
-            fontSize: '22px',
-            fontWeight: '900',
-            color: '#1e293b',
-            letterSpacing: '-0.5px'
-          }}>
-            Extrato de Carga e Material
-          </h2>
-          <p style={{
-            margin: 0,
-            fontSize: '16px',
-            fontWeight: '700',
-            color: '#475569',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
-            <span style={{ fontSize: '12px', background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px', textTransform: 'uppercase' }}>
-              {localTipo}
-            </span>
-            {titulo}
-          </p>
-        </div>
-        <div style={{
-          textAlign: 'right',
-          fontSize: '11px',
-          color: '#64748b',
-          lineHeight: '1.4'
-        }}>
-          <p style={{ margin: 0, fontWeight: 'bold' }}>B4 LOGÍSTICA</p>
-          <p style={{ margin: 0 }}>Carga Oficial</p>
-        </div>
-      </div>
-
-      {/* INFORMAÇÕES DE LEITURA */}
-      <div style={{
-        background: '#f8fafc',
-        borderRadius: '12px',
-        padding: '12px 16px',
-        fontSize: '12px',
-        color: '#475569',
+        background: '#ffffff',
+        borderRadius: '16px',
+        padding: '20px',
         border: '1px solid #e2e8f0',
-        marginBottom: '24px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '8px'
+        boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+        marginBottom: '16px'
       }}>
-        <span>Consultado em: <strong>{new Date().toLocaleString('pt-BR')}</strong></span>
-        <span>Total: <strong>{itens.length} itens cadastrados</strong></span>
+        <div style={{
+          borderBottom: '3px solid #dc2626',
+          paddingBottom: '14px',
+          marginBottom: '14px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <div>
+            <p style={{
+              margin: '0 0 2px',
+              fontSize: '11px',
+              color: '#dc2626',
+              fontWeight: '800',
+              textTransform: 'uppercase',
+              letterSpacing: '1.5px',
+            }}>
+              CBMSC — Araquari/SC
+            </p>
+            <h2 style={{
+              margin: '0 0 4px',
+              fontSize: '20px',
+              fontWeight: '900',
+              color: '#1e293b',
+              letterSpacing: '-0.5px'
+            }}>
+              Extrato de Carga e Material
+            </h2>
+            <p style={{
+              margin: 0,
+              fontSize: '15px',
+              fontWeight: '700',
+              color: '#475569',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <span style={{ fontSize: '11px', background: '#fee2e2', color: '#991b1b', padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase', fontWeight: '800' }}>
+                {localTipo}
+              </span>
+              {titulo}
+            </p>
+          </div>
+          <div style={{
+            textAlign: 'right',
+            fontSize: '11px',
+            color: '#64748b',
+            lineHeight: '1.4'
+          }}>
+            <p style={{ margin: 0, fontWeight: 'bold', color: '#991b1b' }}>B4 LOGÍSTICA</p>
+            <p style={{ margin: 0 }}>Carga Oficial</p>
+          </div>
+        </div>
+
+        {/* DATA E PAINEL DE PROGRESSO DA CONFERÊNCIA */}
+        <div style={{
+          background: '#f1f5f9',
+          borderRadius: '12px',
+          padding: '12px 14px',
+          fontSize: '12px',
+          color: '#334155',
+          border: '1px solid #cbd5e1'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+            <span>📅 Consultado em: <strong>{new Date().toLocaleString('pt-BR')}</strong></span>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', color: totalConferidos === totalItens && totalItens > 0 ? '#15803d' : '#0f172a' }}>
+              Conferidos: {totalConferidos} de {totalItens} ({porcentagemConferido}%)
+            </span>
+          </div>
+
+          {/* Barra de Progresso Visual */}
+          <div style={{
+            width: '100%',
+            height: '8px',
+            background: '#e2e8f0',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            marginBottom: '8px'
+          }}>
+            <div style={{
+              width: `${porcentagemConferido}%`,
+              height: '100%',
+              background: porcentagemConferido === 100 ? '#166534' : '#dc2626',
+              transition: 'width 0.3s ease'
+            }} />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>
+              💡 Clique nos itens para marcar como conferido / riscar
+            </span>
+            {totalConferidos > 0 && (
+              <button
+                onClick={limparConferidos}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#dc2626',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  padding: '2px 6px',
+                  textDecoration: 'underline'
+                }}
+              >
+                Desmarcar todos
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* LISTA DE ITENS */}
+      {/* RENDERIZAÇÃO DOS ITENS AGRUPADOS POR COMPARTIMENTO */}
       {itens.length === 0 ? (
         <div style={{
           textAlign: 'center',
           padding: '48px 24px',
           color: '#64748b',
-          background: '#f8fafc',
-          borderRadius: '12px',
+          background: '#ffffff',
+          borderRadius: '16px',
           border: '1px dashed #cbd5e1'
         }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}>inventory_2</span>
+          <span style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>📦</span>
           <p style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>Nenhum item cadastrado neste local.</p>
           <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>Os itens vinculados aparecerão aqui em tempo real.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: '#e2e8f0', borderRadius: '12px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-          {itens.map((item, i) => {
-            const statusLabel = item.status === 'active' ? 'Ativo' : 'Inoperante';
-            const isAtivo = item.status === 'active';
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {grupos.map((grupo, gIndex) => {
+            if (grupo.itens.length === 0) return null;
+
+            const corCfg = COMPARTIMENTO_CORES[gIndex % COMPARTIMENTO_CORES.length];
 
             return (
-              <div key={item.id} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '16px',
-                background: '#ffffff',
-                transition: 'background 0.2s'
-              }}>
-                <div>
-                  <p style={{
-                    margin: 0,
-                    fontWeight: '700',
-                    fontSize: '14px',
-                    color: '#0f172a'
-                  }}>
-                    {i + 1}. {item.name}
-                  </p>
-                  <p style={{
-                    margin: '4px 0 0',
-                    fontSize: '11px',
-                    color: '#64748b',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}>
-                    <span style={{ fontWeight: '600' }}>{item.type}</span>
-                    {item.brand && <span>• {item.brand}</span>}
-                    {item.patrimonio_number && (
-                      <span style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px', fontSize: '10px' }}>
-                        Pat: {item.patrimonio_number}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
+              <div
+                key={grupo.id}
+                style={{
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  border: `1px solid ${corCfg.border}`,
+                  overflow: 'hidden',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                }}
+              >
+                {/* CABEÇALHO DO COMPARTIMENTO COM DESTAQUE DE COR */}
+                <div style={{
+                  background: corCfg.bg,
+                  borderBottom: `2px solid ${corCfg.border}`,
+                  padding: '12px 16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '18px' }}>{corCfg.icon}</span>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: corCfg.text }}>
+                        {grupo.nome}
+                      </h3>
+                      {grupo.posicao && (
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
+                          Posição: {grupo.posicao}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <span style={{
-                    display: 'inline-block',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    background: corCfg.badgeBg,
+                    color: corCfg.text,
                     padding: '3px 10px',
                     borderRadius: '20px',
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    background: isAtivo ? '#dcfce7' : '#fee2e2',
-                    color: isAtivo ? '#15803d' : '#b91c1c',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
+                    border: `1px solid ${corCfg.border}`
                   }}>
-                    {statusLabel}
+                    {grupo.itens.length} {grupo.itens.length === 1 ? 'item' : 'itens'}
                   </span>
+                </div>
+
+                {/* LISTAGEM DE ITENS DO COMPARTIMENTO */}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {grupo.itens.map((item) => {
+                    contadorGeralIndex++;
+                    const currentIndex = contadorGeralIndex;
+                    const isConferido = Boolean(conferidos[item.id]);
+                    const isAtivo = item.status === 'active' || item.status === 'Ok';
+
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleConferido(item.id)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '14px 16px',
+                          background: isConferido ? '#f8fafc' : '#ffffff',
+                          borderBottom: '1px solid #f1f5f9',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          transition: 'background 0.2s ease',
+                          opacity: isConferido ? 0.6 : 1,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1, paddingRight: '12px' }}>
+                          {/* CHECKBOX DE CONFERÊNCIA (CHECKLIST) */}
+                          <div style={{
+                            width: '22px',
+                            height: '22px',
+                            borderRadius: '6px',
+                            border: isConferido ? '2px solid #166534' : '2px solid #cbd5e1',
+                            background: isConferido ? '#166534' : '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#ffffff',
+                            fontWeight: 'bold',
+                            fontSize: '14px',
+                            marginTop: '2px',
+                            flexShrink: 0,
+                            transition: 'all 0.2s ease'
+                          }}>
+                            {isConferido ? '✓' : ''}
+                          </div>
+
+                          {/* DADOS DO ITEM (COM RISCADO QUANDO CONFERIDO) */}
+                          <div>
+                            <p style={{
+                              margin: 0,
+                              fontWeight: '700',
+                              fontSize: '14px',
+                              color: isConferido ? '#64748b' : '#0f172a',
+                              textDecoration: isConferido ? 'line-through' : 'none',
+                              lineHeight: '1.4'
+                            }}>
+                              {currentIndex}. {item.name}
+                            </p>
+                            <p style={{
+                              margin: '3px 0 0',
+                              fontSize: '11px',
+                              color: '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              flexWrap: 'wrap'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>{item.type}</span>
+                              {item.brand && <span>• {item.brand}</span>}
+                              {item.patrimonio_number && (
+                                <span style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '10px', color: '#475569', border: '1px solid #e2e8f0' }}>
+                                  Pat: {item.patrimonio_number}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* BADGE DE STATUS OU CHECADO */}
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          {isConferido ? (
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '3px 10px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              background: '#dcfce7',
+                              color: '#15803d',
+                              border: '1px solid #86efac'
+                            }}>
+                              ✅ CHECADO
+                            </span>
+                          ) : (
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '3px 10px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              background: isAtivo ? '#dcfce7' : '#fee2e2',
+                              color: isAtivo ? '#15803d' : '#b91c1c',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {isAtivo ? 'ATIVO' : 'INOPERANTE'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -497,22 +758,26 @@ export function ExtratoPublico() {
         </div>
       )}
 
-      {/* RODAPÉ */}
+      {/* RODAPÉ INFORMATIVO */}
       <div style={{
-        marginTop: '40px',
-        padding: '20px 16px',
-        background: '#f8fafc',
-        borderRadius: '12px',
+        marginTop: '32px',
+        padding: '16px',
+        background: '#ffffff',
+        borderRadius: '16px',
         textAlign: 'center',
         fontSize: '11px',
         color: '#64748b',
         border: '1px solid #e2e8f0',
         lineHeight: '1.6'
       }}>
-        <p style={{ margin: '0 0 4px', fontWeight: 'bold' }}>Sistema de Gestão Interna CBMSC Araquari</p>
-        <p style={{ margin: 0 }}>Ficha pública de consulta para fins de conferência patrimonial e auditoria.</p>
-        <p style={{ margin: '8px 0 0', color: '#94a3b8' }}>
-          Qualquer discrepância deve ser informada imediatamente ao B4 do Quartel.
+        <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: '#1e293b' }}>
+          Sistema de Gestão Interna CBMSC Araquari
+        </p>
+        <p style={{ margin: 0 }}>
+          Ficha pública de consulta para fins de conferência patrimonial e auditoria de carga.
+        </p>
+        <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
+          Qualquer divergência deve ser informada ao B4 da Unidade.
         </p>
       </div>
     </div>
