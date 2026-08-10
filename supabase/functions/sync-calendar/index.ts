@@ -108,16 +108,41 @@ serve(async (req) => {
 
     const token = await getAccessToken();
     const personnelMap = new Map<string | number, string>();
-    
-    if (Array.isArray(personnel)) {
-      personnel.forEach((p: PersonnelItem) => {
+
+    const populatePersonnelMap = (list: PersonnelItem[]) => {
+      list.forEach((p: PersonnelItem) => {
         const rank = p.rank ? `${p.rank} ` : '';
         const name = p.war_name || p.name;
         const formatted = `${rank}${name}`.trim();
-        personnelMap.set(p.id, formatted);
-        personnelMap.set(String(p.id), formatted);
-        personnelMap.set(Number(p.id), formatted);
+        if (p.id !== undefined && p.id !== null) {
+          personnelMap.set(p.id, formatted);
+          personnelMap.set(String(p.id), formatted);
+          if (!isNaN(Number(p.id))) personnelMap.set(Number(p.id), formatted);
+        }
       });
+    };
+
+    if (Array.isArray(personnel) && personnel.length > 0) {
+      populatePersonnelMap(personnel);
+    } else {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      if (supabaseUrl && supabaseAnonKey) {
+        try {
+          const pRes = await fetch(`${supabaseUrl}/rest/v1/personnel?select=id,name,war_name,rank`, {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+          });
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            if (Array.isArray(pData)) populatePersonnelMap(pData);
+          }
+        } catch (e) {
+          console.warn('Erro ao carregar personnel do Supabase:', e);
+        }
+      }
     }
 
     if (action === 'upsert' && Array.isArray(escalas)) {
@@ -126,7 +151,6 @@ serve(async (req) => {
       for (const esc of (escalas as EscalaItem[])) {
         if (!esc.data) continue;
 
-        // Filtrar mês/ano se informados
         if (mes && ano) {
           const [eYear, eMonth] = esc.data.split('-').map(Number);
           if (eYear !== Number(ano) || eMonth !== Number(mes)) continue;
@@ -134,7 +158,6 @@ serve(async (req) => {
 
         const turmaLabel = esc.turma || (esc.equipe ? esc.equipe.replace('Turma ', '') : 'A');
         
-        // Resolver nomes dos militares de serviço
         const militaresNomes: string[] = [];
         if (Array.isArray(esc.militares)) {
           esc.militares.forEach((mId) => {
@@ -143,17 +166,21 @@ serve(async (req) => {
           });
         }
 
-        // Título formatado com nomes reais das guarnições
         const summary = `🚨 Guarnição ${turmaLabel}: ${militaresNomes.length > 0 ? militaresNomes.join(', ') : 'Serviço Operacional'}`;
         const description = `Escala Operacional CBMSC Araquari\nData: ${esc.data}\nGuarnição: ${turmaLabel}\nMilitares de Serviço:\n${militaresNomes.map(n => `• ${n}`).join('\n') || 'Nenhum militar registrado'}`;
 
         const eventId = `escala${esc.data.replace(/-/g, '')}`;
 
+        const startDateObj = new Date(`${esc.data}T00:00:00Z`);
+        const endDateObj = new Date(startDateObj);
+        endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
+        const nextDayStr = endDateObj.toISOString().split('T')[0];
+
         const eventPayload = {
           summary,
           description,
           start: { date: esc.data },
-          end: { date: esc.data },
+          end: { date: nextDayStr },
           transparency: 'transparent',
         };
 
