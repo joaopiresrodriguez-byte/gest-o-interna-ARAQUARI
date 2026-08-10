@@ -395,6 +395,7 @@ export interface DailyMission {
     description?: string;
     mission_date: string;
     start_time?: string;
+    end_date?: string;
     end_time?: string;
     responsible_id?: string;
     responsible_name?: string;
@@ -405,8 +406,13 @@ export interface DailyMission {
     registration_date?: string;
     updated_at?: string;
     created_at?: string;
-    // Campos de observação e auditoria de edição
+    // Campos de localização e PBM
+    location_address?: string;
+    location_link?: string;
+    is_pbm_araquari?: boolean;
+    // Campos de observação e auditoria de conclusão / edição
     observacoes?: string;
+    completed_by?: string;
     editado_por_id?: string;
     editado_por_nome?: string;
     editado_em?: string;

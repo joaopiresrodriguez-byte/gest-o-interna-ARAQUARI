@@ -44,6 +44,10 @@ const timeAgo = (isoDate: string) => {
   return `${days}d atrás`;
 };
 
+import { DailyMissionModal } from '../components/shared/DailyMissionModal';
+import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
+import { STATUS_MISSAO } from '../services/missoesService';
+
 const DashboardAvisos: React.FC = () => {
   const { user, profile } = useAuth();
   const isEditor = profile?.p_avisos === 'editor';
@@ -61,6 +65,10 @@ const DashboardAvisos: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(SupabaseService.getTodayDate());
   const [loading, setLoading] = useState(true);
   const [expandido, setExpandido] = useState(false);
+
+  // Estados dos modais de missão
+  const [isNewMissionModalOpen, setIsNewMissionModalOpen] = useState(false);
+  const [selectedMissionForConclusion, setSelectedMissionForConclusion] = useState<DailyMission | null>(null);
 
   // Exibir por padrão apenas 1 ASU + 1 ABTR + 1 AR (ou primeiras ativas)
   const TIPOS_DESTAQUE = ['ASU', 'ABTR', 'AR'];
@@ -468,7 +476,11 @@ const DashboardAvisos: React.FC = () => {
                   )}
                 </h2>
                 {isEditor && (
-                  <button onClick={() => window.location.href = '/operacional'} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors text-xs font-bold flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsNewMissionModalOpen(true)}
+                    className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  >
                     <span className="material-symbols-outlined text-[18px]">add</span>
                     Nova Missão
                   </button>
@@ -520,43 +532,122 @@ const DashboardAvisos: React.FC = () => {
 
                       // Regular mission
                       const mission = item.data as DailyMission;
+                      const statusMeta = STATUS_MISSAO[mission.status as keyof typeof STATUS_MISSAO] || {
+                        label: mission.status,
+                        cor: '#4b5563',
+                        fundo: '#f3f4f6',
+                        icone: '📌'
+                      };
+
+                      const gmapsUrl = mission.location_link || (mission.location_address ? `https://maps.google.com/?q=${encodeURIComponent(mission.location_address)}` : '');
+                      const wazeUrl = mission.is_pbm_araquari
+                        ? 'https://waze.com/ul?ll=-26.3752,-48.7214&navigate=yes'
+                        : (mission.location_address ? `https://waze.com/ul?q=${encodeURIComponent(mission.location_address)}&navigate=yes` : '');
+
                       return (
                         <div key={`mission-${mission.id}`} className={`flex items-start gap-4 p-4 hover:bg-gray-50 transition-colors ${mission.status === 'concluida' ? 'bg-gray-50/50' : ''}`}>
                           <div
-                            onClick={() => mission.id && toggleMission(mission.id, mission.status)}
-                            className={`w-6 h-6 mt-0.5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${isEditor ? 'cursor-pointer' : 'cursor-default'} ${mission.status === 'concluida' ? 'bg-green-600 border-green-600' : 'border-rustic-border hover:border-primary'}`}
+                            onClick={() => isEditor && setSelectedMissionForConclusion(mission)}
+                            title={isEditor ? "Clique para registrar conclusão ou resultado" : ""}
+                            className={`w-7 h-7 mt-0.5 rounded-lg border flex items-center justify-center transition-all flex-shrink-0 ${isEditor ? 'cursor-pointer hover:scale-105' : 'cursor-default'}`}
+                            style={{ backgroundColor: statusMeta.fundo, borderColor: statusMeta.cor }}
                           >
-                            {mission.status === 'concluida' && <span className="material-symbols-outlined text-white text-[16px]">check</span>}
+                            <span className="text-sm">{statusMeta.icone}</span>
                           </div>
+
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className={`font-medium text-[#2c1810] ${mission.status === 'concluida' ? 'line-through text-rustic-brown/50' : ''}`}>
+                              <p className={`font-semibold text-[#2c1810] ${mission.status === 'concluida' ? 'line-through opacity-60' : ''}`}>
                                 {mission.title}
                               </p>
+                              <span
+                                className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase"
+                                style={{ backgroundColor: statusMeta.fundo, color: statusMeta.cor }}
+                              >
+                                {statusMeta.label}
+                              </span>
                               <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
                                 mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
                                 mission.priority === 'alta' ? 'bg-orange-100 text-orange-600' :
                                 mission.priority === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
                               }`}>
-                                {mission.priority}
+                                {mission.priority || 'média'}
                               </span>
                             </div>
+
                             {mission.description && <p className="text-[11px] text-gray-500 mt-0.5">{mission.description}</p>}
-                            <div className="flex items-center gap-3 mt-1">
+
+                            {/* Endereço / Links para Maps & Waze */}
+                            {(mission.location_address || mission.is_pbm_araquari) && (
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap text-[10px]">
+                                <span className="font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-100 flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">location_on</span>
+                                  {mission.is_pbm_araquari ? 'PBM ARAQUARI' : mission.location_address}
+                                </span>
+                                {gmapsUrl && (
+                                  <a
+                                    href={gmapsUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline font-bold flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
+                                  >
+                                    <span className="material-symbols-outlined text-[12px]">map</span>
+                                    Google Maps
+                                  </a>
+                                )}
+                                {wazeUrl && (
+                                  <a
+                                    href={wazeUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-cyan-700 hover:underline font-bold flex items-center gap-0.5 bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-100"
+                                  >
+                                    <span className="material-symbols-outlined text-[12px]">navigation</span>
+                                    Waze
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                               {mission.start_time && (
                                 <span className="text-[10px] font-bold text-primary flex items-center gap-1">
                                   <span className="material-symbols-outlined text-[14px]">schedule</span>
-                                  {mission.start_time}
+                                  {mission.start_time} {mission.end_time ? `- ${mission.end_time}` : ''}
                                 </span>
                               )}
                               {mission.responsible_name && (
-                                <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1">
                                   <span className="material-symbols-outlined text-[14px]">person</span>
-                                  {mission.responsible_name}
+                                  Resp: {mission.responsible_name}
+                                </span>
+                              )}
+                              {mission.completed_by && (
+                                <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                  <span className="material-symbols-outlined text-[14px]">verified</span>
+                                  Concluído por: {mission.completed_by}
                                 </span>
                               )}
                             </div>
+
+                            {/* Exibir observação de encerramento se houver */}
+                            {mission.observacoes && (
+                              <div className="mt-1.5 p-2 bg-amber-50/70 border border-amber-200/60 rounded text-[11px] text-amber-900">
+                                <strong>Obs:</strong> {mission.observacoes}
+                              </div>
+                            )}
                           </div>
+
+                          {isEditor && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMissionForConclusion(mission)}
+                              className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                              Resultado
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -968,6 +1059,23 @@ const DashboardAvisos: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* MODAIS UNIFICADOS DE MISSÃO */}
+      <DailyMissionModal
+        isOpen={isNewMissionModalOpen}
+        onClose={() => setIsNewMissionModalOpen(false)}
+        onSave={async (missionData) => {
+          await SupabaseService.addDailyMission(missionData);
+          loadData();
+        }}
+      />
+
+      <ConcluirMissaoModal
+        isOpen={!!selectedMissionForConclusion}
+        onClose={() => setSelectedMissionForConclusion(null)}
+        mission={selectedMissionForConclusion}
+        onSuccess={() => loadData()}
+      />
     </div>
   );
 };

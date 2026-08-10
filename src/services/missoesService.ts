@@ -70,6 +70,7 @@ export async function atualizarMissao(
   dados: {
     status: StatusMissao;
     observacoes: string;
+    completed_by?: string;
   }
 ): Promise<true> {
   const {
@@ -80,17 +81,66 @@ export async function atualizarMissao(
     throw new Error('Usuário não autenticado. Faça login para editar missões.');
   }
 
+  const nomeMilitar = dados.completed_by || user.email || 'Usuário desconhecido';
+
+  const { data: missaoAtual } = await supabase
+    .from('daily_missions')
+    .select('*')
+    .eq('id', missaoId)
+    .single();
+
   const { error } = await supabase
     .from('daily_missions')
     .update({
       status: dados.status,
       observacoes: dados.observacoes,
+      completed_by: nomeMilitar,
       editado_por_id: user.id,
-      editado_por_nome: user.email ?? 'Usuário desconhecido',
+      editado_por_nome: nomeMilitar,
       editado_em: new Date().toISOString(),
     })
     .eq('id', missaoId);
 
   if (error) throw error;
+
+  // Se a missão NÃO foi concluída (parcialmente_concluida ou nao_realizada)
+  if (dados.status === 'nao_realizada' || dados.status === 'parcialmente_concluida') {
+    const tituloMissao = missaoAtual?.title || 'Missão Diária';
+    const statusLabel = STATUS_MISSAO[dados.status]?.label || dados.status;
+    const responsavel = missaoAtual?.responsible_name || 'Não atribuído';
+    const dataMissao = missaoAtual?.mission_date || new Date().toLocaleDateString('pt-BR');
+    
+    // Criar aviso no sistema (pending_notices)
+    try {
+      await supabase.from('pending_notices').insert({
+        title: `[ALERTA MISSÃO] ${statusLabel}: ${tituloMissao}`,
+        description: `A missão "${tituloMissao}" (Data: ${dataMissao}, Resp: ${responsavel}) foi marcada como "${statusLabel}" por ${nomeMilitar}. Observação: ${dados.observacoes || 'Nenhuma'}`,
+        status: 'pendente',
+        priority: 'alta',
+        created_at: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn("Não foi possível salvar em pending_notices:", e);
+    }
+
+    // Criar/Notificar para o e-mail do comando 16_22cmt@cbm.sc.gov.br
+    const emailSubject = encodeURIComponent(`[ALERTA MISSÃO DIÁRIA] ${statusLabel} - ${tituloMissao}`);
+    const emailBody = encodeURIComponent(
+      `Prezado Comando,\n\n` +
+      `Informamos que a Missão Diária abaixo foi registrada com pendência no sistema de Gestão Interna Araquari:\n\n` +
+      `📌 Missão: ${tituloMissao}\n` +
+      `📅 Data: ${dataMissao}\n` +
+      `👤 Responsável: ${responsavel}\n` +
+      `📊 Status Final: ${statusLabel}\n` +
+      `👮 Registrado Por: ${nomeMilitar}\n` +
+      `📝 Observação: ${dados.observacoes || 'Sem observações'}\n\n` +
+      `Atenciosamente,\n` +
+      `Sistema de Gestão Interna CBMSC Araquari`
+    );
+
+    // Abre mailto para 16_22cmt@cbm.sc.gov.br
+    window.open(`mailto:16_22cmt@cbm.sc.gov.br?subject=${emailSubject}&body=${emailBody}`, '_blank');
+  }
+
   return true;
 }

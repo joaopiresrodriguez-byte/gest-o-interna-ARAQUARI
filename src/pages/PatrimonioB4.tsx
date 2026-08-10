@@ -13,6 +13,8 @@ import { supabase } from '../services/supabase';
 import { useEdicao } from '../hooks/useEdicao';
 import { ModalEdicao } from '../components/shared/ModalEdicao';
 import { ActionButton } from '../components/ui/Icons';
+import { DailyMissionModal } from '../components/shared/DailyMissionModal';
+import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
 
 
 // ─── Helper sub-components ───────────────────────────────────────────────────
@@ -357,6 +359,10 @@ const PatrimonioB4: React.FC = () => {
   // Filters for Missions
   const [missionFilterStatus, setMissionFilterStatus] = useState<string>("todos");
   const [missionFilterPriority, setMissionFilterPriority] = useState<string>("todos");
+
+  // Modais Unificados de Missão
+  const [isNewMissionModalOpen, setIsNewMissionModalOpen] = useState(false);
+  const [selectedMissionForConclusion, setSelectedMissionForConclusion] = useState<DailyMission | null>(null);
 
   // Listing filters & grouping
   const [filterAtividade, setFilterAtividade] = useState<string>("todos");
@@ -748,7 +754,9 @@ const PatrimonioB4: React.FC = () => {
                   onClick={() => setActiveTab(tab)}
                   className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
                 >
-                  <span className="material-symbols-outlined">{tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'relatorios' ? 'analytics' : 'checklist'}</span>
+                  <span className="material-symbols-outlined">
+                    {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'relatorios' ? 'analytics' : 'checklist'}
+                  </span>
                   {tab === 'missoes' ? 'Missões Diárias' : tab === 'conferencias' ? 'Conferências' : tab === 'relatorios' ? 'Relatórios' : tab}
                 </button>
               ))}
@@ -757,130 +765,147 @@ const PatrimonioB4: React.FC = () => {
             <div className="p-6 bg-surface min-h-[500px]">
 
               {activeTab === 'missoes' && (
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                  {/* Form Column */}
-                  <div className="xl:col-span-4 space-y-6">
-                    <div className="bg-stone-50 border border-rustic-border p-6 rounded-2xl shadow-inner">
-                      <h3 className="font-bold mb-4 flex items-center gap-2"><span className="material-symbols-outlined text-primary">add_task</span> Nova Missão</h3>
-                      {profile?.p_logistica === 'editor' ? (
-                        <div className="space-y-4">
-                          <input value={missionTitle} onChange={e => setMissionTitle(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" placeholder="Título da Missão *" />
-                          <textarea value={missionDesc} onChange={e => setMissionDesc(e.target.value)} className="w-full h-24 p-3 rounded-lg border border-rustic-border text-sm" placeholder="Descrição Detalhada" />
-                          <div className="grid grid-cols-2 gap-4">
-                            <input type="date" value={missionDate} onChange={e => setMissionDate(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
-                            <select value={missionPriority} onChange={e => setMissionPriority(e.target.value as any)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
-                              <option value="baixa">Baixa</option>
-                              <option value="media">Média</option>
-                              <option value="alta">Alta</option>
-                              <option value="urgente">Urgente</option>
-                            </select>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <input type="time" value={missionStart} onChange={e => setMissionStart(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
-                            <input type="time" value={missionEnd} onChange={e => setMissionEnd(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm" />
-                          </div>
-                          <select value={missionRespId} onChange={e => setMissionRespId(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
-                            <option value="">Selecionar Responsável</option>
-                            {personnel.map(p => <option key={p.id} value={p.id}>{p.graduation || p.rank || ''} {p.name}</option>)}
-                          </select>
-                          <select value={missionStatus} onChange={e => setMissionStatus(e.target.value as any)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-sm">
-                            <option value="agendada">Agendada</option>
-                            <option value="em_andamento">Em Andamento</option>
-                          </select>
-                          <textarea value={missionObs} onChange={e => setMissionObs(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-sm" placeholder="Observações" />
-                          <button onClick={handleCreateMission} className="w-full py-3 bg-primary text-white font-bold rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">
-                            CADASTRAR MISSÃO
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-center">
-                          <span className="material-symbols-outlined text-amber-500 mb-2">lock</span>
-                          <p className="text-[10px] font-black uppercase text-amber-700">Apenas leitura</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* List Column */}
-                  <div className="xl:col-span-8 space-y-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-rustic-border shadow-sm">
-                      <div className="flex gap-4">
-                        <select value={missionFilterStatus} onChange={e => setMissionFilterStatus(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border text-xs font-bold bg-white">
-                          <option value="todos">Todos Status</option>
-                          <option value="agendada">Agendada</option>
-                          <option value="em_andamento">Em Andamento</option>
-                          <option value="concluida">Concluída</option>
-                          <option value="cancelada">Cancelada</option>
-                        </select>
-                        <select value={missionFilterPriority} onChange={e => setMissionFilterPriority(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border text-xs font-bold bg-white">
-                          <option value="todos">Todas Prioridades</option>
-                          <option value="baixa">Baixa</option>
-                          <option value="media">Média</option>
-                          <option value="alta">Alta</option>
-                          <option value="urgente">Urgente</option>
-                        </select>
-                      </div>
+                <div className="space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-rustic-border shadow-sm">
+                    <div className="flex gap-4 items-center flex-wrap">
+                      <select value={missionFilterStatus} onChange={e => setMissionFilterStatus(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border text-xs font-bold bg-white">
+                        <option value="todos">Todos Status</option>
+                        <option value="agendada">Agendadas</option>
+                        <option value="em_andamento">Em Andamento</option>
+                        <option value="concluida">Concluídas</option>
+                        <option value="parcialmente_concluida">Parcialmente Concluídas</option>
+                        <option value="nao_realizada">Não Realizadas</option>
+                        <option value="cancelada">Canceladas</option>
+                      </select>
+                      <select value={missionFilterPriority} onChange={e => setMissionFilterPriority(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border text-xs font-bold bg-white">
+                        <option value="todos">Todas Prioridades</option>
+                        <option value="baixa">Baixa</option>
+                        <option value="media">Média</option>
+                        <option value="alta">Alta</option>
+                        <option value="urgente">Urgente</option>
+                      </select>
                       <div className="text-[10px] font-black uppercase text-gray-400">Total: {dailyMissions.length} Missões</div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[800px] pr-2">
-                      {dailyMissions
-                        .filter(m => (missionFilterStatus === 'todos' || m.status === missionFilterStatus))
-                        .filter(m => (missionFilterPriority === 'todos' || m.priority === missionFilterPriority))
-                        .map(mission => (
-                          <div key={mission.id} className="bg-white border border-rustic-border rounded-xl p-4 hover:shadow-md transition-all flex flex-col gap-3">
-                            <div className="flex justify-between items-start">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
-                                mission.priority === 'alta' ? 'bg-orange-100 text-orange-600' :
-                                  mission.priority === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
-                                }`}>
-                                {mission.priority}
-                              </span>
-                              <div className="flex gap-1 items-center">
-                                <ActionButton
-                                  variant="alteration"
-                                  size="sm"
-                                  onClick={() => abrirEdicaoMission(mission)}
-                                  title="Alterar/Editar Missão"
-                                />
-                                <ActionButton
-                                  variant="delete"
-                                  size="sm"
-                                  onClick={() => handleDeleteMission(mission.id!)}
-                                  title="Excluir Missão"
-                                />
-                              </div>
+                    {profile?.p_logistica === 'editor' && (
+                      <button
+                        onClick={() => setIsNewMissionModalOpen(true)}
+                        className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-md hover:bg-red-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">add_task</span>
+                        Cadastrar Nova Missão
+                      </button>
+                    )}
+                  </div>
 
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-sm leading-tight mb-1">{mission.title}</h4>
-                              <p className="text-[11px] text-gray-500 line-clamp-2">{mission.description}</p>
-                            </div>
-                            <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 mt-1">
-                              <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> {new Date(mission.mission_date).toLocaleDateString('pt-BR')}</span>
-                              {mission.start_time && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> {mission.start_time}</span>}
-                              {mission.responsible_name && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">person</span> {mission.responsible_name}</span>}
-                            </div>
-                            <div className="border-t border-stone-50 pt-3 flex items-center justify-between mt-auto">
-                              <select
-                                value={mission.status}
-                                onChange={e => handleUpdateMissionStatus(mission.id!, e.target.value as any)}
-                                className={`text-[10px] font-black border-none bg-stone-100 rounded-md px-2 py-1 outline-none ${mission.status === 'concluida' ? 'text-green-600' :
-                                  mission.status === 'em_andamento' ? 'text-blue-600' :
-                                    mission.status === 'cancelada' ? 'text-red-400' : 'text-gray-600'
-                                  }`}
-                              >
-                                <option value="agendada">AGENDADA</option>
-                                <option value="em_andamento">EM ANDAMENTO</option>
-                                <option value="concluida">CONCLUÍDA</option>
-                                <option value="cancelada">CANCELADA</option>
-                              </select>
-                              <span className="text-[9px] text-gray-300 italic">Cadastrado em {new Date(mission.created_at!).toLocaleDateString()}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto max-h-[800px] pr-2">
+                    {dailyMissions
+                      .filter(m => (missionFilterStatus === 'todos' || m.status === missionFilterStatus))
+                      .filter(m => (missionFilterPriority === 'todos' || m.priority === missionFilterPriority))
+                      .map(mission => (
+                        <div key={mission.id} className="bg-white border border-rustic-border rounded-xl p-4 hover:shadow-md transition-all flex flex-col gap-3">
+                          <div className="flex justify-between items-start">
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
+                              mission.priority === 'alta' ? 'bg-orange-100 text-orange-600' :
+                                mission.priority === 'media' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-600'
+                              }`}>
+                              {mission.priority}
+                            </span>
+                            <div className="flex gap-1 items-center">
+                              {profile?.p_logistica === 'editor' && (
+                                <button
+                                  onClick={() => setSelectedMissionForConclusion(mission)}
+                                  className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors flex items-center gap-0.5"
+                                  title="Registrar Resultado / Observação"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">edit_note</span>
+                                  Resultado
+                                </button>
+                              )}
+                              <ActionButton
+                                variant="delete"
+                                size="sm"
+                                onClick={() => handleDeleteMission(mission.id!)}
+                                title="Excluir Missão"
+                              />
                             </div>
                           </div>
-                        ))
-                      }
-                    </div>
+
+                          <div>
+                            <h4 className="font-bold text-sm leading-tight mb-1">{mission.title}</h4>
+                            {mission.description && <p className="text-[11px] text-gray-500 line-clamp-2">{mission.description}</p>}
+                          </div>
+
+                          {/* Endereço / Localização */}
+                          {(mission.location_address || mission.is_pbm_araquari) && (
+                            <div className="flex items-center gap-2 flex-wrap text-[10px]">
+                              <span className="font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-100 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">location_on</span>
+                                {mission.is_pbm_araquari ? 'PBM ARAQUARI' : mission.location_address}
+                              </span>
+                              {(mission.location_link || mission.location_address) && (
+                                <a
+                                  href={mission.location_link || `https://maps.google.com/?q=${encodeURIComponent(mission.location_address!)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline font-bold flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">map</span>
+                                  Maps
+                                </a>
+                              )}
+                              <a
+                                href={mission.is_pbm_araquari
+                                  ? 'https://waze.com/ul?ll=-26.3752,-48.7214&navigate=yes'
+                                  : `https://waze.com/ul?q=${encodeURIComponent(mission.location_address!)}&navigate=yes`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-cyan-700 hover:underline font-bold flex items-center gap-0.5 bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-100"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">navigation</span>
+                                Waze
+                              </a>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 mt-1 flex-wrap">
+                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> {new Date(mission.mission_date).toLocaleDateString('pt-BR')}</span>
+                            {mission.start_time && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> {mission.start_time}</span>}
+                            {mission.responsible_name && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">person</span> {mission.responsible_name}</span>}
+                            {mission.completed_by && (
+                              <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                                Concluído por: {mission.completed_by}
+                              </span>
+                            )}
+                          </div>
+
+                          {mission.observacoes && (
+                            <div className="p-2 bg-amber-50 border border-amber-200/60 rounded text-[10px] text-amber-900">
+                              <strong>Obs:</strong> {mission.observacoes}
+                            </div>
+                          )}
+
+                          <div className="border-t border-stone-50 pt-3 flex items-center justify-between mt-auto">
+                            <select
+                              value={mission.status}
+                              onChange={e => handleUpdateMissionStatus(mission.id!, e.target.value as any)}
+                              className={`text-[10px] font-black border-none bg-stone-100 rounded-md px-2 py-1 outline-none ${mission.status === 'concluida' ? 'text-green-600' :
+                                mission.status === 'em_andamento' ? 'text-blue-600' :
+                                  mission.status === 'cancelada' ? 'text-red-400' : 'text-gray-600'
+                                }`}
+                            >
+                              <option value="agendada">AGENDADA</option>
+                              <option value="em_andamento">EM ANDAMENTO</option>
+                              <option value="concluida">CONCLUÍDA</option>
+                              <option value="parcialmente_concluida">PARCIALMENTE CONCLUÍDA</option>
+                              <option value="nao_realizada">NÃO REALIZADA</option>
+                              <option value="cancelada">CANCELADA</option>
+                            </select>
+                            <span className="text-[9px] text-gray-300 italic">Cadastrado em {new Date(mission.created_at!).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))
+                    }
                   </div>
                 </div>
               )}
@@ -2128,6 +2153,26 @@ const PatrimonioB4: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modais Unificados de Missão */}
+      <DailyMissionModal
+        isOpen={isNewMissionModalOpen}
+        onClose={() => setIsNewMissionModalOpen(false)}
+        onSave={async (missionData) => {
+          await SupabaseService.addDailyMission({
+            ...missionData,
+            created_by: "Administrador B4"
+          });
+          loadData();
+        }}
+      />
+
+      <ConcluirMissaoModal
+        isOpen={!!selectedMissionForConclusion}
+        onClose={() => setSelectedMissionForConclusion(null)}
+        mission={selectedMissionForConclusion}
+        onSuccess={() => loadData()}
+      />
     </div>
   );
 };

@@ -3,7 +3,7 @@ import { DailyMission, Mission, GuReport, Training } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_time, responsible_id, priority, status, created_at, updated_at, responsible_name, observacoes, editado_por_id, editado_por_nome, editado_em';
+const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_date, end_time, responsible_id, priority, status, created_at, updated_at, responsible_name, location_address, location_link, is_pbm_araquari, observacoes, completed_by, editado_por_id, editado_por_nome, editado_em';
 const GU_REPORT_FIELDS = 'id, title, description, type, report_date, responsible_id, created_at';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 const MISSION_FIELDS = 'id, title, description, date, completed';

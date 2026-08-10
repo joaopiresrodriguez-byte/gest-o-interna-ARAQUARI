@@ -7,6 +7,8 @@ import { Button, Input, TextArea } from '../components/ui';
 import { STATUS_MISSAO, STATUS_RESULTADO, StatusMissao, atualizarMissao } from '../services/missoesService';
 import ConferenciaDiaria from '../components/operacional/ConferenciaDiaria';
 import HistoricoConferencias from '../components/b4/HistoricoConferencias';
+import { DailyMissionModal } from '../components/shared/DailyMissionModal';
+import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
 
 // ============ SUB-COMPONENTS ============
 
@@ -200,6 +202,38 @@ const CardMissao: React.FC<{
             {missao.description && (
               <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{missao.description}</p>
             )}
+            {/* Endereço e Links de Mapa */}
+            {(missao.location_address || missao.is_pbm_araquari) && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap text-[10px]">
+                <span className="font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-100 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">location_on</span>
+                  {missao.is_pbm_araquari ? 'PBM ARAQUARI' : missao.location_address}
+                </span>
+                {(missao.location_link || missao.location_address) && (
+                  <a
+                    href={missao.location_link || `https://maps.google.com/?q=${encodeURIComponent(missao.location_address!)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline font-bold flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
+                  >
+                    <span className="material-symbols-outlined text-[12px]">map</span>
+                    Google Maps
+                  </a>
+                )}
+                <a
+                  href={missao.is_pbm_araquari
+                    ? 'https://waze.com/ul?ll=-26.3752,-48.7214&navigate=yes'
+                    : `https://waze.com/ul?q=${encodeURIComponent(missao.location_address!)}&navigate=yes`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-cyan-700 hover:underline font-bold flex items-center gap-0.5 bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-100"
+                >
+                  <span className="material-symbols-outlined text-[12px]">navigation</span>
+                  Waze
+                </a>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${priorityCfg.color}`}>
                 {priorityCfg.label}
@@ -220,6 +254,11 @@ const CardMissao: React.FC<{
                 <span className="text-[10px] text-gray-400 font-bold">
                   <span className="material-symbols-outlined text-[12px] align-middle">person</span>{' '}
                   {missao.responsible_name}
+                </span>
+              )}
+              {missao.completed_by && (
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-bold border border-emerald-100">
+                  Concluído por: {missao.completed_by}
                 </span>
               )}
             </div>
@@ -753,8 +792,8 @@ const Operacional: React.FC = () => {
                 </select>
               </div>
               {isEditor && (
-                <Button variant="primary" size="md" icon="add" onClick={() => setShowMissionForm(!showMissionForm)}>
-                  {showMissionForm ? 'Cancelar' : 'Nova Missão'}
+                <Button variant="primary" size="md" icon="add" onClick={() => setShowMissionForm(true)}>
+                  Nova Missão
                 </Button>
               )}
             </div>
@@ -991,6 +1030,19 @@ const Operacional: React.FC = () => {
         onClose={() => setNotifModal({ open: false, data: null, type: 'receipt' })}
         notificationData={notifModal.data}
         type={notifModal.type}
+      />
+
+      {/* Daily Mission Modal */}
+      <DailyMissionModal
+        isOpen={showMissionForm}
+        onClose={() => setShowMissionForm(false)}
+        onSave={async (missionData) => {
+          await SupabaseService.addDailyMission({
+            ...missionData,
+            created_by: user?.email || 'N/A',
+          });
+          loadAllData();
+        }}
       />
     </div>
   );
