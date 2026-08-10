@@ -3,13 +3,13 @@ import { DailyMission, Mission, GuReport, Training } from './types';
 import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
-const DAILY_MISSION_FIELDS = 'id, title, description, mission_date, start_time, end_date, end_time, responsible_id, priority, status, created_at, updated_at, responsible_name, location_address, location_link, is_pbm_araquari, observacoes, completed_by, editado_por_id, editado_por_nome, editado_em';
+const DAILY_MISSION_FIELDS = '*';
 const GU_REPORT_FIELDS = 'id, title, description, type, report_date, responsible_id, created_at';
 const TRAINING_FIELDS = 'id, materia_id, date, instructor, location, status';
 const MISSION_FIELDS = 'id, title, description, date, completed';
 
 // Instâncias dos serviços base
-const dailyMissionsBase = new BaseService<DailyMission>('daily_missions', DAILY_MISSION_FIELDS);
+const dailyMissionsBase = new BaseService<DailyMission>('daily_missions', '*');
 const guReportsBase = new BaseService<GuReport>('gu_reports', GU_REPORT_FIELDS);
 const trainingsBase = new BaseService<Training>('training_schedule', TRAINING_FIELDS);
 const missionsBase = new BaseService<Mission>('missions', MISSION_FIELDS);
@@ -30,7 +30,7 @@ export const OperationalService = {
             if (filters?.status && filters.status.length > 0) {
                 let query = supabase
                     .from('daily_missions')
-                    .select(DAILY_MISSION_FIELDS)
+                    .select('*')
                     .in('status', filters.status);
 
                 if (filters.data) {
@@ -41,12 +41,11 @@ export const OperationalService = {
                 }
 
                 const { data, error } = await query
-                    .order('created_at', { ascending: false })
-                    .order('start_time', { ascending: true });
+                    .order('created_at', { ascending: false });
 
                 if (error) {
                     console.error('Error fetching daily missions:', error);
-                    throw error;
+                    return [];
                 }
 
                 return (data || []).map((m: any) => ({
@@ -86,7 +85,17 @@ export const OperationalService = {
      */
     addDailyMission: async (mission: Omit<DailyMission, 'id'>): Promise<DailyMission> => {
         try {
-            return await dailyMissionsBase.create(mission);
+            const { data, error } = await supabase
+                .from('daily_missions')
+                .insert(mission)
+                .select('*')
+                .single();
+
+            if (error) {
+                console.error('Error adding daily mission:', error);
+                throw error;
+            }
+            return data as DailyMission;
         } catch (error) {
             console.error('Error adding daily mission:', error);
             throw error;
@@ -102,7 +111,18 @@ export const OperationalService = {
                 ...updates,
                 updated_at: new Date().toISOString(),
             };
-            return await dailyMissionsBase.update(id, updatesWithTimestamp);
+            const { data, error } = await supabase
+                .from('daily_missions')
+                .update(updatesWithTimestamp)
+                .eq('id', id)
+                .select('*')
+                .single();
+
+            if (error) {
+                console.error('Error updating daily mission:', error);
+                throw error;
+            }
+            return data as DailyMission;
         } catch (error) {
             console.error('Error updating daily mission:', error);
             throw error;
