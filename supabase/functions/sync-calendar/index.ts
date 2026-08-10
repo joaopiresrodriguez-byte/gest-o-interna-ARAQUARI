@@ -113,7 +113,10 @@ serve(async (req) => {
       personnel.forEach((p: PersonnelItem) => {
         const rank = p.rank ? `${p.rank} ` : '';
         const name = p.war_name || p.name;
-        personnelMap.set(p.id, `${rank}${name}`.trim());
+        const formatted = `${rank}${name}`.trim();
+        personnelMap.set(p.id, formatted);
+        personnelMap.set(String(p.id), formatted);
+        personnelMap.set(Number(p.id), formatted);
       });
     }
 
@@ -135,7 +138,7 @@ serve(async (req) => {
         const militaresNomes: string[] = [];
         if (Array.isArray(esc.militares)) {
           esc.militares.forEach((mId) => {
-            const nome = personnelMap.get(mId);
+            const nome = personnelMap.get(mId) || personnelMap.get(String(mId)) || personnelMap.get(Number(mId));
             if (nome) militaresNomes.push(nome);
           });
         }

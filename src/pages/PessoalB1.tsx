@@ -594,17 +594,41 @@ const PessoalB1: React.FC = () => {
 
   const handleSyncCalendar = async (months: { mes: number; ano: number }[]) => {
     setCalendarSyncing(true);
-    setCalendarProgress('Enviando para servidor...');
+    setCalendarProgress('Carregando escala do banco...');
     try {
+      // Buscar a escala do banco para os meses solicitados
+      let todasEscalas = [...escalas];
+      if (months.length > 0) {
+        const minYear = Math.min(...months.map(m => m.ano));
+        const minMonth = Math.min(...months.filter(m => m.ano === minYear).map(m => m.mes));
+        const maxYear = Math.max(...months.map(m => m.ano));
+        const maxMonth = Math.max(...months.filter(m => m.ano === maxYear).map(m => m.mes));
+
+        const startDate = `${minYear}-${String(minMonth).padStart(2, '0')}-01`;
+        const endDate = `${maxYear}-${String(maxMonth).padStart(2, '0')}-${new Date(maxYear, maxMonth, 0).getDate()}`;
+
+        const { data: dbEscalas } = await supabase
+          .from('escalas')
+          .select('*')
+          .gte('data', startDate)
+          .lte('data', endDate)
+          .order('data', { ascending: true });
+
+        if (dbEscalas && dbEscalas.length > 0) {
+          todasEscalas = dbEscalas;
+        }
+      }
+
+      setCalendarProgress(`Enviando ${todasEscalas.length} dia(s) para o Google Calendar...`);
+
       const result = await syncCalendar({
         action: 'upsert',
-        escalas,
+        escalas: todasEscalas,
         personnel: personnelList,
-        mes: months[0]?.mes,
-        ano: months[0]?.ano,
       });
+
       if (result.ok) {
-        toast.success(`✅ Escala de ${months.length} mês(es) enviada para o Google Calendar!`);
+        toast.success(`✅ Escala de ${months.length} mês(es) (${todasEscalas.length} dias) enviada para o Google Calendar!`);
         setCalendarProgress('✅ Sincronização concluída!');
       } else {
         toast.error('Falha na sincronização: ' + (result.error || 'Erro desconhecido'));
