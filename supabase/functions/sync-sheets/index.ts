@@ -183,6 +183,18 @@ const TABELA_CONFIG: Record<string, { aba: string; mapeamento: (record: any) => 
       r.editado_em ? new Date(r.editado_em).toLocaleString('pt-BR') : '',
     ],
   },
+  // ─── Escala Operacional (B1) ──────────────────────────────────────────────
+  escalas: {
+    aba: 'Escala Mensal',
+    mapeamento: (r) => [
+      r.id,
+      r.data,
+      r.turma || r.equipe || '',
+      Array.isArray(r.militares) ? r.militares.join(', ') : '',
+      r.shift_type || '24x72',
+      r.manual_override ? 'Sim' : 'Não',
+    ],
+  },
 };
 
 serve(async (req) => {
