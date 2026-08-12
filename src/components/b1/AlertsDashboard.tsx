@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 // accessibility: placeholder / aria-label - This is a display-only dashboard, no form inputs.
 import { AlertItem } from '../../services/types';
 
@@ -14,9 +14,12 @@ const severityConfig = {
 };
 
 const AlertsDashboard: React.FC<Props> = ({ alerts, onNavigateToProfile }) => {
+    const [showAll, setShowAll] = useState(false);
     const criticalCount = alerts.filter(a => a.severity === 'critical').length;
     const warningCount = alerts.filter(a => a.severity === 'warning').length;
     const infoCount = alerts.filter(a => a.severity === 'info').length;
+
+    const visibleAlerts = showAll ? alerts : alerts.slice(0, 3);
 
     return (
         <div className="space-y-6">
@@ -60,7 +63,7 @@ const AlertsDashboard: React.FC<Props> = ({ alerts, onNavigateToProfile }) => {
                 </div>
             ) : (
                 <div className="space-y-2">
-                    {alerts.map((alert, i) => {
+                    {visibleAlerts.map((alert, i) => {
                         const cfg = severityConfig[alert.severity];
                         return (
                             <div key={i} className={`${cfg.bg} ${cfg.border} border rounded-xl p-4 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer`} onClick={() => onNavigateToProfile(alert.personnelId)}>
@@ -76,6 +79,20 @@ const AlertsDashboard: React.FC<Props> = ({ alerts, onNavigateToProfile }) => {
                             </div>
                         );
                     })}
+
+                    {alerts.length > 3 && (
+                        <div className="text-center pt-2">
+                            <button
+                                onClick={() => setShowAll(!showAll)}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-bold transition-all shadow-sm"
+                            >
+                                <span className="material-symbols-outlined text-base">
+                                    {showAll ? 'expand_less' : 'expand_more'}
+                                </span>
+                                {showAll ? 'Ver menos' : `Ver mais (${alerts.length - 3} restantes)`}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

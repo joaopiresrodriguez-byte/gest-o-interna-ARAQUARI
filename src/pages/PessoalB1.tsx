@@ -13,20 +13,21 @@ import { ActionButton } from '../components/ui/Icons';
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
 import DisciplinarySection from '../components/b1/DisciplinarySection';
-import ReadinessReport from '../components/b1/ReadinessReport';
 import PersonnelProfile from '../components/b1/PersonnelProfile';
 import ExportSection from '../components/b1/ExportSection';
 import CursosB1 from '../components/b1/CursosB1';
 import NotificacoesB1 from '../components/b1/NotificacoesB1';
-import DashboardComandante from '../components/b1/DashboardComandante';
 import ScaleConfigPanel from '../components/b1/ScaleConfigPanel';
 import ScaleCalendar from '../components/b1/ScaleCalendar';
+import PainelAfastamentos from '../components/b1/PainelAfastamentos';
+import RankingAcesso from '../components/b1/RankingAcesso';
+import PainelDinossauros from '../components/b1/PainelDinossauros';
+import ModalCadastroMilitar from '../components/b1/ModalCadastroMilitar';
+import ModalEdicaoFerias from '../components/b1/ModalEdicaoFerias';
 
-import { ScaleReportingService } from '../services/scaleReportingService';
+type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
 
-type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PRONTIDAO' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
-
-const tabIcons: Record<Tab, string> = { EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', DISCIPLINA: 'gavel', PRONTIDAO: 'shield', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DASHBOARD: 'dashboard' };
+const tabIcons: Record<Tab, string> = { EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', FERIAS: 'beach_access', DISCIPLINA: 'gavel', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DASHBOARD: 'dashboard' };
 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
 // Mapa de posição hierárquica (0 = mais antigo/alto, índice cresce para mais novo)
@@ -94,6 +95,24 @@ const PessoalB1: React.FC = () => {
   const [search, setSearch] = useState('');
   const [formData, setFormData] = useState<Partial<Personnel>>(emptyForm());
   const [editId, setEditId] = useState<number | null>(null);
+
+  // Modal de cadastro de militar em janela sobreposta
+  const [showModalCadastro, setShowModalCadastro] = useState(false);
+  const [militarModalData, setMilitarModalData] = useState<Partial<Personnel> | null>(null);
+
+  // Modal de edição de férias
+  const [showModalFerias, setShowModalFerias] = useState(false);
+  const [feriasModalData, setFeriasModalData] = useState<Vacation | null>(null);
+
+  // Filtros funcionais da seção Efetivo
+  const [filterGraduation, setFilterGraduation] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterType, setFilterType] = useState('');
+
+  // Documentos: Opções de Upload ou Link Externo
+  const [docSourceType, setDocSourceType] = useState<'upload' | 'link'>('upload');
+  const [docExternalUrl, setDocExternalUrl] = useState('');
+  const [docExternalName, setDocExternalName] = useState('');
 
   // Hook de edição universal para Militares B1
   const {
@@ -450,19 +469,66 @@ const PessoalB1: React.FC = () => {
     } catch (err: any) { toast.error('Erro: ' + err.message); }
   };
 
-  // Handle document upload
+  // Handle document upload / external link
   const handleUploadDoc = async () => {
-    if (!docFile || !docType || !docPersonId) return toast.error('Preencha todos os campos!');
+    if (!docType || !docPersonId) return toast.error('Selecione o militar e o tipo de documento!');
     try {
-      const path = `b1/${docPersonId}/${Date.now()}_${docFile.name}`;
-      const { error: uploadError } = await supabase.storage.from('documentos-b1').upload(path, docFile);
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('documentos-b1').getPublicUrl(path);
-      await PersonnelService.addDocumentB1({ file_name: docFile.name, document_type: docType, file_url: urlData.publicUrl, size_kb: Math.round(docFile.size / 1024), personnel_id: docPersonId as number, upload_date: new Date().toISOString() });
-      toast.success('Documento anexado!');
-      setDocFile(null); setDocType(''); setDocNotes('');
+      let finalUrl = '';
+      let fileName = '';
+      let fileSize = 0;
+
+      if (docSourceType === 'upload') {
+        if (!docFile) return toast.error('Selecione um arquivo do seu computador!');
+        const path = `b1/${docPersonId}/${Date.now()}_${docFile.name}`;
+        const { error: uploadError } = await supabase.storage.from('documentos-b1').upload(path, docFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('documentos-b1').getPublicUrl(path);
+        finalUrl = urlData.publicUrl;
+        fileName = docFile.name;
+        fileSize = Math.round(docFile.size / 1024);
+      } else {
+        if (!docExternalUrl.trim()) return toast.error('Informe a URL / Link de Acesso do documento!');
+        finalUrl = docExternalUrl.trim();
+        fileName = docExternalName.trim() || `${docType} - Link Externo`;
+        fileSize = 0;
+      }
+
+      await PersonnelService.addDocumentB1({
+        file_name: fileName,
+        document_type: docType,
+        file_url: finalUrl,
+        size_kb: fileSize,
+        personnel_id: docPersonId as number,
+        upload_date: new Date().toISOString(),
+        notes: docNotes
+      });
+
+      toast.success('Documento registrado com sucesso!');
+      setDocFile(null);
+      setDocType('');
+      setDocNotes('');
+      setDocExternalUrl('');
+      setDocExternalName('');
       loadData();
-    } catch (err: any) { toast.error('Erro: ' + err.message); }
+    } catch (err: any) {
+      toast.error('Erro ao salvar documento: ' + err.message);
+    }
+  };
+
+  // Handler para modal de salvar militar
+  const handleSaveModalMilitar = async (data: Omit<Personnel, 'id'> | Personnel) => {
+    if ('id' in data && data.id) {
+      await PersonnelService.updatePersonnel(data.id, data);
+    } else {
+      await PersonnelService.addPersonnel(data as Omit<Personnel, 'id'>);
+    }
+    await loadData();
+  };
+
+  // Handler para modal de férias
+  const handleSaveModalFerias = async (id: string, updates: Partial<Vacation>) => {
+    await PersonnelService.updateVacation(id, updates);
+    await loadData();
   };
 
   // Scale helpers
@@ -649,18 +715,38 @@ const PessoalB1: React.FC = () => {
   };
 
   const filteredPersonnel = personnelList
-    .filter(p =>
-      !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.war_name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.graduation || '').toLowerCase().includes(search.toLowerCase())
-    )
+    .filter(p => {
+      const matchesSearch = !search ||
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.war_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.graduation || '').toLowerCase().includes(search.toLowerCase());
+
+      const matchesGrad = !filterGraduation || (p.graduation || p.rank) === filterGraduation;
+      const matchesStatus = !filterStatus || p.status === filterStatus;
+      const matchesType = !filterType || p.type === filterType;
+
+      return matchesSearch && matchesGrad && matchesStatus && matchesType;
+    })
     .sort((a, b) => {
+      // 1º Critério: Graduação/Posto (da mais alta para a mais baixa)
       const gradA = normalizeGraduation(a.graduation || a.rank);
       const gradB = normalizeGraduation(b.graduation || b.rank);
       const rankA = RANK_ORDEM[gradA] ?? 999;
       const rankB = RANK_ORDEM[gradB] ?? 999;
-      if (rankA !== rankB) return rankA - rankB; // mais antigo primeiro (menor índice = mais antigo)
-      return (a.name || '').localeCompare(b.name || '', 'pt-BR'); // empate: alfabético
+      if (rankA !== rankB) return rankA - rankB;
+
+      // 2º Critério de Desempate: Data da última promoção (mais antigo promovido há mais tempo)
+      const dateA = a.data_ultima_promocao ? new Date(a.data_ultima_promocao + 'T00:00:00').getTime() : Infinity;
+      const dateB = b.data_ultima_promocao ? new Date(b.data_ultima_promocao + 'T00:00:00').getTime() : Infinity;
+      if (dateA !== dateB) return dateA - dateB;
+
+      // 3º Critério de Desempate: Data de inclusão na corporação
+      const incA = a.data_inclusao ? new Date(a.data_inclusao + 'T00:00:00').getTime() : Infinity;
+      const incB = b.data_inclusao ? new Date(b.data_inclusao + 'T00:00:00').getTime() : Infinity;
+      if (incA !== incB) return incA - incB;
+
+      // 4º Critério: Alfabético
+      return (a.name || '').localeCompare(b.name || '', 'pt-BR');
     });
 
   // ===== RENDER =====
@@ -702,9 +788,9 @@ const PessoalB1: React.FC = () => {
 
           {/* Tabs */}
           <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
-            {(['DASHBOARD', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'DISCIPLINA', 'PRONTIDAO', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
+            {(['DASHBOARD', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'DISCIPLINA', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
               <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
-                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('PRONTIDAO', 'PRONTIDÃO').replace('DASHBOARD', 'DASHBOARD')}
+                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('DASHBOARD', 'DASHBOARD')}
                 {t === 'DASHBOARD' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
               </button>
             ))}
@@ -727,10 +813,56 @@ const PessoalB1: React.FC = () => {
 
               {/* TAB: EFETIVO */}
               {tab === 'EFETIVO' && (
-                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="flex-1 relative"><span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-300 text-[18px]">search</span><input value={search} onChange={e => setSearch(e.target.value)} className="w-full h-10 pl-10 pr-4 rounded-lg border border-rustic-border text-sm" placeholder="Buscar por nome, guerra ou graduação..." /></div>
-                    <button onClick={() => { setFormData(emptyForm()); setEditId(null); setTab('CADASTRO'); }} className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">add</span> NOVO</button>
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm space-y-4">
+                  {/* Filtros e Busca */}
+                  <div className="flex flex-col md:flex-row items-center gap-3">
+                    <div className="flex-1 w-full relative">
+                      <span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 text-[18px]">search</span>
+                      <input
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        className="w-full h-10 pl-10 pr-4 rounded-xl border border-rustic-border text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-stone-50"
+                        placeholder="Buscar por nome, guerra ou graduação..."
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
+                      <select
+                        value={filterGraduation}
+                        onChange={e => setFilterGraduation(e.target.value)}
+                        className="h-10 px-3 rounded-xl border border-rustic-border text-xs font-bold bg-stone-50 text-gray-700"
+                      >
+                        <option value="">Todas Graduações</option>
+                        {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+
+                      <select
+                        value={filterStatus}
+                        onChange={e => setFilterStatus(e.target.value)}
+                        className="h-10 px-3 rounded-xl border border-rustic-border text-xs font-bold bg-stone-50 text-gray-700"
+                      >
+                        <option value="">Todos Status</option>
+                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+
+                      <select
+                        value={filterType}
+                        onChange={e => setFilterType(e.target.value)}
+                        className="h-10 px-3 rounded-xl border border-rustic-border text-xs font-bold bg-stone-50 text-gray-700"
+                      >
+                        <option value="">Todos Tipos</option>
+                        <option value="BM">BM (Militar)</option>
+                        <option value="BC">BC (Comunitário)</option>
+                      </select>
+
+                      <button
+                        onClick={() => { setMilitarModalData(null); setShowModalCadastro(true); }}
+                        className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2 shadow-md hover:brightness-110 shrink-0"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">add</span>
+                        NOVO MILITAR
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Militar</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">E-mail</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
@@ -888,28 +1020,127 @@ const PessoalB1: React.FC = () => {
               {/* TAB: DOCUMENTOS */}
               {tab === 'DOCUMENTOS' && (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit">
-                    <h3 className="font-black text-lg mb-4">Anexar Documento</h3>
+                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm h-fit space-y-4">
+                    <h3 className="font-black text-lg text-gray-800">Cadastrar Documento</h3>
+
+                    {/* Seleção da Origem do Documento */}
+                    <div className="space-y-2 border-b border-stone-100 pb-3">
+                      <label className="text-[10px] font-black uppercase text-gray-400 block">Origem do Arquivo</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDocSourceType('upload')}
+                          className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                            docSourceType === 'upload' ? 'bg-primary text-white shadow-sm' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-base">upload_file</span>
+                          Upload
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocSourceType('link')}
+                          className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                            docSourceType === 'link' ? 'bg-primary text-white shadow-sm' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-base">link</span>
+                          Link Externo
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="space-y-4">
-                      <select value={docPersonId} onChange={e => setDocPersonId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
-                      <select value={docType} onChange={e => setDocType(e.target.value)} className="w-full h-11 px-4 rounded-lg border text-sm"><option value="">Tipo de documento...</option>{['Certidão', 'Atestado', 'Requerimento', 'Ofício', 'Portaria', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}</select>
-                      <input type="file" onChange={e => setDocFile(e.target.files?.[0] || null)} className="w-full text-sm" />
-                      <textarea value={docNotes} onChange={e => setDocNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border text-xs" placeholder="Observações..." />
-                      <button onClick={handleUploadDoc} className="w-full py-3 bg-primary text-white font-black rounded-xl">ENVIAR</button>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Militar Vinculado</label>
+                        <select value={docPersonId} onChange={e => setDocPersonId(Number(e.target.value))} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-xs bg-white">
+                          <option value="">Selecionar militar...</option>
+                          {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Tipo de Documento</label>
+                        <select value={docType} onChange={e => setDocType(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-xs bg-white">
+                          <option value="">Tipo de documento...</option>
+                          {['Certidão', 'Atestado', 'Requerimento', 'Ofício', 'Portaria', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+
+                      {docSourceType === 'upload' ? (
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Arquivo do Computador</label>
+                          <input type="file" onChange={e => setDocFile(e.target.files?.[0] || null)} className="w-full text-xs" />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">URL / Link de Acesso</label>
+                            <input
+                              type="url"
+                              value={docExternalUrl}
+                              onChange={e => setDocExternalUrl(e.target.value)}
+                              placeholder="https://drive.google.com/... ou SharePoint"
+                              className="w-full h-10 px-3 rounded-lg border border-rustic-border text-xs bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Título / Nome do Documento</label>
+                            <input
+                              type="text"
+                              value={docExternalName}
+                              onChange={e => setDocExternalName(e.target.value)}
+                              placeholder="Ex: Certificado Curso X"
+                              className="w-full h-10 px-3 rounded-lg border border-rustic-border text-xs bg-white"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Observações</label>
+                        <textarea value={docNotes} onChange={e => setDocNotes(e.target.value)} className="w-full h-20 p-3 rounded-lg border border-rustic-border text-xs focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Observações..." />
+                      </div>
+
+                      <button onClick={handleUploadDoc} className="w-full py-3 bg-primary text-white font-black text-xs rounded-xl hover:brightness-110 shadow-md transition-all">
+                        {docSourceType === 'upload' ? 'ENVIAR ARQUIVO' : 'SALVAR LINK DE ACESSO'}
+                      </button>
                     </div>
                   </div>
+
                   <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                    <h3 className="font-black text-lg mb-4">Documentos ({documents.length})</h3>
-                    <div className="space-y-2">{documents.map(d => {
-                      const person = personnelList.find(p => p.id === d.personnel_id);
-                      return (
-                        <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl border border-rustic-border hover:border-primary/30 transition-all">
-                          <span className="material-symbols-outlined text-primary">description</span>
-                          <div className="flex-1 min-w-0"><span className="font-bold text-sm block truncate">{d.file_name}</span><span className="text-[10px] text-gray-400">{d.document_type} {person ? `• ${person.name}` : ''} {d.upload_date ? `• ${formatLocalDate(d.upload_date)}` : ''}</span></div>
-                          <a href={d.file_url} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500"><span className="material-symbols-outlined text-[16px]">download</span></a>
-                        </div>
-                      );
-                    })}{documents.length === 0 && <p className="text-center py-8 text-gray-300 italic">Nenhum documento anexado.</p>}</div>
+                    <h3 className="font-black text-lg mb-4 text-gray-800">Documentos Registrados ({documents.length})</h3>
+                    <div className="space-y-2.5">
+                      {documents.map(d => {
+                        const person = personnelList.find(p => p.id === d.personnel_id);
+                        const isExternalLink = d.file_url.startsWith('http') && !d.file_url.includes('supabase');
+
+                        return (
+                          <div key={d.id} className="flex items-center gap-3 p-3.5 rounded-xl border border-rustic-border hover:border-primary/30 transition-all bg-stone-50/50">
+                            <span className={`material-symbols-outlined ${isExternalLink ? 'text-blue-600' : 'text-primary'}`}>
+                              {isExternalLink ? 'link' : 'description'}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-bold text-sm block truncate text-gray-800">{d.file_name}</span>
+                              <span className="text-[10px] text-gray-500 block mt-0.5">
+                                {d.document_type} {person ? `• ${person.name}` : ''} {d.upload_date ? `• ${formatLocalDate(d.upload_date)}` : ''}
+                                {isExternalLink && <span className="ml-1 text-blue-600 font-bold">(Link Externo)</span>}
+                              </span>
+                            </div>
+                            <a
+                              href={d.file_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-stone-100 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex items-center gap-1 border border-stone-200"
+                            >
+                              <span className="material-symbols-outlined text-sm">{isExternalLink ? 'open_in_new' : 'download'}</span>
+                              {isExternalLink ? 'Acessar' : 'Baixar'}
+                            </a>
+                          </div>
+                        );
+                      })}
+                      {documents.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum documento anexado.</p>}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1115,6 +1346,13 @@ const PessoalB1: React.FC = () => {
                                 {v.notes && <p className="text-[10px] text-gray-400 italic mt-0.5">Obs: {v.notes}</p>}
                               </div>
                               <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${v.status === 'concluido' ? 'bg-green-100 text-green-700' : v.status === 'em_andamento' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'} uppercase`}>{v.status || 'planejado'}</span>
+                              <button
+                                onClick={() => { setFeriasModalData(v); setShowModalFerias(true); }}
+                                className="p-1 text-blue-400 hover:text-blue-600"
+                                title="Editar período"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                              </button>
                               <button onClick={async () => { if (confirm('Remover?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }} className="p-1 text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[16px]">delete</span></button>
                             </div>
                           );
@@ -1309,8 +1547,7 @@ const PessoalB1: React.FC = () => {
                 <DisciplinarySection records={disciplinaryRecords} personnelList={personnelList} onAdd={async (r) => { await PersonnelService.addDisciplinaryRecord(r); loadDisciplinary(); toast.success('Registro adicionado!'); }} onDelete={async (id) => { if (confirm('Remover registro?')) { await PersonnelService.deleteDisciplinaryRecord(id); loadDisciplinary(); toast.success('Removido!'); } }} isEditor={true} />
               )}
 
-              {/* TAB: PRONTIDAO */}
-              {tab === 'PRONTIDAO' && <ReadinessReport personnelList={personnelList} vacations={vacations} />}
+
 
               {/* TAB: PERFIL */}
               {tab === 'PERFIL' && profilePerson && (
@@ -1323,25 +1560,34 @@ const PessoalB1: React.FC = () => {
                 <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
               )}
 
-              {/* TAB: DASHBOARD — inclui alertas, avisos e painel de comando */}
+              {/* TAB: DASHBOARD */}
               {tab === 'DASHBOARD' && (
                 <div className="space-y-6">
-                  {/* Painel de Alertas e Avisos no topo */}
+
+                  {/* Linha 1: Alertas */}
                   <AlertsDashboard alerts={alerts} onNavigateToProfile={(id) => { const p = personnelList.find(pp => pp.id === id); if (p) handleViewProfile(p); }} />
-                  {notifications.filter(n => !n.is_read).length > 0 && (
+
+                  {/* Linha 2: Avisos Internos */}
+                  {notifications.length > 0 && (
                     <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
                       <h3 className="font-black text-base mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-gray-500">notifications</span>
                         Avisos Internos
-                        <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center">{notifications.filter(n => !n.is_read).length}</span>
+                        {notifications.filter(n => !n.is_read).length > 0 && (
+                          <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center">{notifications.filter(n => !n.is_read).length}</span>
+                        )}
                       </h3>
                       <NotificacoesB1 />
                     </div>
                   )}
-                  {/* Dashboard principal do Comandante */}
-                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                    <DashboardComandante personnelList={personnelList} vacations={vacations} courses={courses} epiDeliveries={epiDeliveries} notifications={notifications} alerts={alerts} onNavigate={(t) => setTab(t as Tab)} />
+
+                  {/* Linha 3: Grid de painéis secundários */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <PainelAfastamentos vacations={vacations} personnelList={personnelList} />
+                    <RankingAcesso personnelList={personnelList} />
+                    <PainelDinossauros personnelList={personnelList} />
                   </div>
+
                 </div>
               )}
 
@@ -1560,6 +1806,34 @@ const PessoalB1: React.FC = () => {
           </div>
         </div>
       </ModalEdicao>
+
+      {/* Modal de Cadastro / Edição de Militar */}
+      {showModalCadastro && (
+        <ModalCadastroMilitar
+          open={showModalCadastro}
+          onClose={() => { setShowModalCadastro(false); setMilitarModalData(null); }}
+          initialData={militarModalData}
+          onSave={async (data) => {
+            await handleSaveModalMilitar(data);
+            setShowModalCadastro(false);
+            setMilitarModalData(null);
+          }}
+        />
+      )}
+
+      {/* Modal de Edição de Férias */}
+      {showModalFerias && feriasModalData && (
+        <ModalEdicaoFerias
+          open={showModalFerias}
+          vacation={feriasModalData}
+          onClose={() => { setShowModalFerias(false); setFeriasModalData(null); }}
+          onSave={async (id, updates) => {
+            await handleSaveModalFerias(id, updates);
+            setShowModalFerias(false);
+            setFeriasModalData(null);
+          }}
+        />
+      )}
     </div>
   );
 };
