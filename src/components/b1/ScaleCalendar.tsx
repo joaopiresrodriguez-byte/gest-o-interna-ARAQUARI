@@ -32,15 +32,16 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
         const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
 
         // Find if scaled
-        const dayEscala = escalas.find(e => e.data === dateStr);
+        const dayEscala = (escalas || []).find(e => e && e.data === dateStr);
         const isScaled = dayEscala?.militares?.includes(personId);
 
         // Find warnings for this specific person on this day
-        const warning = dayEscala?.warnings?.find(w => w.personnel_id === personId);
+        const warning = dayEscala?.warnings?.find(w => w && w.personnel_id === personId);
 
         // Check vacation
-        const isVacation = vacations.some(v =>
-            v.personnel_id === personId &&
+        const isVacation = (vacations || []).some(v =>
+            v && v.personnel_id === personId &&
+            v.start_date && v.end_date &&
             dateStr >= v.start_date &&
             dateStr <= v.end_date
         );

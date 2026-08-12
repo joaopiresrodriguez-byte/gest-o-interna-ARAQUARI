@@ -199,6 +199,8 @@ const PatrimonioB4: React.FC = () => {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [dailyChecklists, setDailyChecklists] = useState<DailyChecklist[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showEmptyLocais, setShowEmptyLocais] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Hook de edição universal para Equipamentos / Viaturas (fleet)
   const {
@@ -1028,106 +1030,191 @@ const PatrimonioB4: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-2 p-4">
-                      {/* 1. Locais de ambiente/ambientes cadastrados */}
-                      {locais.map(local => {
-                        const count = fleet.filter(item =>
-                          item.local_id === local.id ||
-                          (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
-                        ).length;
+                    <div className="p-4 space-y-3">
+                      {/* Pílulas dos Locais e Viaturas com ITENS (> 0) */}
+                      <div className="flex flex-wrap gap-2">
+                        {/* 1. Locais com itens */}
+                        {locais.map(local => {
+                          const count = fleet.filter(item =>
+                            item.local_id === local.id ||
+                            (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
+                          ).length;
+                          if (count === 0) return null;
+                          return (
+                            <div key={local.id} className="flex items-center gap-1">
+                              <button
+                                onClick={() => setExtratoLocal(local)}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rustic-border bg-stone-50 hover:border-green-400 hover:bg-green-50 transition-all group"
+                              >
+                                <span className="material-symbols-outlined text-[16px] text-green-600 group-hover:text-green-700">
+                                  {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
+                                </span>
+                                <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800">{local.nome}</span>
+                                <span className="text-[10px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{count}</span>
+                                <span className="material-symbols-outlined text-[14px] text-gray-400 group-hover:text-green-600">receipt_long</span>
+                              </button>
+                              {profile?.p_logistica === 'editor' && (
+                                <ActionButton
+                                  variant="alteration"
+                                  size="sm"
+                                  onClick={() => abrirEdicaoLocal(local)}
+                                  title="Alterar/Editar Local"
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* 2. Viaturas com itens */}
+                        {fleet.filter(v => v.type === 'Viatura').map(vtr => {
+                          const compIds = allCompartimentos.filter(c => c.viatura_id === vtr.id).map(c => c.id);
+                          const count = fleet.filter(item =>
+                            (item.compartimento_id && compIds.includes(item.compartimento_id)) ||
+                            item.local_id === vtr.id ||
+                            item.location?.toLowerCase() === vtr.name.toLowerCase()
+                          ).length;
+
+                          if (count === 0) return null;
+
+                          const vtrLocalObj: LocalEquipamento = {
+                            id: vtr.id,
+                            nome: `${vtr.name}${vtr.plate ? ` (${vtr.plate})` : ''}`,
+                            tipo: 'viatura',
+                            ativo: true
+                          };
+
+                          return (
+                            <div key={`vtr-${vtr.id}`} className="flex items-center gap-1">
+                              <button
+                                onClick={() => setExtratoLocal(vtrLocalObj)}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-200 bg-blue-50/50 hover:border-blue-500 hover:bg-blue-100/50 transition-all group"
+                              >
+                                <span className="material-symbols-outlined text-[16px] text-blue-600 group-hover:text-blue-800">
+                                  local_shipping
+                                </span>
+                                <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950">{vtr.name}</span>
+                                <span className="text-[10px] font-black bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full">{count}</span>
+                                <span className="material-symbols-outlined text-[14px] text-blue-400 group-hover:text-blue-600">receipt_long</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Locais e Viaturas sem ITENS (count === 0) agrupados em 'Ver mais' */}
+                      {(() => {
+                        const emptyLocaisList = locais.filter(local => {
+                          const count = fleet.filter(item =>
+                            item.local_id === local.id ||
+                            (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
+                          ).length;
+                          return count === 0;
+                        });
+
+                        const emptyVtrsList = fleet.filter(v => v.type === 'Viatura').filter(vtr => {
+                          const compIds = allCompartimentos.filter(c => c.viatura_id === vtr.id).map(c => c.id);
+                          const count = fleet.filter(item =>
+                            (item.compartimento_id && compIds.includes(item.compartimento_id)) ||
+                            item.local_id === vtr.id ||
+                            item.location?.toLowerCase() === vtr.name.toLowerCase()
+                          ).length;
+                          return count === 0;
+                        });
+
+                        const totalEmpty = emptyLocaisList.length + emptyVtrsList.length;
+                        if (totalEmpty === 0) return null;
+
                         return (
-                          <div key={local.id} className="flex items-center gap-1">
+                          <div className="pt-2 border-t border-stone-100">
                             <button
-                              onClick={() => setExtratoLocal(local)}
-                              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rustic-border bg-stone-50 hover:border-green-400 hover:bg-green-50 transition-all group"
+                              onClick={() => setShowEmptyLocais(prev => !prev)}
+                              className="flex items-center gap-1.5 text-xs font-bold text-rustic-brown/60 hover:text-rustic-brown transition-colors py-1 px-2 rounded-lg bg-stone-100/70"
                             >
-                              <span className="material-symbols-outlined text-[16px] text-green-600 group-hover:text-green-700">
-                                {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
+                              <span className="material-symbols-outlined text-[16px]">
+                                {showEmptyLocais ? 'expand_less' : 'expand_more'}
                               </span>
-                              <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800">{local.nome}</span>
-                              <span className="text-[10px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{count}</span>
-                              <span className="material-symbols-outlined text-[14px] text-gray-400 group-hover:text-green-600">receipt_long</span>
+                              Ver mais ({totalEmpty}) locais/viaturas sem itens cadastrados
                             </button>
-                            {profile?.p_logistica === 'editor' && (
-                              <ActionButton
-                                variant="alteration"
-                                size="sm"
-                                onClick={() => abrirEdicaoLocal(local)}
-                                title="Alterar/Editar Local"
-                              />
+
+                            {showEmptyLocais && (
+                              <div className="flex flex-wrap gap-2 mt-3 p-3 bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                                {emptyLocaisList.map(local => (
+                                  <div key={`empty-${local.id}`} className="flex items-center gap-1 opacity-70 hover:opacity-100">
+                                    <button
+                                      onClick={() => setExtratoLocal(local)}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-[11px] font-medium text-rustic-brown"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px] text-stone-400">location_city</span>
+                                      {local.nome} (0)
+                                    </button>
+                                  </div>
+                                ))}
+
+                                {emptyVtrsList.map(vtr => (
+                                  <div key={`empty-vtr-${vtr.id}`} className="flex items-center gap-1 opacity-70 hover:opacity-100">
+                                    <button
+                                      onClick={() => setExtratoLocal({ id: vtr.id, nome: vtr.name, tipo: 'viatura', ativo: true })}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-[11px] font-medium text-blue-800"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px] text-blue-400">local_shipping</span>
+                                      {vtr.name} (0)
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Listing — flat or grouped com limite de 6 itens e botão Ver Mais */}
+                  {groupByAtividade ? (
+                    <div className="space-y-8">
+                      {Object.entries(groupedFleet).map(([atividade, items]) => {
+                        const isExpanded = expandedGroups[atividade] || false;
+                        const visibleItems = isExpanded ? items : items.slice(0, 6);
+                        const remainingCount = items.length - 6;
+
+                        return (
+                          <div key={atividade}>
+                            <div className="flex items-center gap-3 mb-4">
+                              <span className="material-symbols-outlined text-amber-600">local_fire_department</span>
+                              <h3 className="font-black text-sm uppercase tracking-widest text-rustic-brown">{atividade}</h3>
+                              <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{items.length}</span>
+                              <div className="flex-1 h-px bg-rustic-border/40" />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                              {visibleItems.map(item => (
+                                <ItemCard
+                                  key={item.id}
+                                  item={item}
+                                  notices={notices}
+                                  profile={profile}
+                                  onSelect={setSelectedItem}
+                                  onEdit={abrirEdicaoFleetItem}
+                                  onDelete={handleDeleteItem}
+                                  onResolve={handleResolveNotice}
+                                  onGerenciarCompartimentos={setGerenciarCompViatura}
+                                  onVisualizarViatura={setVisualizarViaturaObj}
+                                />
+                              ))}
+                            </div>
+                            {!isExpanded && remainingCount > 0 && (
+                              <div className="mt-4 text-center">
+                                <button
+                                  onClick={() => setExpandedGroups(prev => ({ ...prev, [atividade]: true }))}
+                                  className="px-5 py-2 bg-stone-100 hover:bg-stone-200 text-rustic-brown font-bold text-xs rounded-xl transition-all border border-stone-200 inline-flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">expand_more</span>
+                                  Ver mais ({remainingCount}) itens em {atividade}
+                                </button>
+                              </div>
                             )}
                           </div>
                         );
                       })}
-
-                      {/* 2. Viaturas cadastradas na frota (com contagem de itens nos compartimentos) */}
-                      {fleet.filter(v => v.type === 'Viatura').map(vtr => {
-                        const compIds = allCompartimentos.filter(c => c.viatura_id === vtr.id).map(c => c.id);
-                        const count = fleet.filter(item =>
-                          (item.compartimento_id && compIds.includes(item.compartimento_id)) ||
-                          item.local_id === vtr.id ||
-                          item.location?.toLowerCase() === vtr.name.toLowerCase()
-                        ).length;
-
-                        const vtrLocalObj: LocalEquipamento = {
-                          id: vtr.id,
-                          nome: `${vtr.name}${vtr.plate ? ` (${vtr.plate})` : ''}`,
-                          tipo: 'viatura',
-                          ativo: true
-                        };
-
-                        return (
-                          <div key={`vtr-${vtr.id}`} className="flex items-center gap-1">
-                            <button
-                              onClick={() => setExtratoLocal(vtrLocalObj)}
-                              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-200 bg-blue-50/50 hover:border-blue-500 hover:bg-blue-100/50 transition-all group"
-                            >
-                              <span className="material-symbols-outlined text-[16px] text-blue-600 group-hover:text-blue-800">
-                                local_shipping
-                              </span>
-                              <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950">{vtr.name}</span>
-                              <span className="text-[10px] font-black bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full">{count}</span>
-                              <span className="material-symbols-outlined text-[14px] text-blue-400 group-hover:text-blue-600">receipt_long</span>
-                            </button>
-                          </div>
-                        );
-                      })}
-
-                      {locais.length === 0 && fleet.filter(v => v.type === 'Viatura').length === 0 && (
-                        <p className="text-xs text-gray-400 italic">Nenhum local ou viatura cadastrado.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Listing — flat or grouped */}
-                  {groupByAtividade ? (
-                    <div className="space-y-8">
-                      {Object.entries(groupedFleet).map(([atividade, items]) => (
-                        <div key={atividade}>
-                          <div className="flex items-center gap-3 mb-4">
-                            <span className="material-symbols-outlined text-amber-600">local_fire_department</span>
-                            <h3 className="font-black text-sm uppercase tracking-widest text-rustic-brown">{atividade}</h3>
-                            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{items.length}</span>
-                            <div className="flex-1 h-px bg-rustic-border/40" />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {items.map(item => (
-                              <ItemCard
-                                key={item.id}
-                                item={item}
-                                notices={notices}
-                                profile={profile}
-                                onSelect={setSelectedItem}
-                                onEdit={abrirEdicaoFleetItem}
-                                onDelete={handleDeleteItem}
-                                onResolve={handleResolveNotice}
-                                onGerenciarCompartimentos={setGerenciarCompViatura}
-                                onVisualizarViatura={setVisualizarViaturaObj}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
                       {Object.keys(groupedFleet).length === 0 && (
                         <div className="text-center py-16 text-gray-400">
                           <span className="material-symbols-outlined text-[48px] mb-2">inventory_2</span>
@@ -1136,27 +1223,51 @@ const PatrimonioB4: React.FC = () => {
                       )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                      {filteredFleet.map(item => (
-                        <ItemCard
-                          key={item.id}
-                          item={item}
-                          notices={notices}
-                          profile={profile}
-                          onSelect={setSelectedItem}
-                          onEdit={abrirEdicaoFleetItem}
-                          onDelete={handleDeleteItem}
-                          onResolve={handleResolveNotice}
-                          onGerenciarCompartimentos={setGerenciarCompViatura}
-                          onVisualizarViatura={setVisualizarViaturaObj}
-                        />
-                      ))}
-                      {filteredFleet.length === 0 && (
-                        <div className="col-span-3 text-center py-16 text-gray-400">
-                          <span className="material-symbols-outlined text-[48px] mb-2">search_off</span>
-                          <p className="text-sm font-bold">Nenhum item encontrado.</p>
-                        </div>
-                      )}
+                    <div>
+                      {(() => {
+                        const isExpanded = expandedGroups['all'] || false;
+                        const visibleItems = isExpanded ? filteredFleet : filteredFleet.slice(0, 6);
+                        const remainingCount = filteredFleet.length - 6;
+
+                        return (
+                          <div className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                              {visibleItems.map(item => (
+                                <ItemCard
+                                  key={item.id}
+                                  item={item}
+                                  notices={notices}
+                                  profile={profile}
+                                  onSelect={setSelectedItem}
+                                  onEdit={abrirEdicaoFleetItem}
+                                  onDelete={handleDeleteItem}
+                                  onResolve={handleResolveNotice}
+                                  onGerenciarCompartimentos={setGerenciarCompViatura}
+                                  onVisualizarViatura={setVisualizarViaturaObj}
+                                />
+                              ))}
+                              {filteredFleet.length === 0 && (
+                                <div className="col-span-3 text-center py-16 text-gray-400">
+                                  <span className="material-symbols-outlined text-[48px] mb-2">search_off</span>
+                                  <p className="text-sm font-bold">Nenhum item encontrado.</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {!isExpanded && remainingCount > 0 && (
+                              <div className="text-center pt-2">
+                                <button
+                                  onClick={() => setExpandedGroups(prev => ({ ...prev, all: true }))}
+                                  className="px-6 py-2.5 bg-stone-100 hover:bg-stone-200 text-rustic-brown font-black text-xs rounded-xl transition-all border border-rustic-border inline-flex items-center gap-2 shadow-sm"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">expand_more</span>
+                                  Ver mais ({remainingCount}) itens de patrimônio
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
