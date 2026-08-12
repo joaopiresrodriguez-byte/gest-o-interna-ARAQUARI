@@ -192,7 +192,6 @@ export class RotationEngine {
 
                 checkExpiry(person.cve_expiry_date, 'CVE');
                 checkExpiry(person.cnh_expiry_date, 'CNH');
-                checkExpiry(person.toxicological_expiry_date, 'Toxicológico');
             });
 
             return { ...day, warnings: warnings.length > 0 ? warnings : undefined };

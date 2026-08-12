@@ -1214,56 +1214,6 @@ const PessoalB1: React.FC = () => {
                       <button onClick={handleSaveSwap} className="h-11 bg-amber-500 text-white font-black rounded-xl text-xs">REGISTRAR TROCA</button>
                     </div>
                   </div>
-
-                  {/* Toxicological Status — Personnel with CNH Cat D */}
-                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                    <h3 className="font-black text-lg mb-4 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-blue-500">science</span>
-                      Status Toxicológico — CNH Cat. D
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-stone-50">
-                          <tr className="text-[10px] font-black uppercase text-gray-400">
-                            <th className="px-4 py-3 text-left">Militar</th>
-                            <th className="px-4 py-3">Cat. CNH</th>
-                            <th className="px-4 py-3">Vencimento</th>
-                            <th className="px-4 py-3">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {personnelList.filter(p => p.cnh_category && (p.cnh_category.includes('D') || p.cnh_category.includes('E'))).map(p => {
-                            const todayNoon = new Date();
-                            todayNoon.setHours(12, 0, 0, 0);
-                            const expiry = p.toxicological_expiry_date ? parseLocalDate(p.toxicological_expiry_date) : null;
-                            const daysLeft = expiry ? Math.round((expiry.getTime() - todayNoon.getTime()) / 86400000) : null;
-                            let badge = { label: 'Sem registro', cls: 'bg-gray-100 text-gray-500' };
-                            if (expiry) {
-                              if (daysLeft !== null && daysLeft < 0) badge = { label: 'VENCIDO', cls: 'bg-red-100 text-red-700 font-black' };
-                              else if (daysLeft !== null && daysLeft <= 60) badge = { label: `Vence em ${daysLeft}d`, cls: 'bg-amber-100 text-amber-700 font-black' };
-                              else badge = { label: `Válido (${daysLeft}d)`, cls: 'bg-green-100 text-green-700' };
-                            }
-                            return (
-                              <tr key={p.id} className="hover:bg-stone-50/50">
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[14px]">person</span></div>
-                                    <div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-center font-bold">{p.cnh_category}</td>
-                                <td className="px-4 py-3 text-center text-xs">{p.toxicological_expiry_date ? formatLocalDate(p.toxicological_expiry_date) : '—'}</td>
-                                <td className="px-4 py-3 text-center"><span className={`text-[9px] px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span></td>
-                              </tr>
-                            );
-                          })}
-                          {personnelList.filter(p => p.cnh_category && (p.cnh_category.includes('D') || p.cnh_category.includes('E'))).length === 0 && (
-                            <tr><td colSpan={5} className="text-center py-8 text-gray-300 italic">Nenhum militar com CNH Cat. D/E cadastrado.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
                 </div>
               )}
 

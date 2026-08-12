@@ -141,6 +141,67 @@ const RelatoriosMensais: React.FC = () => {
     toast.success('PDF exportado!');
   };
 
+  const exportarTSV = async () => {
+    try {
+      const { data: items } = await supabase.from('b4_locais_equipamentos').select('*');
+      const { data: vehicles } = await supabase.from('b4_vehicles').select('*');
+
+      const headers = [
+        'ID',
+        'Nome do Item / Equipamento',
+        'Número de Patrimônio / Tombo',
+        'Tipo / Categoria',
+        'Local ou Viatura Alocada',
+        'Quantidade',
+        'Estado de Conservação / Condição',
+        'Observações / Detalhes'
+      ];
+
+      const lines: string[] = [];
+
+      if (items && items.length > 0) {
+        items.forEach(item => {
+          lines.push([
+            item.id || '',
+            item.nome || '',
+            item.patrimonio || 'N/A',
+            'Equipamento/Material',
+            item.local_id || 'Local Geral',
+            item.quantidade || 1,
+            item.estado || 'Bom',
+            item.observacoes || ''
+          ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
+        });
+      }
+
+      if (vehicles && vehicles.length > 0) {
+        vehicles.forEach(v => {
+          lines.push([
+            v.id || '',
+            v.name || '',
+            v.plate || 'N/A',
+            v.type || 'Viatura',
+            v.location || 'Garagem',
+            1,
+            v.status === 'active' ? 'Operacional' : 'Manutenção',
+            v.details || ''
+          ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
+        });
+      }
+
+      const blob = new Blob([['\uFEFF' + headers.join('\t'), ...lines].join('\n')], { type: 'text/tab-separated-values;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `RELATORIO_PATRIMONIO_B4_${new Date().toISOString().split('T')[0]}.tsv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Relatório em TSV exportado com sucesso!');
+    } catch (err: any) {
+      toast.error('Erro ao exportar TSV: ' + err.message);
+    }
+  };
+
   const activeReport = viewingReport?.dados || relatorio;
 
   return (
@@ -199,13 +260,22 @@ const RelatoriosMensais: React.FC = () => {
             </button>
 
             {activeReport && (
-              <button
-                onClick={() => exportarPDF(activeReport)}
-                className="h-10 px-4 bg-[#1e293b] text-white font-bold rounded-xl shadow hover:brightness-125 transition-all flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
-                PDF
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => exportarPDF(activeReport)}
+                  className="h-10 px-4 bg-[#1e293b] text-white font-bold rounded-xl shadow hover:brightness-125 transition-all flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                  PDF
+                </button>
+                <button
+                  onClick={exportarTSV}
+                  className="h-10 px-4 bg-emerald-700 text-white font-bold rounded-xl shadow hover:bg-emerald-800 transition-all flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">download</span>
+                  EXPORTAR TSV
+                </button>
+              </div>
             )}
           </div>
         </div>

@@ -9,11 +9,11 @@ interface ScaleCalendarProps {
     onDayClick?: (date: string, personId: number) => void;
 }
 
-const CORES: Record<string, string> = {
-  A: '#1d4ed8',
-  B: '#15803d',
-  C: '#c2410c',
-  D: '#7e22ce',
+const CORES: Record<string, { bg: string; text: string; hex: string }> = {
+  A: { bg: 'bg-green-600', text: 'text-green-700', hex: '#16a34a' }, // VERDE
+  B: { bg: 'bg-blue-600', text: 'text-blue-700', hex: '#2563eb' },   // AZUL
+  C: { bg: 'bg-yellow-500', text: 'text-yellow-700', hex: '#ca8a04' },// AMARELO
+  D: { bg: 'bg-red-600', text: 'text-red-700', hex: '#dc2626' },    // VERMELHO
 };
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -47,7 +47,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
 
         if (isScaled && dayEscala) {
             const teamLetter = dayEscala.turma || '?';
-            const teamColor = CORES[teamLetter] || '#1d4ed8';
+            const teamInfo = CORES[teamLetter] || { bg: 'bg-green-600', text: 'text-green-700', hex: '#16a34a' };
             
             // Build tooltip with names of all members on duty this day
             const onDutyMembers = dayEscala.militares
@@ -61,7 +61,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
             return {
                 label: teamLetter,
                 cls: 'font-bold border-none',
-                style: { backgroundColor: hexToRgba(teamColor, 0.2), color: teamColor },
+                style: { backgroundColor: hexToRgba(teamInfo.hex, 0.2), color: teamInfo.hex },
                 tooltip: `Serviço: ${onDutyMembers}`,
                 warning: warning || (isVacation ? { type: 'VACATION', message: 'Militar em férias/licença' } : null)
             };
