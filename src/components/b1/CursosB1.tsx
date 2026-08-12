@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { PersonnelService } from '../../services/personnelService';
 import { B1Course, Personnel } from '../../services/types';
 import { toast } from 'sonner';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 const CATEGORIES = ['Operacional', 'Administrativo', 'Saúde', 'Liderança', 'Especialização Técnica', 'Outros'] as const;
 
@@ -60,6 +61,7 @@ export default function CursosB1({ personnelList }: Props) {
     const [courses, setCourses] = useState<B1Course[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState(emptyForm());
     const [saving, setSaving] = useState(false);
     const [filterPersonnel, setFilterPersonnel] = useState('');
@@ -80,6 +82,32 @@ export default function CursosB1({ personnelList }: Props) {
         setLoading(false);
     }, [personnelList]);
 
+    // Verificação de disponibilidade nos últimos 12 meses
+    const checkAvailabilityLastYear = (personnelId: number): boolean => {
+        const now = new Date();
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(now.getMonth() - 12);
+
+        return courses.some(c => {
+            if (c.personnel_id !== personnelId || !c.completion_date) return false;
+            // Ignora o curso que está sendo editado
+            if (editingId && c.id === editingId) return false;
+            const courseDate = new Date(c.completion_date + 'T00:00:00');
+            return courseDate >= twelveMonthsAgo && courseDate <= now;
+        });
+    };
+
+    // Verificação de conflito no mesmo mês
+    const sameMonthCourses = useMemo(() => {
+        if (!form.completion_date) return [];
+        const monthYear = form.completion_date.substring(0, 7); // YYYY-MM
+        return courses.filter(c => {
+            if (!c.completion_date) return false;
+            if (editingId && c.id === editingId) return false;
+            return c.completion_date.startsWith(monthYear);
+        });
+    }, [courses, form.completion_date, editingId]);
+
     const sortedPersonnel = useMemo(() => {
         if (!sortByAvailability) {
             return personnelList.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -93,12 +121,14 @@ export default function CursosB1({ personnelList }: Props) {
             const hasA = courses.some(
                 c => c.personnel_id === a.id && 
                 c.completion_date && 
-                Number(c.completion_date.split('-')[0]) === year
+                Number(c.completion_date.split('-')[0]) === year &&
+                (!editingId || c.id !== editingId)
             );
             const hasB = courses.some(
                 c => c.personnel_id === b.id && 
                 c.completion_date && 
-                Number(c.completion_date.split('-')[0]) === year
+                Number(c.completion_date.split('-')[0]) === year &&
+                (!editingId || c.id !== editingId)
             );
 
             if (hasA && !hasB) return 1;
@@ -113,7 +143,7 @@ export default function CursosB1({ personnelList }: Props) {
 
             return a.name.localeCompare(b.name);
         });
-    }, [personnelList, courses, sortByAvailability, form.completion_date]);
+    }, [personnelList, courses, sortByAvailability, form.completion_date, editingId]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -125,8 +155,35 @@ export default function CursosB1({ personnelList }: Props) {
         return () => window.removeEventListener('keydown', handler);
     }, [showModal]);
 
-    const openModal = () => { setForm(emptyForm()); setShowModal(true); };
-    const closeModal = () => { setShowModal(false); setForm(emptyForm()); };
+    const openModal = () => {
+        setEditingId(null);
+        setForm(emptyForm());
+        setShowModal(true);
+    };
+
+    const handleEditCourse = (course: B1Course) => {
+        setEditingId(course.id || null);
+        setForm({
+            personnel_id: course.personnel_id,
+            course_name: course.course_name,
+            sigla_curso: course.sigla_curso || '',
+            institution: course.institution || '',
+            workload_hours: course.workload_hours,
+            completion_date: course.completion_date,
+            expiry_date: course.expiry_date,
+            category: course.category,
+            certificate_url: course.certificate_url || '',
+            is_retroactive: course.is_retroactive || false,
+            retroactive_notes: course.retroactive_notes || '',
+        });
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setEditingId(null);
+        setForm(emptyForm());
+    };
 
     const filtered = courses.filter(c => {
         if (filterPersonnel && c.personnel_id !== Number(filterPersonnel)) return false;
@@ -143,9 +200,13 @@ export default function CursosB1({ personnelList }: Props) {
         }
         setSaving(true);
         try {
-            await PersonnelService.addCourse({ ...form, personnel_id: Number(form.personnel_id) });
-            // Sync via Edge Function triggered automatically by DB webhook
-            toast.success('Curso registrado com sucesso!');
+            if (editingId) {
+                await PersonnelService.updateCourse(editingId, { ...form, personnel_id: Number(form.personnel_id) });
+                toast.success('Curso atualizado com sucesso!');
+            } else {
+                await PersonnelService.addCourse({ ...form, personnel_id: Number(form.personnel_id) });
+                toast.success('Curso registrado com sucesso!');
+            }
             closeModal();
             await load();
         } catch {
@@ -168,18 +229,18 @@ export default function CursosB1({ personnelList }: Props) {
 
     return (
         <div className="space-y-4">
-            {/* Header */}
+            {/* Header com botão de inclusão destacado em vermelho primário de alto contraste */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-base font-semibold text-stone-800">Cursos e Qualificações</h3>
+                    <h3 className="text-base font-bold text-stone-800">Cursos e Qualificações</h3>
                     <p className="text-xs text-stone-500 mt-0.5">{courses.length} registro{courses.length !== 1 ? 's' : ''}</p>
                 </div>
                 <button
                     onClick={openModal}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#C62828] text-white rounded-xl text-sm font-semibold hover:bg-[#A32020] transition-all shadow-md active:scale-95"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-sm font-black transition-all shadow-md active:scale-95 border border-red-600 focus:ring-2 focus:ring-red-500/30"
                 >
-                    <span className="material-symbols-outlined text-base">add</span>
-                    Novo Curso
+                    <span className="material-symbols-outlined text-lg">add</span>
+                    Incluir Curso
                 </button>
             </div>
 
@@ -192,13 +253,13 @@ export default function CursosB1({ personnelList }: Props) {
                         placeholder="Buscar curso ou instituição..."
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        className="w-full pl-8 bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 placeholder-stone-400 focus:outline-none focus:border-[#C62828]"
+                        className="w-full pl-8 bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 placeholder-stone-400 focus:outline-none focus:border-red-600"
                     />
                 </div>
                 <select
                     value={filterPersonnel}
                     onChange={e => setFilterPersonnel(e.target.value)}
-                    className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-[#C62828]"
+                    className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-red-600"
                 >
                     <option value="">Todos os militares</option>
                     {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation || p.rank || ''} {p.name}</option>)}
@@ -206,7 +267,7 @@ export default function CursosB1({ personnelList }: Props) {
                 <select
                     value={filterCategory}
                     onChange={e => setFilterCategory(e.target.value)}
-                    className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-[#C62828]"
+                    className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-red-600"
                 >
                     <option value="">Todas as categorias</option>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -216,26 +277,26 @@ export default function CursosB1({ personnelList }: Props) {
             {/* Course List */}
             {loading ? (
                 <div className="flex items-center justify-center py-12 gap-3">
-                    <div className="w-6 h-6 border-2 border-cbm-red border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm text-secondary-text">Carregando cursos...</span>
+                    <div className="w-6 h-6 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-stone-500">Carregando cursos...</span>
                 </div>
             ) : filtered.length === 0 ? (
                 <div className="text-center py-14 border-2 border-dashed border-stone-200 rounded-2xl">
                     <span className="material-symbols-outlined text-5xl block mb-3 text-stone-400">school</span>
                     <p className="text-sm text-stone-500 font-medium">Nenhum curso encontrado</p>
-                    <p className="text-xs text-stone-400 mt-1">Use o botão &quot;Novo Curso&quot; para adicionar</p>
+                    <p className="text-xs text-stone-400 mt-1">Use o botão &quot;Incluir Curso&quot; para adicionar</p>
                 </div>
             ) : (
                 <div className="space-y-2">
                     {filtered.map(c => (
                         <div
                             key={c.id}
-                            className="bg-white border border-stone-200 rounded-xl p-3.5 flex items-start justify-between gap-3 hover:border-[#C62828]/30 hover:shadow-sm transition-all"
+                            className="bg-white border border-stone-200 rounded-xl p-3.5 flex items-start justify-between gap-3 hover:border-red-600/30 hover:shadow-sm transition-all"
                         >
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {c.sigla_curso && (
-                                        <span className="text-[10px] font-black bg-red-50 text-[#C62828] border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                        <span className="text-[10px] font-black bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                             {c.sigla_curso}
                                         </span>
                                     )}
@@ -253,8 +314,8 @@ export default function CursosB1({ personnelList }: Props) {
                                     )}
                                 </div>
                                 <p className="text-xs text-stone-400 mt-0.5">
-                                    Conclusão: {new Date(c.completion_date).toLocaleDateString('pt-BR')}
-                                    {c.expiry_date ? ` · Validade: ${new Date(c.expiry_date).toLocaleDateString('pt-BR')}` : ''}
+                                    Conclusão: {formatLocalDate(c.completion_date)}
+                                    {c.expiry_date ? ` · Validade: ${formatLocalDate(c.expiry_date)}` : ''}
                                 </p>
                                 {c.is_retroactive && (
                                     <p className="text-xs text-amber-600 mt-0.5">⊙ Retroativo{c.retroactive_notes ? ` — ${c.retroactive_notes}` : ''}</p>
@@ -266,12 +327,19 @@ export default function CursosB1({ personnelList }: Props) {
                                         href={c.certificate_url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="p-1.5 text-stone-400 hover:text-[#C62828] transition-colors"
+                                        className="p-1.5 text-stone-400 hover:text-red-700 transition-colors"
                                         title="Ver certificado"
                                     >
                                         <span className="material-symbols-outlined text-base">open_in_new</span>
                                     </a>
                                 )}
+                                <button
+                                    onClick={() => handleEditCourse(c)}
+                                    className="p-1.5 text-stone-400 hover:text-blue-600 transition-colors"
+                                    title="Editar curso"
+                                >
+                                    <span className="material-symbols-outlined text-base">edit</span>
+                                </button>
                                 <button
                                     onClick={() => handleDelete(c.id!, c.course_name)}
                                     className="p-1.5 text-stone-400 hover:text-red-600 transition-colors"
@@ -285,7 +353,7 @@ export default function CursosB1({ personnelList }: Props) {
                 </div>
             )}
 
-            {/* ─── MODAL DE CADASTRO ─── */}
+            {/* ─── MODAL DE CADASTRO / EDIÇÃO DE CURSO ─── */}
             {showModal && (
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
                     {/* Backdrop */}
@@ -300,12 +368,12 @@ export default function CursosB1({ personnelList }: Props) {
                         {/* Modal Header */}
                         <div className="flex items-center justify-between px-7 py-5 border-b border-stone-100">
                             <div className="flex items-center gap-3">
-                                <div className="size-10 rounded-xl bg-cbm-red flex items-center justify-center text-white shadow-md shadow-red-200">
-                                    <span className="material-symbols-outlined text-[20px]">school</span>
+                                <div className="size-10 rounded-xl bg-red-700 flex items-center justify-center text-white shadow-md shadow-red-200">
+                                    <span className="material-symbols-outlined text-[20px]">{editingId ? 'edit_square' : 'school'}</span>
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-black text-stone-800">Registrar Curso</h3>
-                                    <p className="text-xs text-stone-400 font-medium">Associar qualificação a um militar</p>
+                                    <h3 className="text-base font-black text-stone-800">{editingId ? 'Editar Curso' : 'Incluir Curso'}</h3>
+                                    <p className="text-xs text-stone-400 font-medium">{editingId ? 'Alterar dados da qualificação do militar' : 'Associar nova qualificação a um militar'}</p>
                                 </div>
                             </div>
                             <button
@@ -331,7 +399,7 @@ export default function CursosB1({ personnelList }: Props) {
                                     type="button"
                                     onClick={() => setSortByAvailability(!sortByAvailability)}
                                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                        sortByAvailability ? 'bg-[#C62828]' : 'bg-stone-300'
+                                        sortByAvailability ? 'bg-red-700' : 'bg-stone-300'
                                     }`}
                                 >
                                     <span
@@ -342,48 +410,65 @@ export default function CursosB1({ personnelList }: Props) {
                                 </button>
                             </div>
 
-                            {/* Militar (dropdown) */}
+                            {/* Militar (dropdown) com Sinalização de Restrição de 12 meses */}
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                                    Militar <span className="text-cbm-red">*</span>
+                                    Militar <span className="text-red-600">*</span>
                                 </label>
                                 <div className="relative">
                                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-stone-300">badge</span>
                                     <select
                                         value={form.personnel_id || ''}
                                         onChange={e => setForm(f => ({ ...f, personnel_id: Number(e.target.value) }))}
-                                        className="w-full pl-10 pr-10 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors appearance-none"
+                                        className="w-full pl-10 pr-10 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors appearance-none"
                                         required
                                     >
                                         <option value="">Selecione o militar...</option>
                                         {sortedPersonnel.map(p => {
                                             const displayRank = p.graduation || p.rank || '';
+                                            const hasCourseLast12Months = checkAvailabilityLastYear(p.id!);
                                             const year = form.completion_date 
                                                 ? Number(form.completion_date.split('-')[0]) 
                                                 : new Date().getFullYear();
-                                            const hasCourse = courses.some(c => c.personnel_id === p.id && c.completion_date && Number(c.completion_date.split('-')[0]) === year);
+                                            const hasCourseThisYear = courses.some(c => c.personnel_id === p.id && c.completion_date && Number(c.completion_date.split('-')[0]) === year && (!editingId || c.id !== editingId));
+                                            
+                                            let labelExtra = '';
+                                            if (hasCourseLast12Months) {
+                                                labelExtra = ' (⚠️ Curso nos últimos 12 meses)';
+                                            } else if (hasCourseThisYear) {
+                                                labelExtra = ` (Já fez curso em ${year})`;
+                                            } else if (sortByAvailability) {
+                                                labelExtra = ' (Disponível)';
+                                            }
+
                                             return (
                                                 <option key={p.id} value={p.id}>
-                                                    {displayRank} {p.name} {sortByAvailability ? (hasCourse ? `(Já fez curso em ${year})` : '(Disponível)') : ''}
+                                                    {displayRank} {p.name} {labelExtra}
                                                 </option>
                                             );
                                         })}
                                     </select>
                                     <span className="absolute right-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-stone-400 pointer-events-none">expand_more</span>
                                 </div>
+                                {form.personnel_id > 0 && checkAvailabilityLastYear(form.personnel_id) && (
+                                    <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 font-medium flex items-center gap-1.5 mt-1">
+                                        <span className="material-symbols-outlined text-sm text-amber-600">warning</span>
+                                        <strong>Alerta de Restrição:</strong> Este militar já realizou um curso nos últimos 12 meses.
+                                    </p>
+                                )}
                             </div>
 
                             {/* Nome do Curso */}
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                                    Nome do Curso <span className="text-cbm-red">*</span>
+                                    Nome do Curso <span className="text-red-600">*</span>
                                 </label>
                                 <input
                                     type="text"
                                     value={form.course_name}
                                     onChange={e => setForm(f => ({ ...f, course_name: e.target.value }))}
                                     placeholder="Ex: Curso de Resgate Veicular"
-                                    className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors"
+                                    className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors"
                                     required
                                 />
                             </div>
@@ -398,7 +483,7 @@ export default function CursosB1({ personnelList }: Props) {
                                         onChange={e => setForm(f => ({ ...f, sigla_curso: e.target.value.toUpperCase() }))}
                                         placeholder="Ex: CFO"
                                         maxLength={10}
-                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-bold uppercase tracking-widest focus:outline-none focus:border-cbm-red transition-colors"
+                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-bold uppercase tracking-widest focus:outline-none focus:border-red-600 transition-colors"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
@@ -411,35 +496,52 @@ export default function CursosB1({ personnelList }: Props) {
                                             value={form.workload_hours || ''}
                                             onChange={e => setForm(f => ({ ...f, workload_hours: Number(e.target.value) || undefined }))}
                                             placeholder="40"
-                                            className="w-full pl-10 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors"
+                                            className="w-full pl-10 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors"
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Data de Realização + Validade (lado a lado) */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                                        Data de Realização <span className="text-cbm-red">*</span>
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={form.completion_date}
-                                        onChange={e => setForm(f => ({ ...f, completion_date: e.target.value }))}
-                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors"
-                                        required
-                                    />
+                            {/* Data de Realização + Validade (lado a lado) + Sinalização do Mesmo Mês */}
+                            <div className="space-y-1.5">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                                            Data de Realização <span className="text-red-600">*</span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={form.completion_date}
+                                            onChange={e => setForm(f => ({ ...f, completion_date: e.target.value }))}
+                                            className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-stone-400">Validade</label>
+                                        <input
+                                            type="date"
+                                            value={form.expiry_date || ''}
+                                            onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value || undefined }))}
+                                            className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors"
+                                        />
+                                    </div>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-stone-400">Validade</label>
-                                    <input
-                                        type="date"
-                                        value={form.expiry_date || ''}
-                                        onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value || undefined }))}
-                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors"
-                                    />
-                                </div>
+                                {sameMonthCourses.length > 0 && (
+                                    <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-800 space-y-1">
+                                        <div className="font-bold flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-sm text-blue-600">calendar_month</span>
+                                            Outros militares com curso no mesmo mês ({form.completion_date.substring(0, 7)}):
+                                        </div>
+                                        <ul className="list-disc list-inside space-y-0.5 text-blue-700 pl-1">
+                                            {sameMonthCourses.map(mc => (
+                                                <li key={mc.id}>
+                                                    <strong>{mc.personnel_rank} {mc.personnel_name}</strong>: {mc.course_name} ({formatLocalDate(mc.completion_date)})
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Categoria + Instituição */}
@@ -449,7 +551,7 @@ export default function CursosB1({ personnelList }: Props) {
                                     <select
                                         value={form.category}
                                         onChange={e => setForm(f => ({ ...f, category: e.target.value as B1Course['category'] }))}
-                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors"
+                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors"
                                     >
                                         {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
@@ -461,7 +563,7 @@ export default function CursosB1({ personnelList }: Props) {
                                         value={form.institution}
                                         onChange={e => setForm(f => ({ ...f, institution: e.target.value }))}
                                         placeholder="Ex: CEBMBSC"
-                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors"
+                                        className="w-full h-11 bg-stone-50 border-2 border-stone-200 rounded-xl px-4 text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors"
                                     />
                                 </div>
                             </div>
@@ -476,7 +578,7 @@ export default function CursosB1({ personnelList }: Props) {
                                         value={form.certificate_url || ''}
                                         onChange={e => setForm(f => ({ ...f, certificate_url: e.target.value }))}
                                         placeholder="https://..."
-                                        className="w-full pl-10 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors"
+                                        className="w-full pl-10 h-11 bg-stone-50 border-2 border-stone-200 rounded-xl text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors"
                                     />
                                 </div>
                             </div>
@@ -507,7 +609,7 @@ export default function CursosB1({ personnelList }: Props) {
                                         onChange={e => setForm(f => ({ ...f, retroactive_notes: e.target.value }))}
                                         placeholder="Ex: Registro de curso realizado em 2018 no CEBM. Certificado digitalizado."
                                         rows={2}
-                                        className="w-full bg-stone-50 border-2 border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-700 font-medium focus:outline-none focus:border-cbm-red transition-colors resize-none"
+                                        className="w-full bg-stone-50 border-2 border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-700 font-medium focus:outline-none focus:border-red-600 transition-colors resize-none"
                                     />
                                 </div>
                             )}
@@ -517,14 +619,14 @@ export default function CursosB1({ personnelList }: Props) {
                                 <button
                                     type="button"
                                     onClick={closeModal}
-                                    className="flex-1 h-11 rounded-xl border-2 border-stone-200 text-stone-500 text-sm font-bold hover:bg-stone-50 transition-colors"
+                                    className="flex-1 h-11 rounded-xl border-2 border-stone-200 text-stone-600 text-sm font-bold hover:bg-stone-50 transition-colors"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={saving}
-                                    className="flex-1 h-11 rounded-xl bg-cbm-red text-white text-sm font-black flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all shadow-md shadow-red-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    className="flex-1 h-11 rounded-xl bg-red-700 hover:bg-red-800 text-white text-sm font-black flex items-center justify-center gap-2 transition-all shadow-md shadow-red-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                     {saving ? (
                                         <>
@@ -534,7 +636,7 @@ export default function CursosB1({ personnelList }: Props) {
                                     ) : (
                                         <>
                                             <span className="material-symbols-outlined text-[18px]">save</span>
-                                            Salvar Curso
+                                            {editingId ? 'Atualizar Curso' : 'Salvar Curso'}
                                         </>
                                     )}
                                 </button>

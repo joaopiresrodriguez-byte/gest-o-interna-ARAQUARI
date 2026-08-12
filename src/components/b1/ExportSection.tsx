@@ -40,7 +40,164 @@ const ExportSection: React.FC<Props> = ({
         onAddExport({ export_type: exportType, month_ref: currentMonth, submitted_date: today.toISOString().split('T')[0], responsible: 'Operador B1', system });
     };
 
-    // BLOCO 10 — EXPORTAR SIGRH (TODOS OS DADOS DO MILITAR SEM EXCEÇÃO)
+    // BLOCO 10 — EXPORTAR SIGRH PDF (FICHA COMPLETA INDIVIDUAL OU GERAL COM TODOS OS DADOS)
+    const generateSIGRHPDF = (personId?: string) => {
+        const listToPrint = personId
+            ? personnelList.filter(p => String(p.id) === personId)
+            : personnelList;
+
+        if (listToPrint.length === 0) {
+            toast.error('Nenhum militar selecionado para impressão do SIGRH.');
+            return;
+        }
+
+        let html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SIGRH - Extrato Cadastral e Operacional Completo - CBMSC</title>
+<style>
+  @page { size: A4; margin: 12mm 15mm; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 10px; color: #1e293b; margin: 0; padding: 0; line-height: 1.4; }
+  .page-break { page-break-after: always; }
+  .header { text-align: center; border-bottom: 2px solid #991b1b; padding-bottom: 8px; margin-bottom: 15px; }
+  .header h1 { font-size: 13px; font-weight: 900; margin: 0; color: #991b1b; text-transform: uppercase; tracking-wide; }
+  .header h2 { font-size: 10px; font-weight: 700; margin: 2px 0 0 0; color: #475569; }
+  .header h3 { font-size: 9px; font-weight: 600; margin: 2px 0 0 0; color: #64748b; }
+  
+  .card-militar { border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 20px; background-color: #fff; }
+  .section-title { font-size: 10px; font-weight: 900; color: #991b1b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; margin-top: 12px; margin-bottom: 8px; flex items-center; }
+  
+  .grid-2 { display: flex; flex-wrap: wrap; margin: -4px; }
+  .col-2 { width: 50%; box-sizing: border-box; padding: 4px; }
+  .col-3 { width: 33.33%; box-sizing: border-box; padding: 4px; }
+  .col-4 { width: 25%; box-sizing: border-box; padding: 4px; }
+  .col-12 { width: 100%; box-sizing: border-box; padding: 4px; }
+
+  .field-box { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 6px; }
+  .label { font-size: 8px; font-weight: 800; text-transform: uppercase; color: #64748b; display: block; }
+  .value { font-size: 9.5px; font-weight: 700; color: #0f172a; margin-top: 1px; word-break: break-word; }
+
+  table.data-table { width: 100%; border-collapse: collapse; margin-top: 5px; margin-bottom: 10px; }
+  table.data-table th, table.data-table td { border: 1px solid #cbd5e1; padding: 4px 6px; font-size: 8.5px; text-align: left; }
+  table.data-table th { background-color: #f1f5f9; font-weight: 900; color: #334155; uppercase; }
+  
+  .footer { position: fixed; bottom: 0; left: 0; right: 0; font-size: 8px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 4px; }
+</style>
+</head>
+<body>`;
+
+        listToPrint.forEach((p, idx) => {
+            const pCourses = courses.filter(c => c.personnel_id === p.id);
+            const pVacations = vacations.filter(v => v.personnel_id === p.id);
+            const pRanks = rankHistories.filter(r => r.personnel_id === p.id);
+            const pDisciplinary = disciplinaryRecords.filter(d => d.personnel_id === p.id);
+
+            html += `
+<div className="${idx < listToPrint.length - 1 ? 'page-break' : ''}">
+  <div className="header">
+    <h1>ESTADO DE SANTA CATARINA — CORPO DE BOMBEIROS MILITAR</h1>
+    <h2>7º BATALHÃO DE BOMBEIROS MILITAR — 3º PELOTÃO (ARAQUARI)</h2>
+    <h3>FICHA CADASTRAL E OPERACIONAL COMPLETA DO MILITAR — SIGRH</h3>
+  </div>
+
+  <div className="card-militar">
+    <!-- DADOS PESSOAIS E FUNCIONAIS -->
+    <div className="section-title">1. Dados Identificadores e Funcionais</div>
+    <div className="grid-2">
+      <div className="col-4"><div className="field-box"><span className="label">Posto / Graduação</span><div className="value">${p.graduation || p.rank || 'N/D'}</div></div></div>
+      <div className="col-4"><div className="field-box"><span className="label">Nome Completo</span><div className="value">${p.name}</div></div></div>
+      <div className="col-4"><div className="field-box"><span className="label">Nome de Guerra</span><div className="value">${p.war_name || 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Matrícula</span><div className="value">${p.matricula || 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">CPF</span><div className="value">${p.cpf || 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Tipo / Status</span><div className="value">${p.type || 'BM'} / ${p.status || 'Ativo'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Data de Inclusão</span><div className="value">${p.data_inclusao ? formatLocalDate(p.data_inclusao) : 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Última Promoção</span><div className="value">${p.data_ultima_promocao ? formatLocalDate(p.data_ultima_promocao) : 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Função</span><div className="value">${p.role || 'Bombeiro Militar'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Cidade Residência</span><div className="value">${p.cidade_residencia || 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Data Nascimento</span><div className="value">${p.birth_date ? formatLocalDate(p.birth_date) : 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">E-mail</span><div className="value">${p.email || 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Telefone</span><div className="value">${p.phone || 'N/D'}</div></div></div>
+    </div>
+
+    <!-- HABILITAÇÕES E SAÚDE -->
+    <div className="section-title">2. Habilitações, Documentos e Saúde</div>
+    <div className="grid-2">
+      <div className="col-3"><div className="field-box"><span className="label">Cat. CNH / Nº CNH</span><div className="value">${p.cnh_category || 'N/D'} - ${p.cnh_number || 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Validade CNH</span><div className="value">${p.cnh_expiry_date ? formatLocalDate(p.cnh_expiry_date) : 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Venc. Toxicológico</span><div className="value">${p.toxicological_expiry_date ? formatLocalDate(p.toxicological_expiry_date) : 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">CVE Ativo / Emissão</span><div className="value">${p.cve_active || 'Não'} ${p.cve_issue_date ? `(${formatLocalDate(p.cve_issue_date)})` : ''}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Validade CVE</span><div className="value">${p.cve_expiry_date ? formatLocalDate(p.cve_expiry_date) : 'N/D'}</div></div></div>
+      <div className="col-3"><div className="field-box"><span className="label">Tipo Sanguíneo / Porte Arma</span><div className="value">${p.blood_type || 'N/D'} / ${p.weapon_permit ? 'Sim' : 'Não'}</div></div></div>
+      <div className="col-6"><div className="field-box"><span className="label">Contato de Emergência</span><div className="value">${p.emergency_contact_name || 'N/D'} (${p.emergency_phone || 'N/D'})</div></div></div>
+    </div>
+
+    <!-- HISTÓRICO DE CURSOS E QUALIFICAÇÕES -->
+    <div className="section-title">3. Cursos e Qualificações Registradas</div>
+    ${pCourses.length === 0 ? '<p style="color:#94a3b8; font-style:italic;">Nenhum curso cadastrado.</p>' : `
+    <table className="data-table">
+      <thead><tr><th>Sigla</th><th>Curso</th><th>Instituição</th><th>Horas</th><th>Conclusão</th><th>Validade</th></tr></thead>
+      <tbody>
+        ${pCourses.map(c => `<tr><td><b>${c.sigla_curso || '—'}</b></td><td>${c.course_name}</td><td>${c.institution || 'CBMSC'}</td><td>${c.workload_hours ? c.workload_hours + 'h' : '—'}</td><td>${formatLocalDate(c.completion_date)}</td><td>${c.expiry_date ? formatLocalDate(c.expiry_date) : 'Sem validade'}</td></tr>`).join('')}
+      </tbody>
+    </table>`}
+
+    <!-- HISTÓRICO DE FÉRIAS E AFASTAMENTOS -->
+    <div className="section-title">4. Histórico de Férias e Afastamentos</div>
+    ${pVacations.length === 0 ? '<p style="color:#94a3b8; font-style:italic;">Nenhum afastamento registrado.</p>' : `
+    <table className="data-table">
+      <thead><tr><th>Tipo</th><th>Período</th><th>Dias</th><th>Status</th><th>Observação</th></tr></thead>
+      <tbody>
+        ${pVacations.map(v => `<tr><td><b>${v.leave_type || 'Férias'}</b></td><td>${formatLocalDate(v.start_date)} a ${formatLocalDate(v.end_date)}</td><td>${v.day_count}d</td><td>${v.status || 'planejado'}</td><td>${v.notes || '—'}</td></tr>`).join('')}
+      </tbody>
+    </table>`}
+
+    <!-- HISTÓRICO DE PROMOÇÕES E ALTERAÇÕES -->
+    <div className="section-title">5. Promoções e Registros Disciplinares</div>
+    <div className="grid-2">
+      <div className="col-6">
+        <div style="font-weight:bold; font-size:8.5px; margin-bottom:2px; color:#475569;">PROMOÇÕES:</div>
+        ${pRanks.length === 0 ? '<p style="color:#94a3b8; font-style:italic;">Sem histórico de promoções.</p>' : `
+        <table className="data-table">
+          <thead><tr><th>Graduação Anterior</th><th>Nova Graduação</th><th>Data</th></tr></thead>
+          <tbody>
+            ${pRanks.map(r => `<tr><td>${r.previous_rank}</td><td><b>${r.new_rank}</b></td><td>${formatLocalDate(r.change_date)}</td></tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>
+      <div className="col-6">
+        <div style="font-weight:bold; font-size:8.5px; margin-bottom:2px; color:#475569;">DISCIPLINA:</div>
+        ${pDisciplinary.length === 0 ? '<p style="color:#94a3b8; font-style:italic;">Sem registros disciplinares.</p>' : `
+        <table className="data-table">
+          <thead><tr><th>Tipo</th><th>Descrição</th><th>Data</th></tr></thead>
+          <tbody>
+            ${pDisciplinary.map(d => `<tr><td><b>${d.record_type}</b></td><td>${d.description}</td><td>${formatLocalDate(d.date)}</td></tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>
+    </div>
+  </div>
+</div>`;
+        });
+
+        html += `
+  <div className="footer">
+    Documento extraído do Sistema de Gestão Interna CBMSC Araquari em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
+  </div>
+</body>
+</html>`;
+
+        const win = window.open('', '_blank');
+        if (win) {
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            setTimeout(() => win.print(), 500);
+        }
+        handleMarkSubmitted(personId ? 'Ficha Individual SIGRH' : 'Extrato Geral SIGRH', 'SIGRH');
+    };
+
+    // BLOCO 10 — EXPORTAR SIGRH (.TSV)
     const generateSIGRHFullData = () => {
         const headers = [
             'ID', 'Nome Completo', 'Nome de Guerra', 'Posto/Graduação', 'Tipo (BM/BC)', 'Status', 'Função',
@@ -459,23 +616,39 @@ const ExportSection: React.FC<Props> = ({
                             Exportação Completa SIGRH
                         </h3>
                         <p className="text-xs text-gray-500 mt-1">
-                            Exporta uma planilha unificada com <b>todos os 32 dados cadastrais e históricos vinculados</b> de cada militar no sistema (sem omissão de campos).
+                            Exporta relatório completo ou planilha unificada com <b>todos os 32 dados cadastrais e históricos vinculados</b> de cada militar no sistema (sem omissão de campos).
                         </p>
                     </div>
 
-                    <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-3">
-                        <div className="flex items-center justify-between">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex flex-col justify-between space-y-3">
                             <div>
-                                <span className="font-bold text-sm text-gray-800 block">Extrato Cadastral & Operacional Completo</span>
-                                <span className="text-[10px] text-gray-500">Inclui dados pessoais, CNH, CVE, Cursos, Férias, Promoções e Registros Disciplinares</span>
+                                <span className="font-bold text-sm text-gray-800 block">Planilha Unificada (.TSV)</span>
+                                <span className="text-[10px] text-gray-500">Formato tabulado ideal para importação e planilhas com 32 colunas completas.</span>
                             </div>
                             <button
                                 onClick={generateSIGRHFullData}
-                                className="px-5 py-3 bg-primary text-white font-black text-xs rounded-xl hover:brightness-110 shadow-md flex items-center gap-2"
+                                className="w-full py-3 bg-primary text-white font-black text-xs rounded-xl hover:brightness-110 shadow-md flex items-center justify-center gap-2"
                             >
                                 <span className="material-symbols-outlined text-base">file_download</span>
-                                EXPORTAR EXTRATO SIGRH (.TSV)
+                                EXPORTAR SIGRH (.TSV)
                             </button>
+                        </div>
+
+                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex flex-col justify-between space-y-3">
+                            <div>
+                                <span className="font-bold text-sm text-gray-800 block">Relatório Cadastral em PDF</span>
+                                <span className="text-[10px] text-gray-500">Documento impresso formatado com cabeçalho da unidade e blocos de dados.</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => generateSIGRHPDF()}
+                                    className="flex-1 py-3 bg-stone-800 text-white font-black text-xs rounded-xl hover:bg-stone-900 shadow-md flex items-center justify-center gap-1.5"
+                                >
+                                    <span className="material-symbols-outlined text-base">print</span>
+                                    PDF GERAL (TODOS)
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
