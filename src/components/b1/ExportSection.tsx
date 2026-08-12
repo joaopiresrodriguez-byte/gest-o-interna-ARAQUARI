@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Personnel, Vacation, SigrhExport, B1Course, RankHistory, DisciplinaryRecord } from '../../services/types';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { toast } from 'sonner';
 
 interface Props {
     personnelList: Personnel[];
@@ -15,13 +16,12 @@ interface Props {
 const ExportSection: React.FC<Props> = ({
     personnelList,
     vacations,
-    exports,
     courses = [],
     rankHistories = [],
     disciplinaryRecords = [],
     onAddExport
 }) => {
-    const [activeSubTab, setActiveSubTab] = useState<'sigrh' | 'sgpe' | 'checklist'>('sigrh');
+    const [activeSubTab, setActiveSubTab] = useState<'sigrh' | 'sgpe'>('sigrh');
     const [selectedPersonnelId, setSelectedPersonnelId] = useState<string>('');
     const [escalaDate, setEscalaDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [chefeSocorroId, setChefeSocorroId] = useState<string>('');
@@ -756,12 +756,51 @@ const ExportSection: React.FC<Props> = ({
                                         </div>
 
                                         <div>
-                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Socorrista ASU:</label>
+                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Socorrista 1 ASU:</label>
                                             <select value={asuSocorrista1Id} onChange={e => setAsuSocorrista1Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
                                                 <option value="">Selecione...</option>
                                                 {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
                                             </select>
                                         </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Resgatista 1 ABTR:</label>
+                                            <select value={abtrResgatista1Id} onChange={e => setAbtrResgatista1Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
+                                                <option value="">Selecione...</option>
+                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Resgatista 2 ABTR:</label>
+                                            <select value={abtrResgatista2Id} onChange={e => setAbtrResgatista2Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
+                                                <option value="">Selecione...</option>
+                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Socorrista 2 ASU:</label>
+                                            <select value={asuSocorrista2Id} onChange={e => setAsuSocorrista2Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
+                                                <option value="">Selecione...</option>
+                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Observações ao Chefe de Socorro:</label>
+                                        <textarea
+                                            value={observacoesChefe}
+                                            onChange={e => setObservacoesChefe(e.target.value)}
+                                            rows={2}
+                                            placeholder="Observações específicas para o serviço..."
+                                            className="w-full px-3 py-2 rounded-lg border border-rustic-border bg-white text-[10px] resize-none"
+                                        />
                                     </div>
                                 </div>
                             </div>

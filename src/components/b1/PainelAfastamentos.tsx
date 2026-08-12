@@ -1,4 +1,4 @@
-import React from 'react';
+import React from 'react'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { Personnel, Vacation } from '../../services/types';
 import { formatLocalDate } from '../../utils/dateUtils';
 

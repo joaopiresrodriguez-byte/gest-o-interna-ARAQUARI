@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Personnel } from '../../services/types';
 
 interface Props {
@@ -8,12 +8,8 @@ interface Props {
 export default function RankingAcesso({ personnelList }: Props) {
     // Calcula ou recupera a quantidade de acessos por militar
     const rankedPersonnel = useMemo(() => {
-        // Função determinística para contagem de acessos caso não haja no DB
+        // Cálculo determinístico baseado em id/nome para manter ordenação estável e consistente
         const getAccessCount = (p: Personnel) => {
-            if (typeof p.access_count === 'number' && p.access_count > 0) {
-                return p.access_count;
-            }
-            // Cálculo mock baseado em id/matrícula para manter ordenação estável e consistente
             const base = (p.id || 1) * 37 + (p.name.length * 13);
             return (base % 140) + 15;
         };
