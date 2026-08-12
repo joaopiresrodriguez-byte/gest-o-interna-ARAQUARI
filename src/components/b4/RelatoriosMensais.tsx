@@ -6,10 +6,11 @@ import {
   listarRelatorios,
   RelatorioMensal,
   RelatorioSalvo,
+  buscarInventarioConsolidado,
+  InventarioItem
 } from '../../services/b4RelatorioService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { supabase } from '../../services/supabase';
 
 const MESES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril',
@@ -46,6 +47,19 @@ const RelatoriosMensais: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [viewingReport, setViewingReport] = useState<RelatorioSalvo | null>(null);
 
+  // Inventário das 3 tabelas (b4_vehicles, b4_compartimentos_viaturas, b4_locais_equipamentos/checklist_itens)
+  const [inventario, setInventario] = useState<InventarioItem[]>([]);
+  const [filtroLocal, setFiltroLocal] = useState<string>('todos');
+
+  const carregarInventario = useCallback(async (local: string) => {
+    try {
+      const data = await buscarInventarioConsolidado(local);
+      setInventario(data);
+    } catch (err: any) {
+      console.error('Erro ao carregar inventário:', err);
+    }
+  }, []);
+
   const loadHistorico = useCallback(async () => {
     try {
       const data = await listarRelatorios();
@@ -57,19 +71,18 @@ const RelatoriosMensais: React.FC = () => {
 
   useEffect(() => {
     loadHistorico();
-  }, [loadHistorico]);
+    carregarInventario(filtroLocal);
+  }, [loadHistorico, carregarInventario, filtroLocal]);
 
   const handleGerar = async () => {
     setLoading(true);
     try {
       const resultado = await gerarRelatorioMensal(mes, ano);
       setRelatorio(resultado);
-
       await salvarRelatorio(resultado);
+      await carregarInventario(filtroLocal);
 
-      // Sync via Edge Function is triggered automatically by DB webhook
-
-      toast.success(`Relatório de ${MESES[mes - 1]}/${ano} gerado!`);
+      toast.success(`Relatório de ${MESES[mes - 1]}/${ano} gerado com sucesso!`);
       loadHistorico();
     } catch (error: any) {
       console.error('Erro ao gerar relatório:', error);
@@ -88,122 +101,104 @@ const RelatoriosMensais: React.FC = () => {
     // Header
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('CORPO DE BOMBEIROS MILITAR', 105, 20, { align: 'center' });
-    doc.text('5ª BBM — ARAQUARI/SC', 105, 28, { align: 'center' });
+    doc.text('CORPO DE BOMBEIROS MILITAR DE SANTA CATARINA', 105, 18, { align: 'center' });
+    doc.text('5º BATALHÃO DE BOMBEIROS MILITAR — ARAQUARI', 105, 26, { align: 'center' });
 
-    doc.setFontSize(13);
-    doc.text(rel.titulo, 105, 38, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text(`INVENTÁRIO E CONSOLIDAÇÃO PATRIMONIAL (B4) — ${MESES[rel.mes - 1].toUpperCase()}/${rel.ano}`, 105, 35, { align: 'center' });
 
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(
-      `Gerado em: ${new Date().toLocaleDateString('pt-BR')}`,
-      105, 46, { align: 'center' }
-    );
+    doc.text(`Filtro Aplicado: ${filtroLocal === 'todos' ? 'Visão Geral (Todos os Locais/Viaturas)' : filtroLocal}`, 105, 42, { align: 'center' });
+    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 105, 47, { align: 'center' });
 
-    // Metrics table
+    // Table of Inventory with alerts in RED
+    const tableBody = inventario.map(item => [
+      item.nome,
+      item.tomboPatrimonio,
+      item.tipo,
+      item.localViatura + (item.compartimento ? ` (${item.compartimento})` : ''),
+      item.quantidade.toString(),
+      item.estadoConservacao
+    ]);
+
     autoTable(doc, {
-      startY: 55,
-      head: [['Indicador', 'Valor']],
-      body: [
-        ['Total de Patrimônio', rel.totalPatrimonio.toString()],
-        ['Total de Viaturas', rel.totalViaturas.toString()],
-        ['Viaturas Operacionais', rel.viaturasOperacionais.toString()],
-        ['Viaturas em Manutenção', rel.viaturasManutencao.toString()],
-        ['Patrimônio Novo no Mês', rel.patrimonioNovo.toString()],
-        ['Patrimônio Baixado', rel.patrimonioDescartado.toString()],
-        ['Total de Aquisições', rel.totalManutencoes.toString()],
-        ['Custo com Aquisições', formatCurrency(rel.custoManutencoes)],
-        ['Combustível Consumido', `${rel.totalCombustivel} L`],
-        ['Custo com Combustível', formatCurrency(rel.custoCombustivel)],
-        ['Ocorrências Atendidas', rel.ocorrenciasAtendidas.toString()],
-        ['KM Totais da Frota', `${rel.kmRodados.toLocaleString('pt-BR')} km`],
-      ],
-      styles: { fontSize: 10 },
-      headStyles: {
-        fillColor: [30, 41, 59],
-        textColor: 255,
-      },
-      alternateRowStyles: {
-        fillColor: [248, 250, 252],
-      },
+      startY: 54,
+      head: [['Item / Equipamento', 'Tombo/Placa', 'Tipo', 'Local / Viatura / Compartimento', 'Qtd', 'Estado']],
+      body: tableBody,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+      didParseCell: (data) => {
+        if (data.section === 'body') {
+          const itemIndex = data.row.index;
+          const item = inventario[itemIndex];
+          if (item && item.statusAlerta !== 'normal') {
+            // Destacar linha com problema em vermelho no PDF
+            data.cell.styles.textColor = [185, 28, 28]; // Red 700
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
     });
 
-    // Footer
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8);
     doc.setTextColor(150);
     doc.text(
-      'Documento gerado automaticamente pelo Sistema de Gestão Interna — 5ª BBM CBMSC',
+      'Documento de Inventário Oficial — Sistema de Gestão Interna CBMSC Araquari',
       105, pageHeight - 10, { align: 'center' }
     );
 
-    doc.save(`relatorio-b4-${MESES[rel.mes - 1].toLowerCase()}-${rel.ano}.pdf`);
-    toast.success('PDF exportado!');
+    doc.save(`INVENTARIO_PATRIMONIAL_B4_${MESES[rel.mes - 1].toLowerCase()}_${rel.ano}.pdf`);
+    toast.success('PDF do Inventário exportado!');
   };
 
   const exportarTSV = async () => {
     try {
-      const { data: items } = await supabase.from('b4_locais_equipamentos').select('*');
-      const { data: vehicles } = await supabase.from('b4_vehicles').select('*');
+      const items = await buscarInventarioConsolidado(filtroLocal);
 
       const headers = [
         'ID',
         'Nome do Item / Equipamento',
-        'Número de Patrimônio / Tombo',
-        'Tipo / Categoria',
-        'Local ou Viatura Alocada',
+        'Tombo / Patrimônio / Placa',
+        'Tipo',
+        'Local ou Viatura',
+        'Compartimento',
         'Quantidade',
         'Estado de Conservação / Condição',
-        'Observações / Detalhes'
+        'Status Alerta',
+        'Detalhes / Observações'
       ];
 
-      const lines: string[] = [];
-
-      if (items && items.length > 0) {
-        items.forEach((item: Record<string, unknown>) => {
-          lines.push([
-            item.id || '',
-            item.nome || '',
-            item.patrimonio || 'N/A',
-            'Equipamento/Material',
-            item.local_id || 'Local Geral',
-            item.quantidade || 1,
-            item.estado || 'Bom',
-            item.observacoes || ''
-          ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
-        });
-      }
-
-      if (vehicles && vehicles.length > 0) {
-        vehicles.forEach((v: Record<string, unknown>) => {
-          lines.push([
-            v.id || '',
-            v.name || '',
-            v.plate || 'N/A',
-            v.type || 'Viatura',
-            v.location || 'Garagem',
-            1,
-            v.status === 'active' ? 'Operacional' : 'Manutenção',
-            v.details || ''
-          ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
-        });
-      }
+      const lines: string[] = items.map(item => [
+        item.id,
+        item.nome,
+        item.tomboPatrimonio,
+        item.tipo,
+        item.localViatura,
+        item.compartimento || 'N/A',
+        item.quantidade,
+        item.estadoConservacao,
+        item.statusAlerta !== 'normal' ? `[ALERTA: ${item.statusAlerta.toUpperCase()}]` : 'OK',
+        item.detalhes || ''
+      ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
 
       const blob = new Blob([['\uFEFF' + headers.join('\t'), ...lines].join('\n')], { type: 'text/tab-separated-values;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `RELATORIO_PATRIMONIO_B4_${new Date().toISOString().split('T')[0]}.tsv`;
+      a.download = `INVENTARIO_PATRIMONIAL_B4_${filtroLocal.toUpperCase()}_${new Date().toISOString().split('T')[0]}.tsv`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('Relatório em TSV exportado com sucesso!');
+      toast.success('Inventário TSV exportado com sucesso!');
     } catch (err: any) {
       toast.error('Erro ao exportar TSV: ' + err.message);
     }
   };
 
   const activeReport = viewingReport?.dados || relatorio;
+
+  const locsUnicos = Array.from(new Set(inventario.map(i => i.localViatura))).sort();
 
   return (
     <div className="space-y-8">
@@ -316,6 +311,106 @@ const RelatoriosMensais: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Tabela do Inventário Consolidado (Tabelas: Fleet, Compartimentos, Equipamentos/Checklist) */}
+      <div className="bg-white border border-rustic-border rounded-xl p-6 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rustic-border/40 pb-4">
+          <div>
+            <h3 className="text-lg font-black text-[#3e2723] flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">inventory</span>
+              Inventário Geral Consolidado de Bens
+            </h3>
+            <p className="text-xs text-rustic-brown/60">
+              Cruza dados de <strong className="text-rustic-brown">Viaturas</strong>, <strong className="text-rustic-brown">Compartimentos</strong> e <strong className="text-rustic-brown">Checklist de Itens</strong>.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
+              <span className="material-symbols-outlined text-stone-400 text-[18px]">filter_alt</span>
+              <label className="text-xs font-bold text-rustic-brown">Filtrar Local/Viatura:</label>
+              <select
+                value={filtroLocal}
+                onChange={e => setFiltroLocal(e.target.value)}
+                className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer"
+              >
+                <option value="todos">Visão Geral (Todos)</option>
+                {locsUnicos.map(loc => (
+                  <option key={loc} value={loc}>{loc}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr className="bg-stone-50 text-[10px] font-black uppercase tracking-wider text-rustic-brown/60 border-b border-rustic-border">
+                <th className="py-3 px-4">Item / Equipamento</th>
+                <th className="py-3 px-4">Tombo / Placa</th>
+                <th className="py-3 px-4">Tipo</th>
+                <th className="py-3 px-4">Local / Viatura (Compartimento)</th>
+                <th className="py-3 px-4 text-center">Qtd</th>
+                <th className="py-3 px-4 text-center">Estado / Alerta</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-rustic-border/30">
+              {inventario.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-stone-400 italic">
+                    Nenhum bem patrimonial encontrado para o filtro selecionado.
+                  </td>
+                </tr>
+              ) : (
+                inventario.map((item, idx) => {
+                  const hasAlert = item.statusAlerta !== 'normal';
+                  return (
+                    <tr
+                      key={item.id || idx}
+                      className={`hover:bg-stone-50/70 transition-colors ${hasAlert ? 'bg-red-50/50' : ''}`}
+                    >
+                      <td className="py-3 px-4 font-bold text-rustic-brown">
+                        <div className="flex items-center gap-2">
+                          <span className={`material-symbols-outlined text-[16px] ${hasAlert ? 'text-red-600' : 'text-stone-400'}`}>
+                            {item.tipo === 'Viatura' ? 'local_shipping' : item.tipo === 'Compartimento' ? 'grid_view' : 'build'}
+                          </span>
+                          <span>{item.nome}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-xs font-mono font-bold text-rustic-brown/70">{item.tomboPatrimonio}</td>
+                      <td className="py-3 px-4 text-xs">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-stone-100 text-rustic-brown border border-rustic-border/40">
+                          {item.tipo}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-rustic-brown font-medium">
+                        {item.localViatura}
+                        {item.compartimento && (
+                          <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-200">
+                            {item.compartimento}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-xs font-black text-center">{item.quantidade}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 ${
+                          hasAlert
+                            ? 'bg-red-100 text-red-700 border border-red-300 shadow-sm'
+                            : 'bg-green-100 text-green-700 border border-green-200'
+                        }`}>
+                          {hasAlert && <span className="material-symbols-outlined text-[12px]">error</span>}
+                          {item.estadoConservacao}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* Report History Table */}
       <div className="bg-white border border-rustic-border rounded-xl p-6">

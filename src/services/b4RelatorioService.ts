@@ -155,3 +155,115 @@ export async function listarRelatorios(): Promise<RelatorioSalvo[]> {
   if (error) throw error;
   return (data as RelatorioSalvo[]) || [];
 }
+
+export interface InventarioItem {
+  id: string;
+  nome: string;
+  tomboPatrimonio: string;
+  tipo: 'Viatura' | 'Compartimento' | 'Equipamento/Material';
+  localViatura: string;
+  compartimento?: string;
+  quantidade: number;
+  estadoConservacao: string; // 'Bom' | 'Manutenção' | 'Baixado' | 'Vencido'
+  statusAlerta: 'normal' | 'manutencao' | 'vencido' | 'baixado';
+  detalhes?: string;
+}
+
+export async function buscarInventarioConsolidado(localFiltro: string = 'todos'): Promise<InventarioItem[]> {
+  const [vehiclesRes, compartimentosRes, locaisEquipRes, checklistItensRes] = await Promise.allSettled([
+    supabase.from('b4_vehicles').select('*'),
+    supabase.from('b4_compartimentos_viaturas').select('*'),
+    supabase.from('b4_locais_equipamentos').select('*'),
+    supabase.from('b4_checklist_itens').select('*')
+  ]);
+
+  const vehicles = vehiclesRes.status === 'fulfilled' && vehiclesRes.value.data ? vehiclesRes.value.data : [];
+  const compartimentos = compartimentosRes.status === 'fulfilled' && compartimentosRes.value.data ? compartimentosRes.value.data : [];
+  const locaisEquip = locaisEquipRes.status === 'fulfilled' && locaisEquipRes.value.data ? locaisEquipRes.value.data : [];
+  const checklistItens = checklistItensRes.status === 'fulfilled' && checklistItensRes.value.data ? checklistItensRes.value.data : [];
+
+  const inventario: InventarioItem[] = [];
+
+  // 1. Viaturas / Fleet
+  vehicles.forEach((v: any) => {
+    const isManutencao = v.status === 'maintenance' || v.status === 'manutencao';
+    const isBaixado = v.status === 'down' || v.status === 'inativo';
+    inventario.push({
+      id: v.id || `vtr-${Math.random()}`,
+      nome: v.name || 'Viatura',
+      tomboPatrimonio: v.plate || v.id || 'N/A',
+      tipo: 'Viatura',
+      localViatura: v.location || 'Garagem / Pátio',
+      quantidade: 1,
+      estadoConservacao: isManutencao ? 'Em Manutenção' : isBaixado ? 'Inativo/Baixado' : 'Operacional',
+      statusAlerta: isManutencao ? 'manutencao' : isBaixado ? 'baixado' : 'normal',
+      detalhes: `${v.brand || ''} ${v.model || ''} ${v.year || ''} ${v.details || ''}`.trim()
+    });
+  });
+
+  // 2. Compartimentos de Viaturas
+  compartimentos.forEach((c: any) => {
+    const vtr = vehicles.find((v: any) => v.id === c.viatura_id);
+    inventario.push({
+      id: c.id || `comp-${Math.random()}`,
+      nome: c.nome || 'Compartimento',
+      tomboPatrimonio: `COMP-${c.ordem || 1}`,
+      tipo: 'Compartimento',
+      localViatura: vtr ? vtr.name : 'Viatura Não Identificada',
+      compartimento: c.nome,
+      quantidade: 1,
+      estadoConservacao: 'Alocado',
+      statusAlerta: 'normal',
+      detalhes: c.descricao || 'Modulo de armazenamento interno'
+    });
+  });
+
+  // 3. Equipamentos de Locais Físicos
+  locaisEquip.forEach((e: any) => {
+    const isManutencao = e.estado === 'Manutenção' || e.estado === 'manutencao';
+    const isBaixado = e.estado === 'Descarte' || e.estado === 'baixado';
+    inventario.push({
+      id: e.id || `eq-${Math.random()}`,
+      nome: e.nome || 'Equipamento',
+      tomboPatrimonio: e.patrimonio || 'Sem Tombo',
+      tipo: 'Equipamento/Material',
+      localViatura: e.local_id || 'Reserva de Materiais',
+      quantidade: e.quantidade || 1,
+      estadoConservacao: e.estado || 'Bom',
+      statusAlerta: isManutencao ? 'manutencao' : isBaixado ? 'baixado' : 'normal',
+      detalhes: e.observacoes || ''
+    });
+  });
+
+  // 4. Checklist Itens vinculados a compartimentos
+  checklistItens.forEach((ci: any) => {
+    const comp = compartimentos.find((c: any) => c.id === ci.compartimento_id);
+    const vtr = comp ? vehicles.find((v: any) => v.id === comp.viatura_id) : null;
+    const isVencido = ci.validade && new Date(ci.validade) < new Date();
+    const isManutencao = ci.estado === 'Danificado' || ci.estado === 'Faltando';
+
+    inventario.push({
+      id: ci.id || `chk-${Math.random()}`,
+      nome: ci.nome || ci.item_name || 'Item de Conferência',
+      tomboPatrimonio: ci.tombo || ci.patrimonio || 'N/A',
+      tipo: 'Equipamento/Material',
+      localViatura: vtr ? vtr.name : 'Prontidão Operacional',
+      compartimento: comp ? comp.nome : 'Sem Compartimento',
+      quantidade: ci.quantidade || 1,
+      estadoConservacao: isVencido ? 'VENCIDO' : (ci.estado || 'Bom'),
+      statusAlerta: isVencido ? 'vencido' : isManutencao ? 'manutencao' : 'normal',
+      detalhes: ci.observacao || ci.detalhes || ''
+    });
+  });
+
+  // Aplicar filtro por Local / Viatura se especificado
+  if (localFiltro && localFiltro !== 'todos') {
+    return inventario.filter(i =>
+      i.localViatura.toLowerCase().includes(localFiltro.toLowerCase()) ||
+      (i.compartimento && i.compartimento.toLowerCase().includes(localFiltro.toLowerCase()))
+    );
+  }
+
+  return inventario;
+}
+
