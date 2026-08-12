@@ -788,7 +788,7 @@ const PessoalB1: React.FC = () => {
 
           {/* Tabs */}
           <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
-            {(['DASHBOARD', 'EFETIVO', 'CADASTRO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'DISCIPLINA', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
+            {(['DASHBOARD', 'EFETIVO', 'DOCUMENTOS', 'ESCALA', 'FERIAS', 'DISCIPLINA', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
               <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
                 <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('FERIAS', 'FÉRIAS').replace('DASHBOARD', 'DASHBOARD')}
                 {t === 'DASHBOARD' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
@@ -856,7 +856,7 @@ const PessoalB1: React.FC = () => {
                       </select>
 
                       <button
-                        onClick={() => { setMilitarModalData(null); setShowModalCadastro(true); }}
+                        onClick={() => { setFormData(emptyForm()); setEditId(null); setCursosForm([]); setTab('CADASTRO'); }}
                         className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2 shadow-md hover:brightness-110 shrink-0"
                       >
                         <span className="material-symbols-outlined text-[16px]">add</span>
@@ -1353,7 +1353,12 @@ const PessoalB1: React.FC = () => {
                               >
                                 <span className="material-symbols-outlined text-[16px]">edit</span>
                               </button>
-                              <button onClick={async () => { if (confirm('Remover?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }} className="p-1 text-red-400 hover:text-red-600"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                              <ActionButton
+                                variant="delete"
+                                size="sm"
+                                onClick={async () => { if (confirm('Remover período de férias?')) { await PersonnelService.deleteVacation(v.id!); loadData(); toast.success('Removido!'); } }}
+                                title="Excluir período"
+                              />
                             </div>
                           );
                         })}{vacations.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum período registrado.</p>}</div>

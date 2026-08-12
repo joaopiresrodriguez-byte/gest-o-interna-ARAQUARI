@@ -3,6 +3,7 @@ import { PersonnelService } from '../../services/personnelService';
 import { B1Course, Personnel } from '../../services/types';
 import { toast } from 'sonner';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { ActionButton } from '../ui/Icons';
 
 const CATEGORIES = ['Operacional', 'Administrativo', 'Saúde', 'Liderança', 'Especialização Técnica', 'Outros'] as const;
 
@@ -340,13 +341,12 @@ export default function CursosB1({ personnelList }: Props) {
                                 >
                                     <span className="material-symbols-outlined text-base">edit</span>
                                 </button>
-                                <button
+                                <ActionButton
+                                    variant="delete"
+                                    size="sm"
                                     onClick={() => handleDelete(c.id!, c.course_name)}
-                                    className="p-1.5 text-stone-400 hover:text-red-600 transition-colors"
                                     title="Remover curso"
-                                >
-                                    <span className="material-symbols-outlined text-base">delete</span>
-                                </button>
+                                />
                             </div>
                         </div>
                     ))}

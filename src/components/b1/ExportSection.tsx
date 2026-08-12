@@ -591,8 +591,7 @@ const ExportSection: React.FC<Props> = ({
             <div className="flex gap-2 border-b border-stone-200 pb-3">
                 {[
                     { id: 'sigrh', label: 'SIGRH (Extrato Completo)', icon: 'table_view' },
-                    { id: 'sgpe', label: 'SGP-e (Ficha Frequência & Escala 24x72)', icon: 'description' },
-                    { id: 'checklist', label: 'Checklist de Submissões', icon: 'fact_check' }
+                    { id: 'sgpe', label: 'SGP-e (Ficha Frequência & Escala 24x72)', icon: 'description' }
                 ].map(t => (
                     <button
                         key={t.id}
@@ -779,36 +778,6 @@ const ExportSection: React.FC<Props> = ({
                 </div>
             )}
 
-            {/* TAB: CHECKLIST */}
-            {activeSubTab === 'checklist' && (
-                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm space-y-4">
-                    <h3 className="font-black text-lg">Checklist de Submissões aos Sistemas</h3>
-                    <table className="w-full text-sm">
-                        <thead className="bg-stone-50 text-[10px] font-black uppercase text-gray-500">
-                            <tr>
-                                <th className="px-4 py-3 text-left">Tipo</th>
-                                <th className="px-4 py-3">Sistema</th>
-                                <th className="px-4 py-3">Mês Ref.</th>
-                                <th className="px-4 py-3">Data Submissão</th>
-                                <th className="px-4 py-3">Responsável</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {exports.map(e => (
-                                <tr key={e.id}>
-                                    <td className="px-4 py-2 font-bold">{e.export_type}</td>
-                                    <td className="px-4 py-2 text-center">{e.system}</td>
-                                    <td className="px-4 py-2 text-center">{e.month_ref}</td>
-                                    <td className="px-4 py-2 text-center">
-                                        {e.submitted_date ? new Date(e.submitted_date).toLocaleDateString('pt-BR') : '—'}
-                                    </td>
-                                    <td className="px-4 py-2 text-center">{e.responsible || '—'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
         </div>
     );
 };

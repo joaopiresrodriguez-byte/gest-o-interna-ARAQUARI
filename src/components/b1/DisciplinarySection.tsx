@@ -1,5 +1,6 @@
 import React from 'react';
 import { Personnel, DisciplinaryRecord } from '../../services/types';
+import { ActionButton } from '../ui/Icons';
 
 interface Props {
     records: DisciplinaryRecord[];
@@ -103,9 +104,12 @@ const DisciplinarySection: React.FC<Props> = ({ records, personnelList, onAdd, o
                                         <p className="text-[10px] text-gray-400">{new Date(r.date).toLocaleDateString('pt-BR')} {r.responsible_authority ? `• ${r.responsible_authority}` : ''}</p>
                                     </div>
                                     {isEditor && (
-                                        <button onClick={() => onDelete(r.id!)} className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                                        </button>
+                                        <ActionButton
+                                            variant="delete"
+                                            size="sm"
+                                            onClick={() => onDelete(r.id!)}
+                                            title="Excluir registro disciplinar"
+                                        />
                                     )}
                                 </div>
                             );
