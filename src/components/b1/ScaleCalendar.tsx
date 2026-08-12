@@ -140,7 +140,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
             <div className="p-4 bg-stone-50 border-t border-stone-200 flex flex-wrap gap-4 text-[10px] font-bold uppercase text-stone-500">
                 {Object.entries(CORES).map(([letra, cor]) => (
                     <div key={letra} className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-sm border" style={{ backgroundColor: hexToRgba(cor, 0.2), borderColor: cor }}></span> 
+                        <span className="w-3 h-3 rounded-sm border" style={{ backgroundColor: hexToRgba(cor.hex, 0.2), borderColor: cor.hex }}></span> 
                         Guarnição {letra}
                     </div>
                 ))}

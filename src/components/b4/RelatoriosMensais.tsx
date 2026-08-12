@@ -9,6 +9,7 @@ import {
 } from '../../services/b4RelatorioService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { supabase } from '../../services/supabase';
 
 const MESES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril',
@@ -160,7 +161,7 @@ const RelatoriosMensais: React.FC = () => {
       const lines: string[] = [];
 
       if (items && items.length > 0) {
-        items.forEach(item => {
+        items.forEach((item: Record<string, unknown>) => {
           lines.push([
             item.id || '',
             item.nome || '',
@@ -175,7 +176,7 @@ const RelatoriosMensais: React.FC = () => {
       }
 
       if (vehicles && vehicles.length > 0) {
-        vehicles.forEach(v => {
+        vehicles.forEach((v: Record<string, unknown>) => {
           lines.push([
             v.id || '',
             v.name || '',

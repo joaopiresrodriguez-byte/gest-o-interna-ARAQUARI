@@ -11,6 +11,7 @@ import { ActionButton } from '../components/ui/Icons';
 
 
 import { ScaleAdjustmentService } from '../services/scaleAdjustmentService';
+import { ScaleReportingService } from '../services/scaleReportingService';
 import AlertsDashboard from '../components/b1/AlertsDashboard';
 import DisciplinarySection from '../components/b1/DisciplinarySection';
 import PersonnelProfile from '../components/b1/PersonnelProfile';
