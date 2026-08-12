@@ -170,32 +170,42 @@ export interface InventarioItem {
 }
 
 export async function buscarInventarioConsolidado(localFiltro: string = 'todos'): Promise<InventarioItem[]> {
-  const [vehiclesRes, compartimentosRes, locaisEquipRes, checklistItensRes] = await Promise.allSettled([
+  const [fleetRes, b4VehiclesRes, compViatsRes, b4CompRes, locaisEquipRes, chkItensRes] = await Promise.allSettled([
+    supabase.from('fleet').select('*'),
     supabase.from('b4_vehicles').select('*'),
+    supabase.from('compartimentos_viatura').select('*'),
     supabase.from('b4_compartimentos_viaturas').select('*'),
     supabase.from('b4_locais_equipamentos').select('*'),
-    supabase.from('b4_checklist_itens').select('*')
+    supabase.from('checklist_itens').select('*')
   ]);
 
-  const vehicles = vehiclesRes.status === 'fulfilled' && vehiclesRes.value.data ? vehiclesRes.value.data : [];
-  const compartimentos = compartimentosRes.status === 'fulfilled' && compartimentosRes.value.data ? compartimentosRes.value.data : [];
+  const fleetData = fleetRes.status === 'fulfilled' && fleetRes.value.data ? fleetRes.value.data : [];
+  const b4VehiclesData = b4VehiclesRes.status === 'fulfilled' && b4VehiclesRes.value.data ? b4VehiclesRes.value.data : [];
+  const vehicles = fleetData.length > 0 ? fleetData : b4VehiclesData;
+
+  const compData = compViatsRes.status === 'fulfilled' && compViatsRes.value.data ? compViatsRes.value.data : [];
+  const b4CompData = b4CompRes.status === 'fulfilled' && b4CompRes.value.data ? b4CompRes.value.data : [];
+  const compartimentos = compData.length > 0 ? compData : b4CompData;
+
   const locaisEquip = locaisEquipRes.status === 'fulfilled' && locaisEquipRes.value.data ? locaisEquipRes.value.data : [];
-  const checklistItens = checklistItensRes.status === 'fulfilled' && checklistItensRes.value.data ? checklistItensRes.value.data : [];
+  const checklistItens = chkItensRes.status === 'fulfilled' && chkItensRes.value.data ? chkItensRes.value.data : [];
 
   const inventario: InventarioItem[] = [];
 
-  // 1. Viaturas / Fleet
+  // 1. Bens e Viaturas da Tabela `fleet`
   vehicles.forEach((v: any) => {
+    const isViatura = v.type === 'Viatura' || v.type === 'viatura';
     const isManutencao = v.status === 'maintenance' || v.status === 'manutencao';
     const isBaixado = v.status === 'down' || v.status === 'inativo';
+    
     inventario.push({
       id: v.id || `vtr-${Math.random()}`,
-      nome: v.name || 'Viatura',
-      tomboPatrimonio: v.plate || v.id || 'N/A',
-      tipo: 'Viatura',
+      nome: v.name || 'Item de Patrimônio',
+      tomboPatrimonio: v.plate || v.patrimonio || v.id || 'N/A',
+      tipo: isViatura ? 'Viatura' : 'Equipamento/Material',
       localViatura: v.location || 'Garagem / Pátio',
       quantidade: 1,
-      estadoConservacao: isManutencao ? 'Em Manutenção' : isBaixado ? 'Inativo/Baixado' : 'Operacional',
+      estadoConservacao: isManutencao ? 'Em Manutenção' : isBaixado ? 'Inativo/Baixado' : 'Operacional/Bom',
       statusAlerta: isManutencao ? 'manutencao' : isBaixado ? 'baixado' : 'normal',
       detalhes: `${v.brand || ''} ${v.model || ''} ${v.year || ''} ${v.details || ''}`.trim()
     });
@@ -206,15 +216,15 @@ export async function buscarInventarioConsolidado(localFiltro: string = 'todos')
     const vtr = vehicles.find((v: any) => v.id === c.viatura_id);
     inventario.push({
       id: c.id || `comp-${Math.random()}`,
-      nome: c.nome || 'Compartimento',
+      nome: c.nome || c.name || 'Compartimento',
       tomboPatrimonio: `COMP-${c.ordem || 1}`,
       tipo: 'Compartimento',
       localViatura: vtr ? vtr.name : 'Viatura Não Identificada',
-      compartimento: c.nome,
+      compartimento: c.nome || c.name,
       quantidade: 1,
       estadoConservacao: 'Alocado',
       statusAlerta: 'normal',
-      detalhes: c.descricao || 'Modulo de armazenamento interno'
+      detalhes: c.descricao || 'Módulo de armazenamento interno'
     });
   });
 
@@ -248,7 +258,7 @@ export async function buscarInventarioConsolidado(localFiltro: string = 'todos')
       tomboPatrimonio: ci.tombo || ci.patrimonio || 'N/A',
       tipo: 'Equipamento/Material',
       localViatura: vtr ? vtr.name : 'Prontidão Operacional',
-      compartimento: comp ? comp.nome : 'Sem Compartimento',
+      compartimento: comp ? (comp.nome || comp.name) : 'Sem Compartimento',
       quantidade: ci.quantidade || 1,
       estadoConservacao: isVencido ? 'VENCIDO' : (ci.estado || 'Bom'),
       statusAlerta: isVencido ? 'vencido' : isManutencao ? 'manutencao' : 'normal',
