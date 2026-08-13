@@ -23,6 +23,16 @@ const hexToRgba = (hex: string, alpha: number) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+const getTurmaLetter = (turma?: string, equipe?: string): string => {
+    const raw = (turma || equipe || '').trim().toUpperCase();
+    if (raw.endsWith('A') || raw.includes('TURMA A') || raw.includes('GUARNIÇÃO A') || raw.includes('ALPHA') || raw.includes('AZUL')) return 'A';
+    if (raw.endsWith('B') || raw.includes('TURMA B') || raw.includes('GUARNIÇÃO B') || raw.includes('BRAVO') || raw.includes('VERMELH')) return 'B';
+    if (raw.endsWith('C') || raw.includes('TURMA C') || raw.includes('GUARNIÇÃO C') || raw.includes('CHARLIE') || raw.includes('AMAREL')) return 'C';
+    if (raw.endsWith('D') || raw.includes('TURMA D') || raw.includes('GUARNIÇÃO D') || raw.includes('DELTA') || raw.includes('BRANC')) return 'D';
+    if (raw.length === 1 && ['A', 'B', 'C', 'D'].includes(raw)) return raw;
+    return 'A';
+};
+
 const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, onDayClick }) => {
     const [year, monthNum] = month.split('-').map(Number);
     const daysInMonth = new Date(year, monthNum, 0).getDate();
@@ -47,8 +57,8 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
         );
 
         if (isScaled && dayEscala) {
-            const teamLetter = dayEscala.turma || '?';
-            const teamInfo = CORES[teamLetter] || { bg: 'bg-green-600', text: 'text-green-700', hex: '#16a34a' };
+            const teamLetter = getTurmaLetter(dayEscala.turma, dayEscala.equipe);
+            const teamInfo = CORES[teamLetter] || CORES['A'];
             
             // Build tooltip with names of all members on duty this day
             const onDutyMembers = dayEscala.militares
@@ -63,7 +73,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                 label: teamLetter,
                 cls: 'font-bold border-none',
                 style: { backgroundColor: hexToRgba(teamInfo.hex, 0.2), color: teamInfo.hex },
-                tooltip: `Serviço: ${onDutyMembers}`,
+                tooltip: `Guarnição ${teamLetter} - Serviço: ${onDutyMembers}`,
                 warning: warning || (isVacation ? { type: 'VACATION', message: 'Militar em férias/licença' } : null)
             };
         }
