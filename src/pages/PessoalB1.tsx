@@ -539,34 +539,41 @@ const PessoalB1: React.FC = () => {
     try {
       setLoading(true);
 
+      // FIX: buscar militar_id diretamente — a FK 'personnel' não existe na tabela guarnicao_membros
       const { data: gData, error } = await supabase
         .from('guarnicoes')
         .select(`
           id, nome,
-          guarnicao_membros(
-            personnel(id, name, war_name, rank)
-          )
+          guarnicao_membros( militar_id )
         `)
         .order('nome');
 
       if (error || !gData) throw new Error('Não foi possível carregar as guarnições.');
 
-      const mapNomeToCodigo = (nome: string) => {
-        if (nome === 'Azul') return 'A';
-        if (nome === 'Vermelha') return 'B';
-        if (nome === 'Amarela') return 'C';
-        if (nome === 'Branca') return 'D';
-        if (nome === 'Alpha') return 'A';
-        if (nome === 'Bravo') return 'B';
-        if (nome === 'Charlie') return 'C';
-        if (nome === 'Delta') return 'D';
-        return nome.charAt(0);
+      // FIX: extrair último token do nome (ex: "Guarnição A" → "A") em vez de charAt(0) → "G"
+      const mapNomeToCodigo = (nome: string): string => {
+        const normalizado = nome.trim().toUpperCase();
+        // Nomes por extenso → código letra
+        if (normalizado.includes('ALPHA')   || normalizado.includes('AZUL'))     return 'A';
+        if (normalizado.includes('BRAVO')   || normalizado.includes('VERMELH'))  return 'B';
+        if (normalizado.includes('CHARLIE') || normalizado.includes('AMAREL'))   return 'C';
+        if (normalizado.includes('DELTA')   || normalizado.includes('BRANC'))    return 'D';
+        // Padrão "Guarnição X" ou "Turma X" → último token
+        const ultimaPalavra = normalizado.split(/\s+/).pop() || '';
+        if (['A', 'B', 'C', 'D'].includes(ultimaPalavra)) return ultimaPalavra;
+        // Último caractere como fallback seguro
+        const ultimoChar = normalizado.slice(-1);
+        if (['A', 'B', 'C', 'D'].includes(ultimoChar)) return ultimoChar;
+        return 'A';
       };
 
       const guarnicoesFormatadas = gData.map(g => ({
         id: g.id,
         codigo: mapNomeToCodigo(g.nome),
-        membrosIds: g.guarnicao_membros?.map((m: any) => m.personnel?.id).filter(Boolean) || []
+        // FIX: usar m.militar_id (campo real da tabela)
+        membrosIds: (g.guarnicao_membros as Array<{ militar_id: number }> | null)
+          ?.map(m => m.militar_id)
+          .filter(Boolean) || []
       })).sort((a, b) => a.codigo.localeCompare(b.codigo));
 
       if (guarnicoesFormatadas.length === 0) throw new Error('Nenhuma guarnição encontrada no banco.');
