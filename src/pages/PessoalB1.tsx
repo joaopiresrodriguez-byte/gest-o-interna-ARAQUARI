@@ -25,6 +25,7 @@ import RankingAcesso from '../components/b1/RankingAcesso';
 import PainelDinossauros from '../components/b1/PainelDinossauros';
 import ModalCadastroMilitar from '../components/b1/ModalCadastroMilitar';
 import ModalEdicaoFerias from '../components/b1/ModalEdicaoFerias';
+import { SecaoAlteracoesEscala } from '../components/b1/SecaoAlteracoesEscala';
 
 type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
 
@@ -1204,17 +1205,13 @@ const PessoalB1: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Swap Registration */}
-                  <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                    <h3 className="font-black text-lg mb-4 flex items-center gap-2"><span className="material-symbols-outlined text-amber-500">swap_horiz</span> Troca de Serviço <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Limite: 2/mês/militar</span></h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                      <select value={swapPersonId} onChange={e => setSwapPersonId(Number(e.target.value))} className="h-11 px-3 rounded-lg border text-sm"><option value="">Militar...</option>{personnelList.filter(p => p.status === 'Ativo').map(p => <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>)}</select>
-                      <input type="date" value={swapOrigDate} onChange={e => setSwapOrigDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Data original" />
-                      <input type="date" value={swapNewDate} onChange={e => setSwapNewDate(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Nova data" />
-                      <input value={swapReason} onChange={e => setSwapReason(e.target.value)} className="h-11 px-3 rounded-lg border text-sm" placeholder="Motivo" />
-                      <button onClick={handleSaveSwap} className="h-11 bg-amber-500 text-white font-black rounded-xl text-xs">REGISTRAR TROCA</button>
-                    </div>
-                  </div>
+                  {/* Seção Alterações de Escala Publicada — 3 Modalidades & Histórico */}
+                  <SecaoAlteracoesEscala
+                    personnelList={personnelList}
+                    escalas={escalas}
+                    vacations={vacations}
+                    onReload={loadData}
+                  />
                 </div>
               )}
 

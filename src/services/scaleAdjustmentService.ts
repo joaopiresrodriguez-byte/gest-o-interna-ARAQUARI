@@ -60,5 +60,200 @@ export const ScaleAdjustmentService = {
         const { data, error } = await query;
         if (error) throw error;
         return data || [];
+    },
+
+    // ─── BLOCO 3: 3 MODALIDADES DE ALTERAÇÃO DE ESCALA ─────────────────────────
+
+    /**
+     * MODALIDADE 1 — TROCA DE SERVIÇO ENTRE DOIS MILITARES
+     * Troca os dias de serviço entre Militar A (dia A) e Militar B (dia B)
+     */
+    registrarTrocaMutua: async (params: {
+        militarAId: number;
+        diaA: string;
+        militarBId: number;
+        diaB: string;
+        usuario: string;
+        detalhes?: string;
+    }) => {
+        const { militarAId, diaA, militarBId, diaB, usuario, detalhes } = params;
+
+        // 1. Buscar escalas dos dois dias
+        const { data: escA } = await supabase.from('escalas').select('*').eq('data', diaA).single();
+        const { data: escB } = await supabase.from('escalas').select('*').eq('data', diaB).single();
+
+        if (escA && escB) {
+            // Substituir Militar A por B no Dia A e vice-versa no Dia B
+            const milsA = (escA.militares || []).map((id: number) => id === militarAId ? militarBId : id);
+            const milsB = (escB.militares || []).map((id: number) => id === militarBId ? militarAId : id);
+
+            await supabase.from('escalas').update({ militares: milsA, updated_at: new Date().toISOString() }).eq('id', escA.id);
+            await supabase.from('escalas').update({ militares: milsB, updated_at: new Date().toISOString() }).eq('id', escB.id);
+        }
+
+        // 2. Registrar no Histórico escala_alteracoes / service_swaps
+        const record = {
+            tipo_alteracao: 'troca_militares',
+            militar_a_id: militarAId,
+            militar_b_id: militarBId,
+            dia_original_a: diaA,
+            dia_original_b: diaB,
+            detalhes: detalhes || `Troca mútua de serviço: Militar #${militarAId} (Dia ${diaA}) por Militar #${militarBId} (Dia ${diaB})`,
+            criado_por: usuario,
+            criado_em: new Date().toISOString()
+        };
+
+        const { error } = await supabase.from('escala_alteracoes').insert(record);
+        if (error) {
+            console.warn('[ScaleAdjustmentService] Tabela escala_alteracoes indisponível, registrando fallback via audit log:', error.message);
+            await ScaleAdjustmentService.logAudit({
+                action_type: 'Troca Mútua',
+                scale_date: diaA,
+                personnel_id: militarAId,
+                personnel_name: `Militar ${militarAId} <-> ${militarBId}`,
+                reason: record.detalhes,
+                performed_by: usuario
+            });
+        }
+        return true;
+    },
+
+    /**
+     * MODALIDADE 2 — TROCA INDIVIDUAL DE DIA DE SERVIÇO
+     * Move um militar do dia de saída para o dia de entrada
+     */
+    registrarTrocaIndividual: async (params: {
+        militarId: number;
+        diaSaida: string;
+        diaEntrada: string;
+        militarSubstitudoId?: number;
+        usuario: string;
+        detalhes?: string;
+    }) => {
+        const { militarId, diaSaida, diaEntrada, militarSubstitudoId, usuario, detalhes } = params;
+
+        // 1. Remover militar do dia de saída
+        if (diaSaida) {
+            const { data: escSaida } = await supabase.from('escalas').select('*').eq('data', diaSaida).single();
+            if (escSaida) {
+                const mils = (escSaida.militares || []).filter((id: number) => id !== militarId);
+                await supabase.from('escalas').update({ militares: mils, updated_at: new Date().toISOString() }).eq('id', escSaida.id);
+            }
+        }
+
+        // 2. Adicionar militar no dia de entrada (substituindo se informado)
+        if (diaEntrada) {
+            const { data: escEntrada } = await supabase.from('escalas').select('*').eq('data', diaEntrada).single();
+            if (escEntrada) {
+                let mils = escEntrada.militares || [];
+                if (militarSubstitudoId) {
+                    mils = mils.map((id: number) => id === militarSubstitudoId ? militarId : id);
+                } else if (!mils.includes(militarId)) {
+                    mils.push(militarId);
+                }
+                await supabase.from('escalas').update({ militares: mils, updated_at: new Date().toISOString() }).eq('id', escEntrada.id);
+            }
+        }
+
+        // 3. Registrar no Histórico escala_alteracoes
+        const record = {
+            tipo_alteracao: 'troca_individual',
+            militar_a_id: militarId,
+            militar_b_id: militarSubstitudoId || null,
+            dia_original_a: diaSaida,
+            dia_original_b: diaEntrada,
+            detalhes: detalhes || `Troca individual: Militar #${militarId} saiu do dia ${diaSaida} e entrou no dia ${diaEntrada}`,
+            criado_por: usuario,
+            criado_em: new Date().toISOString()
+        };
+
+        const { error } = await supabase.from('escala_alteracoes').insert(record);
+        if (error) {
+            await ScaleAdjustmentService.logAudit({
+                action_type: 'Troca Individual',
+                scale_date: diaEntrada || diaSaida,
+                personnel_id: militarId,
+                personnel_name: `Militar #${militarId}`,
+                reason: record.detalhes,
+                performed_by: usuario
+            });
+        }
+        return true;
+    },
+
+    /**
+     * MODALIDADE 3 — TRANSFERÊNCIA DE GUARNIÇÃO DO MILITAR
+     * Transfere permanentemente o militar para nova guarnição a partir da data de vigência
+     */
+    registrarTransferenciaGuarnicao: async (params: {
+        militarId: number;
+        guarnicaoOrigemId?: string;
+        guarnicaoDestinoId: string;
+        dataVigencia: string;
+        usuario: string;
+        detalhes?: string;
+    }) => {
+        const { militarId, guarnicaoOrigemId, guarnicaoDestinoId, dataVigencia, usuario, detalhes } = params;
+
+        // 1. Atualizar vinculo na tabela guarnicao_membros
+        if (guarnicaoOrigemId) {
+            await supabase.from('guarnicao_membros').delete().eq('militar_id', militarId).eq('guarnicao_id', guarnicaoOrigemId);
+        } else {
+            await supabase.from('guarnicao_membros').delete().eq('militar_id', militarId);
+        }
+
+        await supabase.from('guarnicao_membros').insert({
+            guarnicao_id: guarnicaoDestinoId,
+            militar_id: militarId,
+            created_at: new Date().toISOString()
+        });
+
+        // 2. Registrar no Histórico escala_alteracoes
+        const record = {
+            tipo_alteracao: 'transferencia_guarnicao',
+            militar_a_id: militarId,
+            guarnicao_origem_id: guarnicaoOrigemId || null,
+            guarnicao_destino_id: guarnicaoDestinoId,
+            data_vigencia: dataVigencia,
+            detalhes: detalhes || `Transferência de guarnição do Militar #${militarId} para Guarnição ${guarnicaoDestinoId} a partir de ${dataVigencia}`,
+            criado_por: usuario,
+            criado_em: new Date().toISOString()
+        };
+
+        const { error } = await supabase.from('escala_alteracoes').insert(record);
+        if (error) {
+            await ScaleAdjustmentService.logAudit({
+                action_type: 'Transferência Guarnição',
+                scale_date: dataVigencia,
+                personnel_id: militarId,
+                personnel_name: `Militar #${militarId}`,
+                reason: record.detalhes,
+                performed_by: usuario
+            });
+        }
+        return true;
+    },
+
+    /**
+     * Busca o histórico unificado de alterações da escala
+     */
+    getHistoricoAlteracoes: async (): Promise<any[]> => {
+        const { data, error } = await supabase
+            .from('escala_alteracoes')
+            .select('*')
+            .order('criado_em', { ascending: false });
+
+        if (error) {
+            // Fallback audit log
+            const logs = await ScaleAdjustmentService.getAuditLogs();
+            return logs.map(l => ({
+                id: l.id,
+                tipo_alteracao: l.action_type,
+                detalhes: l.reason,
+                criado_por: l.performed_by,
+                criado_em: l.performed_at
+            }));
+        }
+        return data || [];
     }
 };

@@ -18,23 +18,19 @@ interface Guarnicao {
   membros: Militar[];
 }
 
-const CORES: Record<string, string> = {
-  A: '#2563EB', // Azul
-  B: '#DC2626', // Vermelha
-  C: '#EAB308', // Amarela
-  D: '#9CA3AF', // Branca
+const CORES: Record<string, { bg: string; text: string; hex: string }> = {
+  A: { bg: 'bg-green-600', text: 'text-green-700', hex: '#16a34a' }, // VERDE
+  B: { bg: 'bg-blue-600', text: 'text-blue-700', hex: '#2563eb' },   // AZUL
+  C: { bg: 'bg-yellow-500', text: 'text-yellow-700', hex: '#ca8a04' },// AMARELO
+  D: { bg: 'bg-red-600', text: 'text-red-700', hex: '#dc2626' },    // VERMELHO
 };
 
 const mapNomeToCodigo = (nome: string) => {
-  if (nome === 'Azul') return 'A';
-  if (nome === 'Vermelha') return 'B';
-  if (nome === 'Amarela') return 'C';
-  if (nome === 'Branca') return 'D';
-  if (nome === 'Alpha') return 'A';
-  if (nome === 'Bravo') return 'B';
-  if (nome === 'Charlie') return 'C';
-  if (nome === 'Delta') return 'D';
-  return nome.charAt(0);
+  if (nome === 'Guarnição A' || nome === 'Alpha' || nome === 'Azul') return 'A';
+  if (nome === 'Guarnição B' || nome === 'Bravo' || nome === 'Vermelha') return 'B';
+  if (nome === 'Guarnição C' || nome === 'Charlie' || nome === 'Amarela') return 'C';
+  if (nome === 'Guarnição D' || nome === 'Delta' || nome === 'Branca') return 'D';
+  return nome.charAt(nome.length - 1) || 'A';
 };
 
 export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarnicoes: number, totalMembros: number) => void }) {
@@ -219,7 +215,7 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
         {guarnicoes.map(guarnicao => (
           <div key={guarnicao.id} className="border rounded-lg overflow-hidden bg-white">
             <div className="p-3 text-white font-bold text-sm flex items-center justify-between"
-              style={{ backgroundColor: CORES[guarnicao.codigo] || '#374151' }}>
+              style={{ backgroundColor: CORES[guarnicao.codigo]?.hex || '#16a34a' }}>
               <span>Guarnição {guarnicao.codigo}</span>
               <span className="text-xs opacity-75 bg-white/20 px-2 py-0.5 rounded-full">
                 {guarnicao.membros.length} mil.
