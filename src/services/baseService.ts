@@ -138,13 +138,45 @@ export class BaseService<T> {
     }
 
     /**
+     * Limpa o payload removendo objetos de junção/relacionamento antes de enviar ao Supabase
+     */
+    private cleanPayload(data: Partial<T>): Record<string, unknown> {
+        const cleaned: Record<string, unknown> = {};
+        const ignoredKeys = [
+            'local',
+            'compartimento',
+            'personnel',
+            'bombeiro',
+            'materia',
+            'vehicle',
+            'item',
+            'time_ago',
+            'personnel_name',
+            'swap_with_name',
+            'bombeiro_nome',
+            'bombeiro_guerra',
+            'bombeiro_posto',
+            'bombeiro_telefone',
+            'patrimonio_description',
+        ];
+
+        for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
+            if (ignoredKeys.includes(key)) continue;
+            if (val !== null && typeof val === 'object' && !Array.isArray(val)) continue;
+            cleaned[key] = val;
+        }
+        return cleaned;
+    }
+
+    /**
      * Criar novo registro
      */
     async create(data: Partial<T>): Promise<T> {
         try {
+            const payload = this.cleanPayload(data);
             const { data: created, error } = await supabase
                 .from(this.tableName)
-                .insert(data)
+                .insert(payload)
                 .select(this.selectFields)
                 .single();
 
@@ -171,9 +203,10 @@ export class BaseService<T> {
      */
     async update(id: string | number, data: Partial<T>): Promise<T> {
         try {
+            const payload = this.cleanPayload(data);
             const { data: updated, error } = await supabase
                 .from(this.tableName)
-                .update(data)
+                .update(payload)
                 .eq('id', id)
                 .select(this.selectFields)
                 .single();

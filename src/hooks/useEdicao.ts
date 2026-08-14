@@ -27,12 +27,38 @@ export function useEdicao<T extends { id: string }>(tabela: string) {
     setSalvando(true);
     setErro(null);
 
-    const { id, ...dados } = itemEditando;
+    const { id, ...dados } = itemEditando as Record<string, any>;
+
+    // Filtrar campos de relacionamento e objetos virtuais que não são colunas reais
+    const dadosLimpos: Record<string, any> = {};
+    const ignoredKeys = [
+      'local',
+      'compartimento',
+      'personnel',
+      'bombeiro',
+      'materia',
+      'vehicle',
+      'item',
+      'time_ago',
+      'personnel_name',
+      'swap_with_name',
+      'bombeiro_nome',
+      'bombeiro_guerra',
+      'bombeiro_posto',
+      'bombeiro_telefone',
+      'patrimonio_description',
+    ];
+
+    for (const [key, val] of Object.entries(dados)) {
+      if (ignoredKeys.includes(key)) continue;
+      if (val !== null && typeof val === 'object' && !Array.isArray(val)) continue;
+      dadosLimpos[key] = val;
+    }
 
     const { error } = await supabase
       .from(tabela)
       .update({
-        ...dados,
+        ...dadosLimpos,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -41,7 +67,7 @@ export function useEdicao<T extends { id: string }>(tabela: string) {
 
     if (error) {
       setErro(error.message);
-      mostrarToast('⚠️ Erro ao salvar alterações.', 'erro');
+      mostrarToast('⚠️ Erro ao salvar alterações: ' + error.message, 'erro');
       return false;
     }
 
