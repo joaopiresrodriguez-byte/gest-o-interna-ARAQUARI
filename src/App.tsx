@@ -18,8 +18,10 @@ const Login = lazy(() => import('./pages/Login'));
 const GestaoUsuarios = lazy(() => import('./pages/GestaoUsuarios'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const ExtratoPublico = lazy(() => import('./pages/ExtratoPublico'));
+const BcIntencaoPublica = lazy(() => import('./pages/BcIntencaoPublica').then(m => ({ default: m.BcIntencaoPublica })));
 
 import ChangePasswordModal from './components/ChangePasswordModal';
+
 
 
 
@@ -233,6 +235,14 @@ const App: React.FC = () => {
         <Toaster position="top-right" richColors />
         <RouteErrorBoundary>
           <Routes>
+            <Route
+              path="/bc-intencao"
+              element={
+                <Suspense fallback={<LoadingFallback message="Carregando formulário de intenção..." />}>
+                  <BcIntencaoPublica />
+                </Suspense>
+              }
+            />
             <Route
               path="/extrato/:tipo/:id"
               element={

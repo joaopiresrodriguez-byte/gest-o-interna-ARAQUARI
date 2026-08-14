@@ -569,3 +569,49 @@ export interface ScaleRotationConfig {
     created_at?: string;
     is_active?: boolean;
 }
+
+export interface BcCiclo {
+    id: string;
+    mes_referencia: string;
+    data_abertura: string;
+    data_encerramento: string;
+    status: 'aberto' | 'encerrado' | 'processado' | 'publicado';
+    criado_em?: string;
+}
+
+export interface BcIntencao {
+    id?: string;
+    bombeiro_id: number;
+    mes_referencia: string;
+    dia: string;
+    horario_inicio: string;
+    horario_fim: string;
+    total_horas: number;
+    status: 'pendente' | 'aceita' | 'rejeitada';
+    token_acesso: string;
+    criado_em?: string;
+    // Joined
+    bombeiro_nome?: string;
+    bombeiro_guerra?: string;
+}
+
+export interface BcSelecionado {
+    id?: string;
+    bombeiro_id: number;
+    dia: string;
+    horario_inicio: string;
+    horario_fim: string;
+    total_horas: number;
+    criterio_aplicado: string;
+    posicao_ranking: number;
+    notificado: boolean;
+    substituido_por_gestor?: boolean;
+    motivo_substituicao?: string;
+    criado_em?: string;
+    // Joined
+    bombeiro_nome?: string;
+    bombeiro_guerra?: string;
+    bombeiro_posto?: string;
+    bombeiro_telefone?: string;
+}
+
