@@ -15,18 +15,33 @@ import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
 const GarrisonDisplay = () => {
   const [escala, setEscala] = useState<any>(null);
   const [personnel, setPersonnel] = useState<any[]>([]);
+  const [vacations, setVacations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const getLeaveLabel = (type?: string) => {
+    switch (type) {
+      case 'ferias': return 'Férias';
+      case 'licenca_medica': return 'Licença Médica';
+      case 'licenca_especial': return 'Licença Especial';
+      case 'afastamento': return 'Afastamento';
+      case 'cedido': return 'Cedido';
+      case 'outros': return 'Outros';
+      default: return 'Afastamento';
+    }
+  };
 
   useEffect(() => {
     const fetchEscala = async () => {
       try {
         const today = new Date().toISOString().split('T')[0];
-        const [escalaData, personnelData] = await Promise.all([
+        const [escalaData, personnelData, vacationsData] = await Promise.all([
           SupabaseService.getEscalaByDate(today),
-          SupabaseService.getPersonnel()
+          SupabaseService.getPersonnel(),
+          SupabaseService.getVacations()
         ]);
         setEscala(escalaData);
         setPersonnel(personnelData);
+        setVacations(vacationsData || []);
       } catch (error) {
         console.error("Erro ao buscar guarnição:", error);
       } finally {
@@ -39,24 +54,65 @@ const GarrisonDisplay = () => {
   if (loading) return <div className="text-xs text-gray-500 animate-pulse">Carregando guarnição...</div>;
   if (!escala) return <div className="text-xs text-gray-400 italic">Nenhuma escala publicada para hoje. (Verifique com o B1)</div>;
 
+  const today = new Date().toISOString().split('T')[0];
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-xs font-bold text-rustic-brown">Equipe:</span>
-        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-black uppercase">{escala.equipe}</span>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-rustic-brown">Equipe:</span>
+          <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-black uppercase">{escala.equipe}</span>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         {escala.militares?.map((id: number) => {
           const p = personnel.find(px => px.id === id);
-          return p ? (
-            <div key={id} className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg shadow-sm">
-              <div className="w-8 h-8 rounded-full bg-cover bg-center" style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}></div>
-              <div className="leading-tight">
-                <p className="text-[10px] font-black text-primary uppercase">{p.rank}</p>
-                <p className="text-xs font-bold text-gray-700">{p.war_name || p.name.split(' ')[0]}</p>
+          if (!p) return null;
+
+          const afastamento = vacations.find(v => {
+            if (v.leave_type === 'desconto_ferias') return false;
+            const matchPerson = Number(v.personnel_id) === Number(p.id) ||
+              (v.full_name && p.name && v.full_name.toLowerCase().trim() === p.name.toLowerCase().trim());
+            return matchPerson && v.start_date <= today && v.end_date >= today;
+          });
+
+          return (
+            <div
+              key={id}
+              className={`flex items-center gap-2.5 p-2 rounded-lg shadow-xs transition-all border ${
+                afastamento
+                  ? 'bg-amber-500/10 border-amber-500/30 relative overflow-hidden'
+                  : 'bg-white border-gray-200'
+              }`}
+            >
+              {afastamento && (
+                <div className="w-1 bg-amber-500 absolute left-0 top-0 bottom-0"></div>
+              )}
+              <div
+                className={`w-8 h-8 rounded-full bg-cover bg-center shrink-0 ${
+                  afastamento ? 'ml-1 border border-amber-300' : ''
+                }`}
+                style={{ backgroundImage: `url(${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}
+              ></div>
+              <div className="leading-tight flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1.5">
+                  <p className="text-[10px] font-black text-primary uppercase">{p.rank}</p>
+                  {afastamento && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-950 border border-amber-500/40 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                      {getLeaveLabel(afastamento.leave_type)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-bold text-gray-700 truncate">{p.war_name || p.name.split(' ')[0]}</p>
+                {afastamento && (
+                  <p className="text-[9px] text-amber-800 font-semibold truncate">
+                    • (Afastado no período)
+                  </p>
+                )}
               </div>
             </div>
-          ) : null;
+          );
         })}
       </div>
     </div>
