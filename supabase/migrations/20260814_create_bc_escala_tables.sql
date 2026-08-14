@@ -1,67 +1,83 @@
--- Migração para o Módulo de Bombeiros Comunitários (Escala Automatizada)
+-- Migração para Módulo de Bombeiros Comunitários (Escala Automatizada)
 -- Tabelas: bc_ciclos, bc_intencoes, bc_selecionados
+-- Referências: personnel(id)
 
--- 1. Tabela bc_ciclos (Controla os ciclos mensais de coleta)
+-- 1. TABELA bc_ciclos
 CREATE TABLE IF NOT EXISTS public.bc_ciclos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    mes_referencia TEXT NOT NULL, -- Ex: '2026-09'
-    data_abertura TIMESTAMPTZ NOT NULL,
-    data_encerramento TIMESTAMPTZ NOT NULL,
+    mes_referencia TEXT NOT NULL,
+    data_abertura DATE NOT NULL DEFAULT CURRENT_DATE,
+    data_encerramento DATE NOT NULL DEFAULT CURRENT_DATE + INTERVAL '5 days',
     status TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto', 'encerrado', 'processado', 'publicado')),
-    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    criado_em TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index para busca rápida por mes_referencia e status
 CREATE INDEX IF NOT EXISTS idx_bc_ciclos_mes_status ON public.bc_ciclos(mes_referencia, status);
 
--- 2. Tabela bc_intencoes (Armazena intenções de serviço)
+-- 2. TABELA bc_intencoes
 CREATE TABLE IF NOT EXISTS public.bc_intencoes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     bombeiro_id INTEGER NOT NULL REFERENCES public.personnel(id) ON DELETE CASCADE,
+    ciclo_id UUID REFERENCES public.bc_ciclos(id) ON DELETE CASCADE,
     mes_referencia TEXT NOT NULL,
-    dia TEXT NOT NULL, -- Format YYYY-MM-DD
-    horario_inicio TEXT NOT NULL, -- Format HH:mm (Ex: '07:00')
-    horario_fim TEXT NOT NULL, -- Format HH:mm (Ex: '19:00')
-    total_horas NUMERIC(4, 1) NOT NULL, -- 12.0 ou 24.0
+    dia DATE NOT NULL,
+    horario_inicio TIME NOT NULL,
+    horario_fim TIME NOT NULL,
+    total_horas NUMERIC(4,1) NOT NULL CHECK (total_horas IN (12, 24)),
     status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'aceita', 'rejeitada')),
-    token_acesso TEXT NOT NULL,
-    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    token_acesso TEXT UNIQUE,
+    criado_em TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indices para consulta de token e bombeiro por mês
 CREATE INDEX IF NOT EXISTS idx_bc_intencoes_token ON public.bc_intencoes(token_acesso);
 CREATE INDEX IF NOT EXISTS idx_bc_intencoes_bombeiro_mes ON public.bc_intencoes(bombeiro_id, mes_referencia);
 CREATE INDEX IF NOT EXISTS idx_bc_intencoes_dia ON public.bc_intencoes(dia);
 
--- 3. Tabela bc_selecionados (Armazena bombeiros selecionados pelo motor ou gestor)
+-- 3. TABELA bc_selecionados
 CREATE TABLE IF NOT EXISTS public.bc_selecionados (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     bombeiro_id INTEGER NOT NULL REFERENCES public.personnel(id) ON DELETE CASCADE,
-    dia TEXT NOT NULL, -- Format YYYY-MM-DD
-    horario_inicio TEXT NOT NULL,
-    horario_fim TEXT NOT NULL,
-    total_horas NUMERIC(4, 1) NOT NULL,
-    criterio_aplicado TEXT NOT NULL, -- Ex: 'Critério 1 (Promoção)', 'Critério 2 (CNH/CVE)', 'Inserção Manual Gestor'
-    posicao_ranking INTEGER NOT NULL DEFAULT 1,
-    notificado BOOLEAN NOT NULL DEFAULT FALSE,
-    substituido_por_gestor BOOLEAN NOT NULL DEFAULT FALSE,
+    ciclo_id UUID REFERENCES public.bc_ciclos(id) ON DELETE CASCADE,
+    dia DATE NOT NULL,
+    horario_inicio TIME NOT NULL,
+    horario_fim TIME NOT NULL,
+    total_horas NUMERIC(4,1) NOT NULL,
+    criterio_aplicado TEXT,
+    posicao_ranking INTEGER DEFAULT 1,
+    origem TEXT NOT NULL DEFAULT 'motor' CHECK (origem IN ('motor', 'excecao_manual')),
+    motivo_excecao TEXT,
     motivo_substituicao TEXT,
-    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    substituido_por_gestor BOOLEAN DEFAULT FALSE,
+    notificado BOOLEAN DEFAULT FALSE,
+    criado_em TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_bc_selecionados_dia ON public.bc_selecionados(dia);
 CREATE INDEX IF NOT EXISTS idx_bc_selecionados_bombeiro ON public.bc_selecionados(bombeiro_id);
 
--- Desabilitar RLS ou permitir leitura/escrita pública com anon se necessário para token público
+-- Habilitar RLS nas tabelas
 ALTER TABLE public.bc_ciclos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bc_intencoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bc_selecionados ENABLE ROW LEVEL SECURITY;
 
--- Políticas de RLS
-CREATE POLICY "Permitir leitura anonima de bc_ciclos" ON public.bc_ciclos FOR SELECT USING (true);
-CREATE POLICY "Permitir gestao total de bc_ciclos" ON public.bc_ciclos FOR ALL USING (true);
+-- POLICIES DE RLS
+-- bc_ciclos
+DROP POLICY IF EXISTS "Permitir leitura pública de bc_ciclos" ON public.bc_ciclos;
+CREATE POLICY "Permitir leitura pública de bc_ciclos" ON public.bc_ciclos FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Permitir gestão total de bc_ciclos" ON public.bc_ciclos;
+CREATE POLICY "Permitir gestão total de bc_ciclos" ON public.bc_ciclos FOR ALL USING (true);
+
+-- bc_intencoes
+DROP POLICY IF EXISTS "Permitir operacao publica com token em bc_intencoes" ON public.bc_intencoes;
 CREATE POLICY "Permitir operacao publica com token em bc_intencoes" ON public.bc_intencoes FOR ALL USING (true);
-CREATE POLICY "Permitir gestao total de bc_intencoes" ON public.bc_intencoes FOR ALL USING (true);
 
-CREATE POLICY "Permitir gestao total de bc_selecionados" ON public.bc_selecionados FOR ALL USING (true);
+DROP POLICY IF EXISTS "Permitir gestão total de bc_intencoes" ON public.bc_intencoes;
+CREATE POLICY "Permitir gestão total de bc_intencoes" ON public.bc_intencoes FOR ALL USING (true);
+
+-- bc_selecionados
+DROP POLICY IF EXISTS "Permitir gestão total de bc_selecionados" ON public.bc_selecionados;
+CREATE POLICY "Permitir gestão total de bc_selecionados" ON public.bc_selecionados FOR ALL USING (true);
+
+-- BLOCO 2 — RECARREGAR SCHEMA CACHE
+NOTIFY pgrst, 'reload schema';

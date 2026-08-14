@@ -32,8 +32,8 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
   const [modalAdicionar, setModalAdicionar] = useState<boolean>(false);
   const [addDia, setAddDia] = useState<string>('');
   const [addMilitarId, setAddMilitarId] = useState<string>('');
-  const [addInicio, setAddInicio] = useState<string>('07:00');
-  const [addFim, setAddFim] = useState<string>('19:00');
+  const [addInicio, setAddInicio] = useState<string>('08:00');
+  const [addFim, setAddFim] = useState<string>('20:00');
 
   const [processando, setProcessando] = useState<boolean>(false);
   const [mensagemStatus, setMensagemStatus] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);

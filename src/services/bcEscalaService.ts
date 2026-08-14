@@ -208,6 +208,7 @@ export const bcEscalaService = {
       const v = bcEscalaService.validarHoras(item.horario_inicio, item.horario_fim);
       return {
         bombeiro_id: bombeiro.id,
+        ciclo_id: ciclo.id,
         mes_referencia: ciclo.mes_referencia,
         dia: item.dia,
         horario_inicio: item.horario_inicio,
@@ -324,12 +325,14 @@ export const bcEscalaService = {
 
         return {
           bombeiro_id: item.bombeiro_id,
+          ciclo_id: item.ciclo_id,
           dia: item.dia,
           horario_inicio: item.horario_inicio,
           horario_fim: item.horario_fim,
           total_horas: item.total_horas,
           criterio_aplicado: descCriterio,
           posicao_ranking: index + 1,
+          origem: 'motor',
           notificado: false,
         };
       });
@@ -425,14 +428,24 @@ export const bcEscalaService = {
     const v = bcEscalaService.validarHoras(horarioInicio, horarioFim);
     if (!v.valido) throw new Error(v.mensagem);
 
+    const mesRef = dia.substring(0, 7);
+    const { data: ciclo } = await supabase
+      .from('bc_ciclos')
+      .select('id')
+      .eq('mes_referencia', mesRef)
+      .maybeSingle();
+
     const record = {
       bombeiro_id: bombeiroId,
+      ciclo_id: ciclo?.id || null,
       dia,
       horario_inicio: horarioInicio,
       horario_fim: horarioFim,
       total_horas: v.totalHoras,
       criterio_aplicado: 'Inserção Manual Gestor (Exceção)',
       posicao_ranking: 99,
+      origem: 'excecao_manual',
+      motivo_excecao: 'Inserção Manual Gestor (Exceção)',
       notificado: false,
       substituido_por_gestor: true,
     };

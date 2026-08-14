@@ -582,6 +582,7 @@ export interface BcCiclo {
 export interface BcIntencao {
     id?: string;
     bombeiro_id: number;
+    ciclo_id?: string;
     mes_referencia: string;
     dia: string;
     horario_inicio: string;
@@ -598,12 +599,15 @@ export interface BcIntencao {
 export interface BcSelecionado {
     id?: string;
     bombeiro_id: number;
+    ciclo_id?: string;
     dia: string;
     horario_inicio: string;
     horario_fim: string;
     total_horas: number;
     criterio_aplicado: string;
     posicao_ranking: number;
+    origem?: 'motor' | 'excecao_manual';
+    motivo_excecao?: string;
     notificado: boolean;
     substituido_por_gestor?: boolean;
     motivo_substituicao?: string;
@@ -614,4 +618,5 @@ export interface BcSelecionado {
     bombeiro_posto?: string;
     bombeiro_telefone?: string;
 }
+
 
