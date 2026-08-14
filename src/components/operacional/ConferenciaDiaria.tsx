@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
-import { STATUS_CONFERENCIA, buscarConferenciaDia, salvarConferencia, StatusConferencia } from '../../services/conferenciaService';
+import {
+  buscarConferenciaDia,
+  salvarConferencia,
+  formatarMensagemWhatsAppConferencia,
+  enviarConferenciaWhatsApp,
+  NUMERO_CHEFE_SOCORRO
+} from '../../services/conferenciaService';
+import { toast } from 'sonner';
 
 interface Viatura {
   id: string;
@@ -68,7 +75,6 @@ interface N1Props {
   conferenciaMap: Record<string, any>;
   onAtualizar: () => void;
   isViatura?: boolean;
-  // Contexto para histórico B4:
   viaturaCtx?: { id: string; nome: string; placa?: string };
   children: React.ReactNode;
 }
@@ -97,37 +103,57 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {isViatura && (
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-              {Object.entries(STATUS_CONFERENCIA).map(([key, cfg]) => (
-                <button
-                  key={key}
-                  onClick={async e => {
-                    e.stopPropagation();
-                    await salvarConferencia({
-                      viatura_id: id,
-                      fleet_item_id: id,
-                      status: key as StatusConferencia,
-                      // Contexto para histórico B4:
-                      item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
-                      viatura_nome: viaturaCtx?.nome || titulo,
-                    });
-                    onAtualizar();
-                  }}
-                  title={cfg.label}
-                  style={{
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    border: confViatura?.status === key ? `2px solid ${cfg.cor}` : '2px solid transparent',
-                    background: confViatura?.status === key ? cfg.fundo : '#f8fafc',
-                    color: confViatura?.status === key ? cfg.cor : '#94a3b8',
-                    cursor: 'pointer',
-                    fontSize: '11px',
-                    fontWeight: confViatura?.status === key ? 'bold' : 'normal',
-                  }}
-                >
-                  {cfg.icone}
-                </button>
-              ))}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+              <button
+                onClick={async e => {
+                  e.stopPropagation();
+                  await salvarConferencia({
+                    viatura_id: id,
+                    fleet_item_id: id,
+                    status: 'ok',
+                    item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
+                    viatura_nome: viaturaCtx?.nome || titulo,
+                  });
+                  onAtualizar();
+                }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: confViatura?.status === 'ok' ? '2px solid #166534' : '1px solid #cbd5e1',
+                  background: confViatura?.status === 'ok' ? '#dcfce7' : '#f8fafc',
+                  color: confViatura?.status === 'ok' ? '#166534' : '#64748b',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                }}
+              >
+                ✅ OK
+              </button>
+              <button
+                onClick={async e => {
+                  e.stopPropagation();
+                  await salvarConferencia({
+                    viatura_id: id,
+                    fleet_item_id: id,
+                    status: 'avariado',
+                    item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
+                    viatura_nome: viaturaCtx?.nome || titulo,
+                  });
+                  onAtualizar();
+                }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: confViatura?.status && confViatura.status !== 'ok' ? '2px solid #991b1b' : '1px solid #cbd5e1',
+                  background: confViatura?.status && confViatura.status !== 'ok' ? '#fee2e2' : '#f8fafc',
+                  color: confViatura?.status && confViatura.status !== 'ok' ? '#991b1b' : '#64748b',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                }}
+              >
+                ⚠️ Ocorrência
+              </button>
             </div>
           )}
           <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 10px', borderRadius: '999px' }}>
@@ -187,13 +213,12 @@ function NivelDois({ id, titulo, posicao, totalItens, abertos, toggle, children 
   );
 }
 
-// Nível 3 — Item Individual
+// Nível 3 — Item Individual com 2 escolhas nítidas (OK vs OCORRÊNCIA)
 interface N3Props {
   item: ItemFleet;
   tipo?: string;
   conferenciaMap: Record<string, any>;
   onAtualizar: () => void;
-  // Contexto para histórico B4 e notificação:
   viaturaCtx?: { id: string; nome: string; placa?: string };
   compartimentoCtx?: { id: string; nome: string; posicao?: string };
   localCtx?: { id: string; nome: string };
@@ -201,18 +226,29 @@ interface N3Props {
 
 function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compartimentoCtx, localCtx }: N3Props) {
   const conf = conferenciaMap[item.id];
-  const statusAtual: StatusConferencia | null = conf?.status || null;
+  const isOk = conf?.status === 'ok';
+  const isOcorrencia = conf?.status && conf.status !== 'ok';
 
-  const [mostrarObs, setMostrarObs] = useState(false);
   const [observacao, setObservacao] = useState(conf?.observacao || '');
+  const [expandidoObs, setExpandidoObs] = useState(Boolean(isOcorrencia));
 
-  async function conferir(novoStatus: string) {
+  useEffect(() => {
+    if (conf?.observacao !== undefined) {
+      setObservacao(conf.observacao || '');
+    }
+    if (isOcorrencia) {
+      setExpandidoObs(true);
+    }
+  }, [conf?.status, conf?.observacao]);
+
+  async function marcarOk() {
+    setObservacao('');
+    setExpandidoObs(false);
     await salvarConferencia({
       fleet_item_id: item.id,
       equipamento_id: item.id,
-      status: novoStatus as StatusConferencia,
-      observacao,
-      // Contexto para histórico B4 e notificação:
+      status: 'ok',
+      observacao: '',
       item_nome: item.name,
       viatura_nome: viaturaCtx?.nome || undefined,
       compartimento_nome: compartimentoCtx?.nome || undefined,
@@ -221,13 +257,59 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
     onAtualizar();
   }
 
+  async function marcarOcorrencia() {
+    setExpandidoObs(true);
+    await salvarConferencia({
+      fleet_item_id: item.id,
+      equipamento_id: item.id,
+      status: 'avariado',
+      observacao: observacao,
+      item_nome: item.name,
+      viatura_nome: viaturaCtx?.nome || undefined,
+      compartimento_nome: compartimentoCtx?.nome || undefined,
+      local_nome: localCtx?.nome || undefined,
+    });
+    onAtualizar();
+  }
+
+  async function salvarTextoObs() {
+    if (!observacao.trim()) {
+      toast.error(`A observação é obrigatória para o item ${item.name}`);
+      return;
+    }
+    await salvarConferencia({
+      fleet_item_id: item.id,
+      equipamento_id: item.id,
+      status: 'avariado',
+      observacao: observacao,
+      item_nome: item.name,
+      viatura_nome: viaturaCtx?.nome || undefined,
+      compartimento_nome: compartimentoCtx?.nome || undefined,
+      local_nome: localCtx?.nome || undefined,
+    });
+    toast.success('Observação registrada com sucesso!');
+    onAtualizar();
+  }
+
+  const containerBg = isOk
+    ? '#f0fdf4'
+    : isOcorrencia
+    ? '#fef2f2'
+    : 'white';
+
+  const containerBorder = isOk
+    ? '1px solid #bbf7d0'
+    : isOcorrencia
+    ? '1px solid #fca5a5'
+    : '1px solid #f1f5f9';
+
   return (
-    <div style={{ padding: '8px 10px', marginBottom: '4px', background: 'white', borderRadius: '8px', border: '1px solid #f1f5f9', marginLeft: '12px' }}>
+    <div style={{ padding: '10px 12px', marginBottom: '6px', background: containerBg, borderRadius: '8px', border: containerBorder, marginLeft: '12px', transition: 'all 0.2s' }}>
       {/* LINHA PRINCIPAL */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {/* NOME E TIPO */}
-        <div style={{ flex: 1 }}>
-          <span style={{ fontSize: '13px', color: '#334155', fontWeight: '500' }}>
+        <div style={{ flex: 1, minWidth: '160px' }}>
+          <span style={{ fontSize: '13px', color: '#1e293b', fontWeight: '600' }}>
             {tipo === 'consumo' ? '📋' : '🔧'} {item.name}
           </span>
           {item.numero_serie && (
@@ -240,62 +322,100 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
           )}
         </div>
 
-        {/* BOTÕES DE STATUS */}
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          {Object.entries(STATUS_CONFERENCIA).map(([key, cfg]) => (
-            <button
-              key={key}
-              onClick={() => conferir(key)}
-              title={cfg.label}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '6px',
-                border: statusAtual === key ? `2px solid ${cfg.cor}` : '2px solid #e2e8f0',
-                background: statusAtual === key ? cfg.fundo : 'white',
-                color: statusAtual === key ? cfg.cor : '#94a3b8',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: statusAtual === key ? 'bold' : 'normal',
-                transition: 'all 0.15s',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {cfg.icone} {cfg.label}
-            </button>
-          ))}
-
-          {/* BOTÃO OBSERVAÇÃO */}
+        {/* OPÇÕES OK vs OCORRÊNCIA */}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {/* BOTÃO OK */}
           <button
-            onClick={() => setMostrarObs(!mostrarObs)}
-            title="Adicionar observação"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#94a3b8', padding: '4px' }}
+            onClick={marcarOk}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: isOk ? '2px solid #166534' : '1px solid #cbd5e1',
+              background: isOk ? '#dcfce7' : 'white',
+              color: isOk ? '#166534' : '#64748b',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: isOk ? 'bold' : '500',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
           >
-            📝
+            <span>✅</span> OK
+          </button>
+
+          {/* BOTÃO OCORRÊNCIA */}
+          <button
+            onClick={marcarOcorrencia}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: isOcorrencia ? '2px solid #991b1b' : '1px solid #cbd5e1',
+              background: isOcorrencia ? '#fee2e2' : 'white',
+              color: isOcorrencia ? '#991b1b' : '#64748b',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: isOcorrencia ? 'bold' : '500',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <span>⚠️</span> Ocorrência
           </button>
         </div>
       </div>
 
-      {/* CAMPO OBSERVAÇÃO */}
-      {mostrarObs && (
-        <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
-          <input
-            value={observacao}
-            onChange={e => setObservacao(e.target.value)}
-            placeholder="Observação..."
-            style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px' }}
-          />
-          <button
-            onClick={() => statusAtual && conferir(statusAtual)}
-            style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: '#1d4ed8', color: 'white', fontSize: '12px', cursor: 'pointer' }}
-          >
-            Salvar
-          </button>
+      {/* CAMPO EXPANSÍVEL DE OBSERVAÇÃO (OBRIGATÓRIO QUANDO OCORRÊNCIA) */}
+      {(expandidoObs || isOcorrencia) && (
+        <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #fca5a5' }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#991b1b', marginBottom: '4px' }}>
+            Observação da Ocorrência * (ausente, avariado, incompleto, etc.)
+          </label>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input
+              value={observacao}
+              onChange={e => setObservacao(e.target.value)}
+              placeholder="Descreva o problema encontrado (obrigatório)..."
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: !observacao.trim() && isOcorrencia ? '2px solid #ef4444' : '1px solid #cbd5e1',
+                fontSize: '12px',
+                background: '#fff',
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={salvarTextoObs}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: '#dc2626',
+                color: 'white',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+            >
+              Salvar
+            </button>
+          </div>
+          {!observacao.trim() && isOcorrencia && (
+            <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: '600', marginTop: '2px', display: 'block' }}>
+              ⚠️ Campo de observação é obrigatório para registrar ocorrência.
+            </span>
+          )}
         </div>
       )}
 
       {/* RODAPÉ DE AUDITORIA */}
       {conf?.conferido_por_nome && (
-        <div style={{ marginTop: '4px', fontSize: '10px', color: '#94a3b8' }}>
+        <div style={{ marginTop: '6px', fontSize: '10px', color: '#64748b' }}>
           🔏 Conferido por <strong>{conf.conferido_por_nome}</strong> às{' '}
           {new Date(conf.conferido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
         </div>
@@ -311,6 +431,14 @@ const ConferenciaDiaria: React.FC = () => {
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Estados do Modal de Resumo (Blocos 3, 4 & 5)
+  const [modalResumoAberto, setModalResumoAberto] = useState(false);
+  const [nomeConferente, setNomeConferente] = useState('');
+  const [horaFinalizacao, setHoraFinalizacao] = useState('');
+  const [salvandoEEnviando, setSalvandoEEnviando] = useState(false);
+  const [falhaEnvio, setFalhaEnvio] = useState(false);
+  const [mensagemFormatadaCache, setMensagemFormatadaCache] = useState('');
 
   function toggle(id: string) {
     setAbertos(prev => ({ ...prev, [id]: !prev[id] }));
@@ -342,6 +470,105 @@ const ConferenciaDiaria: React.FC = () => {
       });
   }, []);
 
+  // Obter nome de quem está realizando
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) {
+        setNomeConferente(user.email.split('@')[0].toUpperCase());
+      }
+    });
+  }, []);
+
+  // Abrir Modal de Resumo com validação estrita
+  const handleAbrirResumo = () => {
+    // 1. Validar ocorrências sem observação
+    const ocorrenciasSemObs: string[] = [];
+    dados.itens.forEach(i => {
+      const conf = conferenciaMap[i.id];
+      if (conf?.status && conf.status !== 'ok' && !conf.observacao?.trim()) {
+        ocorrenciasSemObs.push(i.name);
+      }
+    });
+
+    if (ocorrenciasSemObs.length > 0) {
+      toast.error(
+        `Existem ${ocorrenciasSemObs.length} ocorrência(s) sem observação descrita. Preencha a observação do item "${ocorrenciasSemObs[0]}" antes de finalizar.`,
+        { duration: 5000 }
+      );
+      return;
+    }
+
+    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    setHoraFinalizacao(hora);
+    setFalhaEnvio(false);
+    setModalResumoAberto(true);
+  };
+
+  // Calcular itens para o resumo
+  const totalConferidos = Object.keys(conferenciaMap).length;
+  const itensOk = Object.values(conferenciaMap).filter((c: any) => c.status === 'ok');
+  const ocorrenciasList = Object.values(conferenciaMap).filter((c: any) => c.status && c.status !== 'ok');
+
+  // Confirmar e Enviar para WhatsApp (Chefe de Socorro)
+  const handleConfirmarEEnviar = async () => {
+    try {
+      setSalvandoEEnviando(true);
+      const hojeStr = new Date().toISOString().split('T')[0];
+
+      // Formatar lista de ocorrências com contexto
+      const ocorrenciasDetalhadas = ocorrenciasList.map((c: any) => {
+        const itemObj = dados.itens.find(i => i.id === c.id);
+        const compObj = dados.compartimentos.find(comp => comp.id === itemObj?.compartimento_id);
+        const vtrObj = dados.viaturas.find(v => v.id === compObj?.viatura_id);
+        return {
+          item_nome: itemObj?.name || c.item_nome || `Item #${c.id}`,
+          observacao: c.observacao || 'Sem detalhes',
+          viatura_nome: vtrObj?.name,
+          compartimento_nome: compObj?.nome,
+        };
+      });
+
+      const mensagem = formatarMensagemWhatsAppConferencia({
+        dataConferencia: hojeStr,
+        conferidoPor: nomeConferente || 'Militar de Serviço',
+        horario: horaFinalizacao || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        totalConferidos,
+        totalOk: itensOk.length,
+        totalOcorrencias: ocorrenciasList.length,
+        ocorrencias: ocorrenciasDetalhadas,
+      });
+
+      setMensagemFormatadaCache(mensagem);
+
+      // Disparar WhatsApp
+      const disparado = enviarConferenciaWhatsApp(mensagem);
+
+      if (disparado) {
+        toast.success(`✅ Conferência finalizada e relatório enviado ao Chefe de Socorro (${NUMERO_CHEFE_SOCORRO})!`);
+        setModalResumoAberto(false);
+      } else {
+        setFalhaEnvio(true);
+        toast.warning('⚠️ Conferência salva! Falha ao abrir o WhatsApp automaticamente.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro ao finalizar conferência: ' + err.message);
+    } finally {
+      setSalvandoEEnviando(false);
+    }
+  };
+
+  const handleReenviarWhatsApp = () => {
+    if (!mensagemFormatadaCache) return;
+    const disparado = enviarConferenciaWhatsApp(mensagemFormatadaCache);
+    if (disparado) {
+      toast.success('Relatório enviado com sucesso!');
+      setModalResumoAberto(false);
+    } else {
+      toast.error('Não foi possível abrir o aplicativo do WhatsApp. Tente novamente.');
+    }
+  };
+
   if (loading) return (
     <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
       <p style={{ fontSize: '14px' }}>⏳ Carregando conferência...</p>
@@ -355,9 +582,9 @@ const ConferenciaDiaria: React.FC = () => {
   );
 
   return (
-    <div>
+    <div style={{ paddingBottom: '80px' }}>
       {/* Cabeçalho */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
           <h3 style={{ fontWeight: 'bold', fontSize: '16px', color: '#1e293b', margin: 0 }}>
             🚒 Conferência Diária — Viaturas e Locais
@@ -366,12 +593,20 @@ const ConferenciaDiaria: React.FC = () => {
             {dados.viaturas.length} viaturas · {dados.locais.length} locais · {dados.itens.length} itens
           </p>
         </div>
-        <button
-          onClick={expandirTudo}
-          style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', color: '#64748b', fontSize: '12px', padding: '6px 14px' }}
-        >
-          Expandir tudo
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={expandirTudo}
+            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', color: '#64748b', fontSize: '12px', padding: '6px 14px' }}
+          >
+            Expandir tudo
+          </button>
+          <button
+            onClick={handleAbrirResumo}
+            style={{ background: '#166534', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', padding: '8px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+          >
+            📋 Finalizar Conferência
+          </button>
+        </div>
       </div>
 
       {/* Viaturas */}
@@ -453,9 +688,149 @@ const ConferenciaDiaria: React.FC = () => {
         );
       })}
 
-      {dados.viaturas.length === 0 && dados.locais.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
-          <p>Nenhuma viatura ou local cadastrado.</p>
+      {/* BARRA FIXA INFERIOR DE FINALIZAÇÃO */}
+      <div style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', zIndex: 40, background: '#1e293b', color: 'white', padding: '10px 20px', borderRadius: '999px', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', items: 'center', gap: '16px' }}>
+        <div style={{ fontSize: '12px' }}>
+          <span>Conferidos: <strong>{totalConferidos}</strong></span> ·{' '}
+          <span style={{ color: '#4ade80' }}>OK: <strong>{itensOk.length}</strong></span> ·{' '}
+          <span style={{ color: '#f87171' }}>Ocorrências: <strong>{ocorrenciasList.length}</strong></span>
+        </div>
+        <button
+          onClick={handleAbrirResumo}
+          style={{ background: '#166534', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '999px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          📋 Finalizar & Enviar WhatsApp
+        </button>
+      </div>
+
+      {/* MODAL DE RESUMO (BLOCOS 3, 4 E 5) */}
+      {modalResumoAberto && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyCenter: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '16px', width: '100%', maxWidth: '640px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', color: 'white', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+            
+            {/* CABEÇALHO DO RESUMO */}
+            <div style={{ padding: '20px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: 'white' }}>
+                  📋 Resumo da Conferência Diária
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                  Data: <strong style={{ color: '#e2e8f0' }}>{new Date().toLocaleDateString('pt-BR')}</strong> · 
+                  Realizada por: <strong style={{ color: '#e2e8f0' }}>{nomeConferente || 'Militar'}</strong> · 
+                  Horário: <strong style={{ color: '#e2e8f0' }}>{horaFinalizacao}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setModalResumoAberto(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '18px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* CORPO DO RESUMO */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* TOTAIS */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                <div style={{ background: '#1e293b', padding: '12px', borderRadius: '10px', textAlign: 'center', border: '1px solid #334155' }}>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'bold' }}>CONFERIDOS</span>
+                  <p style={{ margin: '4px 0 0', fontSize: '20px', fontWeight: '900', color: 'white' }}>{totalConferidos}</p>
+                </div>
+                <div style={{ background: '#064e3b', padding: '12px', borderRadius: '10px', textAlign: 'center', border: '1px solid #047857' }}>
+                  <span style={{ fontSize: '11px', color: '#a7f3d0', fontWeight: 'bold' }}>ITENS OK</span>
+                  <p style={{ margin: '4px 0 0', fontSize: '20px', fontWeight: '900', color: '#34d399' }}>{itensOk.length}</p>
+                </div>
+                <div style={{ background: '#7f1d1d', padding: '12px', borderRadius: '10px', textAlign: 'center', border: '1px solid #b91c1c' }}>
+                  <span style={{ fontSize: '11px', color: '#fca5a5', fontWeight: 'bold' }}>OCORRÊNCIAS</span>
+                  <p style={{ margin: '4px 0 0', fontSize: '20px', fontWeight: '900', color: '#f87171' }}>{ocorrenciasList.length}</p>
+                </div>
+              </div>
+
+              {/* SEÇÃO OCORRÊNCIAS */}
+              <div style={{ background: '#450a0a', border: '1px solid #991b1b', borderRadius: '12px', padding: '14px' }}>
+                <h4 style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 'bold', color: '#fca5a5', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⚠️</span> SEÇÃO DE OCORRÊNCIAS ENCONTRADAS ({ocorrenciasList.length})
+                </h4>
+
+                {ocorrenciasList.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: '12px', color: '#f87171', fontStyle: 'italic' }}>
+                    Nenhuma ocorrência registrada. Todos os itens em conformidade!
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {ocorrenciasList.map((item: any, idx: number) => {
+                      const fleetObj = dados.itens.find(i => i.id === item.id);
+                      const compObj = dados.compartimentos.find(c => c.id === fleetObj?.compartimento_id);
+                      const vtrObj = dados.viaturas.find(v => v.id === compObj?.viatura_id);
+
+                      return (
+                        <div key={idx} style={{ background: '#7f1d1d', padding: '10px 12px', borderRadius: '8px', border: '1px solid #b91c1c' }}>
+                          <strong style={{ fontSize: '13px', color: 'white', display: 'block' }}>
+                            • {fleetObj?.name || item.item_nome || `Item #${item.id}`}
+                          </strong>
+                          {vtrObj && (
+                            <span style={{ fontSize: '10px', color: '#fca5a5', display: 'block', marginTop: '2px' }}>
+                              Viatura: {vtrObj.name} {compObj ? `(${compObj.nome})` : ''}
+                            </span>
+                          )}
+                          <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#fecaca', background: 'rgba(0,0,0,0.2)', padding: '6px 8px', borderRadius: '4px' }}>
+                            💬 {item.observacao || 'Sem observação'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* SEÇÃO ITENS OK */}
+              <div style={{ background: '#022c22', border: '1px solid #065f46', borderRadius: '12px', padding: '14px' }}>
+                <h4 style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 'bold', color: '#6ee7b7', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>✅</span> SEÇÃO ITENS OK ({itensOk.length})
+                </h4>
+                <p style={{ margin: 0, fontSize: '11px', color: '#a7f3d0' }}>
+                  {itensOk.length} itens foram validados em estado operacional e sem pendências.
+                </p>
+              </div>
+
+              {/* AVISO DE TRATAMENTO DE FALHA */}
+              {falhaEnvio && (
+                <div style={{ background: '#78350f', border: '1px solid #d97706', padding: '12px', borderRadius: '10px', color: '#fef3c7', fontSize: '12px' }}>
+                  ⚠️ <strong>Conferência salva com sucesso no banco de dados!</strong> O envio automático pelo WhatsApp não abriu. Clique no botão abaixo para tentar o envio direto.
+                </div>
+              )}
+            </div>
+
+            {/* BOTÕES DE AÇÃO DO RESUMO */}
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #1e293b', display: 'flex', justifyBetween: 'space-between', gap: '12px' }}>
+              <button
+                onClick={() => setModalResumoAberto(false)}
+                disabled={salvandoEEnviando}
+                style={{ flex: 1, padding: '12px', background: '#334155', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
+              >
+                Voltar e Corrigir
+              </button>
+
+              {falhaEnvio ? (
+                <button
+                  onClick={handleReenviarWhatsApp}
+                  style={{ flex: 1.5, padding: '12px', background: '#d97706', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', display: 'flex', items: 'center', justifyCenter: 'center', gap: '6px' }}
+                >
+                  📲 Tentar Enviar Novamente
+                </button>
+              ) : (
+                <button
+                  onClick={handleConfirmarEEnviar}
+                  disabled={salvandoEEnviando}
+                  style={{ flex: 1.5, padding: '12px', background: '#166534', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', display: 'flex', items: 'center', justifyCenter: 'center', gap: '6px' }}
+                >
+                  {salvandoEEnviando ? '⏳ Finalizando...' : '📲 Confirmar e Enviar'}
+                </button>
+              )}
+            </div>
+
+          </div>
         </div>
       )}
     </div>

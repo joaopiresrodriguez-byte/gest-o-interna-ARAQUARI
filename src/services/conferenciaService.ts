@@ -168,6 +168,7 @@ export async function salvarConferencia(
         viatura_id: dados.viatura_id || null,
         fleet_item_id: itemId,
         status: dados.status,
+        status_item: dados.status === 'ok' ? 'ok' : 'ocorrencia',
         observacao: dados.observacao || null,
         conferido_por_id: user?.id || null,
         conferido_por_nome: nomeUsuario,
@@ -264,4 +265,53 @@ export async function salvarConferencia(
   }
 
   return true;
+}
+
+export const NUMERO_CHEFE_SOCORRO = '554788911948';
+
+export function formatarMensagemWhatsAppConferencia(dados: {
+  dataConferencia: string;
+  conferidoPor: string;
+  horario: string;
+  totalConferidos: number;
+  totalOk: number;
+  totalOcorrencias: number;
+  ocorrencias: Array<{ item_nome: string; observacao: string; viatura_nome?: string; compartimento_nome?: string }>;
+}): string {
+  const dataFmt = new Date(dados.dataConferencia + 'T00:00:00').toLocaleDateString('pt-BR');
+  
+  let msg = `✅ *CONFERÊNCIA DIÁRIA — ${dataFmt}*\n\n`;
+  msg += `*Realizada por:* ${dados.conferidoPor}\n`;
+  msg += `*Horário:* ${dados.horario}\n\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📋 *ITENS CONFERIDOS:* ${dados.totalConferidos}\n`;
+  msg += `✅ *Itens OK:* ${dados.totalOk}\n`;
+  msg += `⚠️ *Ocorrências:* ${dados.totalOcorrencias}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━\n\n`;
+
+  if (dados.ocorrencias.length > 0) {
+    msg += `⚠️ *OCORRÊNCIAS ENCONTRADAS:*\n\n`;
+    dados.ocorrencias.forEach(item => {
+      const contexto = item.viatura_nome ? ` (${item.viatura_nome}${item.compartimento_nome ? ` - ${item.compartimento_nome}` : ''})` : '';
+      msg += `• *${item.item_nome}*${contexto}: ${item.observacao}\n`;
+    });
+    msg += `\n━━━━━━━━━━━━━━━━━━━`;
+  } else {
+    msg += `Todos os itens foram conferidos e estão em conformidade.\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━`;
+  }
+
+  return msg;
+}
+
+export function enviarConferenciaWhatsApp(mensagem: string): boolean {
+  try {
+    const encodedText = encodeURIComponent(mensagem);
+    const waUrl = `https://wa.me/${NUMERO_CHEFE_SOCORRO}?text=${encodedText}`;
+    const win = window.open(waUrl, '_blank');
+    return !!win;
+  } catch (e) {
+    console.error('Erro ao abrir WhatsApp:', e);
+    return false;
+  }
 }
