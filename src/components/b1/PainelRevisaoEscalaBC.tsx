@@ -57,28 +57,37 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     carregarDados();
   }, [mesRef]);
 
-  // Executar Disparo Dia 20 Manualmente
+  const [modalLinks, setModalLinks] = useState<{
+    aberto: boolean;
+    links: Array<{ bombeiro: Personnel; token: string; link: string }>;
+  }>({ aberto: false, links: [] });
+
+  // Executar Disparo Dia 20 Manualmente / Gerar Links
   const handleDispararDia20 = async () => {
     try {
       setProcessando(true);
       setMensagemStatus(null);
-      await bcEscalaService.obterOuCriarCiclo(mesRef);
-
-      // Invocação da Edge Function via Supabase
-      const resFunc = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: 'abrir_ciclo_dia20' }),
+      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef);
+      setModalLinks({ aberto: true, links: res.links });
+      setMensagemStatus({
+        tipo: 'sucesso',
+        texto: `Ciclo ${mesRef} aberto com sucesso! ${res.tokensGerados} link(s) de acesso gerado(s).`
       });
-
-      await resFunc.json().catch(() => ({}));
-      setMensagemStatus({ tipo: 'sucesso', texto: `Ciclo ${mesRef} aberto com sucesso! Links WhatsApp disparados.` });
       await carregarDados();
     } catch (err: any) {
       setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao disparar ciclo.' });
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  const handleVerLinks = async () => {
+    try {
+      setProcessando(true);
+      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef);
+      setModalLinks({ aberto: true, links: res.links });
+    } catch (err: any) {
+      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao buscar links.' });
     } finally {
       setProcessando(false);
     }
@@ -236,6 +245,15 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                 title="Simular disparo automático do link no dia 20"
               >
                 <span>📲</span> Dia 20: Abrir Links
+              </button>
+
+              <button
+                onClick={handleVerLinks}
+                disabled={processando}
+                className="px-3 py-2 bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                title="Visualizar e copiar os links das intenções gerados para os BCs"
+              >
+                <span>🔗</span> Ver Links (BCs)
               </button>
 
               <button
@@ -512,6 +530,71 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                   Adicionar Bombeiro
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL LINKS DAS INTENÇÕES */}
+      {modalLinks.aberto && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>🔗</span> Links das Intenções de Serviço (BCs)
+                </h3>
+                <p className="text-xs text-slate-400">Mês de Referência: <span className="text-red-400 font-semibold">{mesRef}</span></p>
+              </div>
+              <button
+                onClick={() => setModalLinks({ aberto: false, links: [] })}
+                className="text-slate-400 hover:text-white p-1 text-base font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {modalLinks.links.length === 0 ? (
+                <p className="text-xs text-slate-400 italic text-center py-6">Nenhum bombeiro comunitário ativo encontrado para este ciclo.</p>
+              ) : (
+                modalLinks.links.map((item, idx) => (
+                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <strong className="text-white text-sm block">{item.bombeiro.name}</strong>
+                      <span className="text-slate-400 font-mono text-[11px] select-all block truncate max-w-md">{item.link}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(item.link);
+                          setMensagemStatus({ tipo: 'sucesso', texto: `Link copiado para ${item.bombeiro.name}!` });
+                        }}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold"
+                      >
+                        📋 Copiar Link
+                      </button>
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold"
+                      >
+                        🔗 Simular / Abrir
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="border-t border-slate-800 pt-4 mt-4 flex justify-end">
+              <button
+                onClick={() => setModalLinks({ aberto: false, links: [] })}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>

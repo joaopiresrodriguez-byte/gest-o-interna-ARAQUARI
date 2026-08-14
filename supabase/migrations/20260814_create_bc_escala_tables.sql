@@ -79,5 +79,9 @@ CREATE POLICY "Permitir gestão total de bc_intencoes" ON public.bc_intencoes FO
 DROP POLICY IF EXISTS "Permitir gestão total de bc_selecionados" ON public.bc_selecionados;
 CREATE POLICY "Permitir gestão total de bc_selecionados" ON public.bc_selecionados FOR ALL USING (true);
 
+-- personnel (leitura pública para consulta de nome por token de BC)
+DROP POLICY IF EXISTS "Permitir leitura publica de personnel" ON public.personnel;
+CREATE POLICY "Permitir leitura publica de personnel" ON public.personnel FOR SELECT USING (true);
+
 -- BLOCO 2 — RECARREGAR SCHEMA CACHE
 NOTIFY pgrst, 'reload schema';

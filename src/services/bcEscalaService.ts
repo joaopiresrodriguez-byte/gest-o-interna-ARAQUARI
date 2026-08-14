@@ -103,6 +103,83 @@ export const bcEscalaService = {
   },
 
   /**
+   * Dispara abertura do ciclo e gera/recupera links únicos para cada BC ativo
+   */
+  abrirCicloEDispararLinks: async (mesRef?: string): Promise<{
+    ciclo: BcCiclo;
+    tokensGerados: number;
+    links: Array<{ bombeiro: Personnel; token: string; link: string }>;
+  }> => {
+    const ciclo = await bcEscalaService.obterOuCriarCiclo(mesRef);
+    const targetMesRef = ciclo.mes_referencia;
+
+    // Buscar todos os BCs ativos
+    const { data: bcs, error: errBcs } = await supabase
+      .from('personnel')
+      .select('*')
+      .eq('type', 'BC')
+      .eq('status', 'Ativo');
+
+    if (errBcs) throw errBcs;
+
+    const linksList: Array<{ bombeiro: Personnel; token: string; link: string }> = [];
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
+
+    if (bcs && bcs.length > 0) {
+      for (const bc of bcs) {
+        // Verificar se o BC já possui um token para este ciclo/mês
+        const { data: intencaoExistente } = await supabase
+          .from('bc_intencoes')
+          .select('token_acesso')
+          .eq('bombeiro_id', bc.id)
+          .eq('mes_referencia', targetMesRef)
+          .limit(1)
+          .maybeSingle();
+
+        let token = intencaoExistente?.token_acesso;
+        if (!token) {
+          token = bcEscalaService.gerarToken();
+          // Inserir registro inicial de intenção com token único
+          await supabase
+            .from('bc_intencoes')
+            .insert({
+              bombeiro_id: bc.id,
+              ciclo_id: ciclo.id,
+              mes_referencia: targetMesRef,
+              dia: `${targetMesRef}-01`,
+              horario_inicio: '07:00',
+              horario_fim: '19:00',
+              total_horas: 12,
+              status: 'pendente',
+              token_acesso: token,
+            });
+        }
+
+        linksList.push({
+          bombeiro: bc as Personnel,
+          token,
+          link: `${origin}/bc-intencao?token=${token}`,
+        });
+      }
+    }
+
+    // Tentar chamar a Edge Function assincronamente (se implantada no Supabase)
+    try {
+      const edgeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`;
+      fetch(edgeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ action: 'abrir_ciclo_dia20', mesRef: targetMesRef }),
+      }).catch(() => {});
+    } catch (_) {}
+
+    return { ciclo, tokensGerados: linksList.length, links: linksList };
+  },
+
+  /**
    * BLOCO 4 — Busca de Dados por Token Acesso
    */
   buscarDadosPorToken: async (token: string): Promise<{
