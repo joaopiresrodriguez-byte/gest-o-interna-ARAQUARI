@@ -179,6 +179,18 @@ const DashboardAvisos: React.FC = () => {
     });
   }, [vacations, selectedDate]);
 
+  // Count military on scale who have active leaves
+  const totalAfastadosNaEscala = useMemo(() => {
+    return escalaMilitares.filter((p: Personnel) =>
+      vacations.some(v => {
+        if (v.leave_type === 'desconto_ferias') return false;
+        const matchPerson = Number(v.personnel_id) === Number(p.id) ||
+          (v.full_name && p.name && v.full_name.toLowerCase().trim() === p.name.toLowerCase().trim());
+        return matchPerson && v.start_date <= selectedDate && v.end_date >= selectedDate;
+      })
+    ).length;
+  }, [escalaMilitares, vacations, selectedDate]);
+
   // Helper to resolve personnel name
   const getPersonnelName = (id?: number) => {
     if (!id) return '—';
@@ -726,34 +738,101 @@ const DashboardAvisos: React.FC = () => {
                   <span className="material-symbols-outlined text-[16px]">shield_person</span>
                   Guarnição de Serviço do Dia
                   {escalaMilitares.length > 0 && (
-                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full ml-auto">
-                      {escalaMilitares.length}
-                    </span>
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      {totalAfastadosNaEscala > 0 && (
+                        <span className="text-[10px] font-bold bg-amber-100/90 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1" title="Militares escalados com afastamento no dia">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                          {totalAfastadosNaEscala} afastado(s)
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                        {escalaMilitares.length}
+                      </span>
+                    </div>
                   )}
                 </h3>
                 {escala?.equipe && (
-                  <div className="bg-primary/5 border border-primary/10 rounded-lg px-3 py-2 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[16px]">group</span>
-                    <span className="text-xs font-black text-primary uppercase">{escala.equipe}</span>
+                  <div className="bg-primary/5 border border-primary/10 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-[16px]">group</span>
+                      <span className="text-xs font-black text-primary uppercase">{escala.equipe}</span>
+                    </div>
+                    {totalAfastadosNaEscala > 0 && (
+                      <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                        ⚠️ Atenção: Militar(es) na escala com afastamento
+                      </span>
+                    )}
                   </div>
                 )}
                 {escalaMilitares.length > 0 ? (
                   <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
-                    {escalaMilitares.map((p: Personnel) => (
-                      <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg bg-background-light border border-rustic-border/50">
-                        {p.image ? (
-                          <img src={p.image} alt={p.name} className="w-7 h-7 rounded-full object-cover border border-rustic-border" />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="material-symbols-outlined text-primary text-[14px]">person</span>
+                    {escalaMilitares.map((p: Personnel) => {
+                      const afastamento = vacations.find(v => {
+                        if (v.leave_type === 'desconto_ferias') return false;
+                        const matchPerson = Number(v.personnel_id) === Number(p.id) ||
+                          (v.full_name && p.name && v.full_name.toLowerCase().trim() === p.name.toLowerCase().trim());
+                        return matchPerson && v.start_date <= selectedDate && v.end_date >= selectedDate;
+                      });
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                            afastamento
+                              ? 'bg-amber-500/10 border-amber-500/30 relative overflow-hidden shadow-2xs'
+                              : 'bg-background-light border-rustic-border/50'
+                          }`}
+                        >
+                          {afastamento && (
+                            <div className="w-1 bg-amber-500 absolute left-0 top-0 bottom-0"></div>
+                          )}
+                          {p.image ? (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className={`w-7 h-7 rounded-full object-cover border ${
+                                afastamento ? 'border-amber-400 ml-1' : 'border-rustic-border'
+                              }`}
+                            />
+                          ) : (
+                            <div
+                              className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                                afastamento ? 'bg-amber-500/20 ml-1' : 'bg-primary/10'
+                              }`}
+                            >
+                              <span
+                                className={`material-symbols-outlined text-[14px] ${
+                                  afastamento ? 'text-amber-700' : 'text-primary'
+                                }`}
+                              >
+                                person
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <p className="text-xs font-bold text-[#2c1810] truncate">
+                                {p.rank} {p.war_name || p.name}
+                              </p>
+                              {afastamento && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-950 border border-amber-500/40 shrink-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                                  {getLeaveLabel(afastamento.leave_type)}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-rustic-brown/60 truncate">
+                              {p.role || p.type}
+                              {afastamento && (
+                                <span className="text-amber-800 font-semibold ml-1">
+                                  • (Afastado: {formatLocalDate(afastamento.start_date)} a {formatLocalDate(afastamento.end_date)})
+                                </span>
+                              )}
+                            </p>
                           </div>
-                        )}
-                        <div>
-                          <p className="text-xs font-bold text-[#2c1810]">{p.rank} {p.war_name || p.name}</p>
-                          <p className="text-[9px] text-rustic-brown/50">{p.role || p.type}</p>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-rustic-brown/40 italic pl-1">Nenhuma guarnição escalada para hoje.</p>
