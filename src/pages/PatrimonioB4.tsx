@@ -652,7 +652,7 @@ const PatrimonioB4: React.FC = () => {
   const ATIVIDADES_LIST = [
     'Incêndio Urbano', 'Incêndio Florestal', 'Salvamento Terrestre',
     'Salvamento em Altura', 'Salvamento Aquático', 'APH',
-    'Produtos Perigosos', 'Defesa Civil', 'Administrativo'
+    'Produtos Perigosos', 'Corte de Árvore', 'Defesa Civil', 'Administrativo'
   ];
 
   const uniqueLocations = Array.from(
@@ -1675,7 +1675,7 @@ const PatrimonioB4: React.FC = () => {
                         <label className="text-xs font-bold text-rustic-brown">Atividades Operacionais</label>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        {['Incêndio Urbano', 'Incêndio Florestal', 'Salvamento Terrestre', 'Salvamento em Altura', 'Salvamento Aquático', 'APH', 'Produtos Perigosos', 'Defesa Civil', 'Administrativo'].map(at => {
+                        {ATIVIDADES_LIST.map(at => {
                           const hasAt = newItemAtividades.includes(at);
                           return (
                             <label key={at} className="flex items-center gap-2 text-xs font-medium cursor-pointer hover:text-primary transition-colors">
@@ -1976,6 +1976,31 @@ const PatrimonioB4: React.FC = () => {
               </div>
             </div>
           )}
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px' }}>Atividades Operacionais</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              {ATIVIDADES_LIST.map(at => {
+                const currentAts = fleetItemEditando?.atividades || [];
+                const checked = currentAts.includes(at);
+                return (
+                  <label key={at} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={e => {
+                        const newAts = e.target.checked
+                          ? [...currentAts, at]
+                          : currentAts.filter((a: string) => a !== at);
+                        atualizarCampoFleetItem('atividades', newAts);
+                      }}
+                      style={{ borderRadius: '4px' }}
+                    />
+                    {at}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Observações / Detalhes</label>
             <textarea
