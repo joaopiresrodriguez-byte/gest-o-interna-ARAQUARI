@@ -7,7 +7,7 @@ type PeriodoOption = 'atual' | '3meses' | '6meses' | 'custom';
 interface ScaleConfigPanelProps {
     personnelList: Personnel[];
     initialAnchorDate?: string;
-    onPublish: (month: string, shiftType: string, anchorDate: string) => void;
+    onPublish: (month: string, shiftType: string, anchorDate: string, monthsToPublish: { mes: number; ano: number }[]) => void;
     onSyncCalendar?: (months: { mes: number; ano: number }[]) => void;
     calendarSyncing?: boolean;
     calendarProgress?: string;
@@ -36,7 +36,7 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
     const [shiftType, setShiftType] = useState('24x72');
     const [stats, setStats] = useState({ guarnicoes: 0, membros: 0 });
 
-    // Multi-month calendar sync
+    // Multi-month period selection
     const [periodo, setPeriodo] = useState<PeriodoOption>('atual');
     const [customStart, setCustomStart] = useState(month);
     const [customEnd, setCustomEnd] = useState(() => {
@@ -86,7 +86,7 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                    <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Mês de Referência</label>
+                    <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Mês de Referência (Inicial)</label>
                     <input
                         type="month"
                         value={month}
@@ -133,57 +133,65 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
                 </div>
             )}
 
+            {/* ─── Seleção do Período de Projeção & Publicação ─── */}
+            <div className="p-4 bg-stone-50 border border-stone-200 rounded-xl space-y-3">
+                <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-stone-700 text-[18px]">date_range</span>
+                    <span className="font-black text-xs uppercase text-stone-700">Período da Projeção de Escala</span>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {([
+                        { value: 'atual' as const, label: 'Apenas 1 Mês' },
+                        { value: '3meses' as const, label: 'Próximos 3 Meses' },
+                        { value: '6meses' as const, label: 'Próximos 6 Meses' },
+                        { value: 'custom' as const, label: 'Personalizado' },
+                    ]).map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => setPeriodo(opt.value)}
+                            className={`px-3 py-2 rounded-lg text-[11px] font-bold transition-all border ${
+                                periodo === opt.value
+                                    ? 'bg-primary text-white border-primary shadow-md'
+                                    : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+
+                {periodo === 'custom' && (
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-stone-500 block mb-1">Mês Inicial:</label>
+                            <input
+                                type="month"
+                                value={customStart}
+                                onChange={e => setCustomStart(e.target.value)}
+                                className="w-full h-10 px-3 rounded-lg border border-stone-200 text-sm font-bold bg-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-stone-500 block mb-1">Mês Final:</label>
+                            <input
+                                type="month"
+                                value={customEnd}
+                                onChange={e => setCustomEnd(e.target.value)}
+                                className="w-full h-10 px-3 rounded-lg border border-stone-200 text-sm font-bold bg-white"
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* ─── Período de publicação no Google Calendar ─── */}
             {onSyncCalendar && (
                 <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-3">
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-blue-600 text-[18px]">calendar_month</span>
-                        <span className="font-black text-xs uppercase text-blue-700">Publicar escala no Google Calendar</span>
+                        <span className="font-black text-xs uppercase text-blue-700">Sincronizar no Google Calendar</span>
                     </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {([
-                            { value: 'atual' as const, label: 'Apenas este mês' },
-                            { value: '3meses' as const, label: 'Próximos 3 meses' },
-                            { value: '6meses' as const, label: 'Próximos 6 meses' },
-                            { value: 'custom' as const, label: 'Personalizado' },
-                        ]).map(opt => (
-                            <button
-                                key={opt.value}
-                                onClick={() => setPeriodo(opt.value)}
-                                className={`px-3 py-2 rounded-lg text-[11px] font-bold transition-all border ${
-                                    periodo === opt.value
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                                        : 'bg-white text-blue-700 border-blue-200 hover:border-blue-400'
-                                }`}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {periodo === 'custom' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-[10px] font-black uppercase text-blue-500 block mb-1">De:</label>
-                                <input
-                                    type="month"
-                                    value={customStart}
-                                    onChange={e => setCustomStart(e.target.value)}
-                                    className="w-full h-10 px-3 rounded-lg border border-blue-200 text-sm font-bold"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black uppercase text-blue-500 block mb-1">Até:</label>
-                                <input
-                                    type="month"
-                                    value={customEnd}
-                                    onChange={e => setCustomEnd(e.target.value)}
-                                    className="w-full h-10 px-3 rounded-lg border border-blue-200 text-sm font-bold"
-                                />
-                            </div>
-                        </div>
-                    )}
 
                     {calendarProgress && (
                         <div className="flex items-center gap-2 p-2 bg-white/80 rounded-lg text-xs font-bold text-blue-700">
@@ -217,12 +225,12 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
                             alert('⚠️ Adicione militares às turmas antes de publicar!');
                             return;
                         }
-                        onPublish(month, shiftType, anchorDate);
+                        onPublish(month, shiftType, anchorDate, getMonthsForPeriodo());
                     }}
                     disabled={stats.membros === 0}
-                    className={`px-8 py-3 font-black text-xs rounded-xl transition-all uppercase tracking-widest ${stats.membros === 0 ? 'bg-stone-300 text-stone-500 cursor-not-allowed' : 'bg-primary text-white hover:shadow-lg'}`}
+                    className={`px-8 py-3.5 font-black text-xs rounded-xl transition-all uppercase tracking-widest ${stats.membros === 0 ? 'bg-stone-300 text-stone-500 cursor-not-allowed' : 'bg-primary text-white hover:shadow-lg shadow-primary/20'}`}
                 >
-                    Projetar e Publicar Escala
+                    Projetar e Publicar Escala ({periodoLabel()})
                 </button>
             </div>
         </div>

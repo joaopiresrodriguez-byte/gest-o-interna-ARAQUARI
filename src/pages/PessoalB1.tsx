@@ -205,7 +205,7 @@ const PessoalB1: React.FC = () => {
 
   const [scaleAnchorDate, setScaleAnchorDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  const [scaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
+  const [scaleMonth, setScaleMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; });
 
   // Swap form
   const [swapPersonId, setSwapPersonId] = useState<number | ''>('');
@@ -280,7 +280,7 @@ const PessoalB1: React.FC = () => {
         PersonnelService.getCourses(),
         PersonnelService.getEpiDeliveries(),
         PersonnelService.getNotifications(),
-        supabase.from('escalas').select('*').order('data', { ascending: false }).limit(90)
+        supabase.from('escalas').select('*').order('data', { ascending: true })
       ]);
       setCourses(courseList);
       setEpiDeliveries(epiList);
@@ -537,7 +537,12 @@ const PessoalB1: React.FC = () => {
 
   // Scale helpers
 
-  const handlePublishScale = async (month: string, _shiftType: string, anchorDate: string) => {
+  const handlePublishScale = async (
+    month: string,
+    _shiftType: string,
+    anchorDate: string,
+    monthsToPublish?: { mes: number; ano: number }[]
+  ) => {
     try {
       setLoading(true);
 
@@ -552,18 +557,14 @@ const PessoalB1: React.FC = () => {
 
       if (error || !gData) throw new Error('Não foi possível carregar as guarnições.');
 
-      // FIX: extrair último token do nome (ex: "Guarnição A" → "A") em vez de charAt(0) → "G"
       const mapNomeToCodigo = (nome: string): string => {
         const normalizado = nome.trim().toUpperCase();
-        // Nomes por extenso → código letra
         if (normalizado.includes('ALPHA')   || normalizado.includes('AZUL'))     return 'A';
         if (normalizado.includes('BRAVO')   || normalizado.includes('VERMELH'))  return 'B';
         if (normalizado.includes('CHARLIE') || normalizado.includes('AMAREL'))   return 'C';
         if (normalizado.includes('DELTA')   || normalizado.includes('BRANC'))    return 'D';
-        // Padrão "Guarnição X" ou "Turma X" → último token
         const ultimaPalavra = normalizado.split(/\s+/).pop() || '';
         if (['A', 'B', 'C', 'D'].includes(ultimaPalavra)) return ultimaPalavra;
-        // Último caractere como fallback seguro
         const ultimoChar = normalizado.slice(-1);
         if (['A', 'B', 'C', 'D'].includes(ultimoChar)) return ultimoChar;
         return 'A';
@@ -572,7 +573,6 @@ const PessoalB1: React.FC = () => {
       const guarnicoesFormatadas = gData.map(g => ({
         id: g.id,
         codigo: mapNomeToCodigo(g.nome),
-        // FIX: usar m.militar_id (campo real da tabela)
         membrosIds: (g.guarnicao_membros as Array<{ militar_id: number }> | null)
           ?.map(m => m.militar_id)
           .filter(Boolean) || []
@@ -580,38 +580,46 @@ const PessoalB1: React.FC = () => {
 
       if (guarnicoesFormatadas.length === 0) throw new Error('Nenhuma guarnição encontrada no banco.');
 
-      const getDiaServico = (dataAlvo: Date, dataAncora: Date): number => {
-        const ms = 1000 * 60 * 60 * 24;
-        const diff = Math.floor((dataAlvo.getTime() - dataAncora.getTime()) / ms);
-        return ((diff % 4) + 4) % 4; // 0=A, 1=B, 2=C, 3=D
-      };
+      const targetMonths = monthsToPublish && monthsToPublish.length > 0
+        ? monthsToPublish
+        : (() => {
+            const [y, m] = month.split('-').map(Number);
+            return [{ mes: m, ano: y }];
+          })();
 
-      const [year, m] = month.split('-').map(Number);
-      const start = new Date(year, m - 1, 1);
-      const end = new Date(year, m, 0);
-      const anchor = new Date(anchorDate + 'T00:00:00');
+      const [ay, am, ad] = anchorDate.split('-').map(Number);
+      const anchorUtc = Date.UTC(ay, am - 1, ad);
 
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const dStr = d.toISOString().split('T')[0];
-        // O algoritmo: A, B, C, D corresponde aos índices 0, 1, 2, 3
-        const servicoIdx = getDiaServico(d, anchor);
-        const guarnicaoDaVez = guarnicoesFormatadas.find(g => {
+      const allEntries: Omit<Escala, 'id' | 'created_at'>[] = [];
+
+      for (const target of targetMonths) {
+        const { mes, ano } = target;
+        const daysInMonth = new Date(ano, mes, 0).getDate();
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dStr = `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const targetUtc = Date.UTC(ano, mes - 1, d);
+          const diffDays = Math.floor((targetUtc - anchorUtc) / (1000 * 60 * 60 * 24));
+          const servicoIdx = ((diffDays % 4) + 4) % 4; // 0=A, 1=B, 2=C, 3=D
+
+          const guarnicaoDaVez = guarnicoesFormatadas.find(g => {
             const codigos = ['A', 'B', 'C', 'D'];
             return g.codigo === codigos[servicoIdx];
-        }) || guarnicoesFormatadas[servicoIdx % guarnicoesFormatadas.length];
+          }) || guarnicoesFormatadas[servicoIdx % guarnicoesFormatadas.length];
 
-        const entry = {
-          data: dStr,
-          equipe: `Turma ${guarnicaoDaVez.codigo}`,
-          militares: guarnicaoDaVez.membrosIds,
-          shift_type: _shiftType as "24x72" | "12x36" | "administrative" | undefined,
-          is_folga: false,
-          manual_override: false,
-          turma: guarnicaoDaVez.codigo
-        };
-
-        await PersonnelService.saveEscala(entry);
+          allEntries.push({
+            data: dStr,
+            equipe: `Turma ${guarnicaoDaVez.codigo}`,
+            militares: guarnicaoDaVez.membrosIds,
+            shift_type: _shiftType as "24x72" | "12x36" | "administrative" | undefined,
+            is_folga: false,
+            manual_override: false,
+            turma: guarnicaoDaVez.codigo
+          });
+        }
       }
+
+      await PersonnelService.saveEscalasBatch(allEntries);
 
       // Save configuration back to DB
       const CORES: Record<string, string> = {
@@ -634,8 +642,8 @@ const PessoalB1: React.FC = () => {
         shiftStartTime: '07:30'
       });
 
-      loadData();
-      toast.success(`Escala de ${month} publicada usando motor determinístico!`);
+      await loadData();
+      toast.success(`Escala de ${targetMonths.length} mês(es) (${allEntries.length} dias) publicada com sucesso!`);
     } catch (error: any) {
       toast.error('Erro na publicação: ' + error.message);
     } finally {
@@ -659,11 +667,9 @@ const PessoalB1: React.FC = () => {
 
       toast.success('Ajuste manual registrado com sucesso!');
 
-      // updatedExceptions not used since state was removed
-      // setScaleExceptions(updatedExceptions);
-
       setShowAdjustmentModal(false);
       setExceptionReason('');
+      await loadData();
     } catch (err: any) {
       toast.error('Erro ao registrar ajuste: ' + err.message);
     }
@@ -1206,6 +1212,7 @@ const PessoalB1: React.FC = () => {
                           escalas={escalas}
                           personnelList={personnelList}
                           vacations={vacations}
+                          onMonthChange={setScaleMonth}
                           onDayClick={(date, personId) => {
                             setSelectedDayInfo({ date, personId });
                             setShowAdjustmentModal(true);

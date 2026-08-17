@@ -715,6 +715,16 @@ export const PersonnelService = {
         return data;
     },
 
+    saveEscalasBatch: async (escalas: Omit<Escala, 'id' | 'created_at'>[]): Promise<Escala[]> => {
+        if (!escalas || escalas.length === 0) return [];
+        const { data, error } = await supabase
+            .from('escalas')
+            .upsert(escalas, { onConflict: 'data' })
+            .select();
+        if (error) throw error;
+        return data || [];
+    },
+
     // ===== SCALE CONFIGS =====
     getScaleConfigs: async (): Promise<ScaleRotationConfig[]> => {
         try {

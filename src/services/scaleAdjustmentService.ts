@@ -23,6 +23,25 @@ export const ScaleAdjustmentService = {
             .single();
         if (error) throw error;
 
+        // Atualizar também a tabela de escalas publicada para que o movimento reflita no calendário
+        const { data: esc } = await supabase.from('escalas').select('*').eq('data', exception.date).maybeSingle();
+        if (esc) {
+            let mils: number[] = Array.isArray(esc.militares) ? esc.militares.map(Number) : [];
+            if (exception.type === 'ADD') {
+                if (!mils.includes(Number(exception.personnel_id))) {
+                    mils.push(Number(exception.personnel_id));
+                }
+            } else if (exception.type === 'REMOVE') {
+                mils = mils.filter(id => id !== Number(exception.personnel_id));
+            }
+            await supabase.from('escalas').update({
+                militares: mils,
+                manual_override: true,
+                override_reason: exception.reason,
+                updated_at: new Date().toISOString()
+            }).eq('id', esc.id);
+        }
+
         // Log audit
         await ScaleAdjustmentService.logAudit({
             action_type: exception.type === 'ADD' ? 'Adição Manual' : 'Remoção Manual',

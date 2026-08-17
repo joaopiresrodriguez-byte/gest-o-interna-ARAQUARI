@@ -7,6 +7,7 @@ interface ScaleCalendarProps {
     personnelList: Personnel[];
     vacations: Vacation[];
     onDayClick?: (date: string, personId: number) => void;
+    onMonthChange?: (newMonth: string) => void;
 }
 
 const CORES: Record<string, { bg: string; text: string; hex: string }> = {
@@ -33,10 +34,16 @@ const getTurmaLetter = (turma?: string, equipe?: string): string => {
     return 'A';
 };
 
-const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, onDayClick }) => {
+const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, onDayClick, onMonthChange }) => {
     const [year, monthNum] = month.split('-').map(Number);
     const daysInMonth = new Date(year, monthNum, 0).getDate();
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    const changeMonth = (delta: number) => {
+        const d = new Date(year, monthNum - 1 + delta, 1);
+        const newMonthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        onMonthChange?.(newMonthStr);
+    };
 
     const getStatusForDay = (dayNum: number, personId: number) => {
         const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
@@ -83,8 +90,47 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
         return null;
     };
 
+    const monthNames = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+
     return (
         <div className="bg-white border text-rustic-brown border-stone-200 rounded-2xl overflow-hidden shadow-sm">
+            {/* Header de Navegação de Mês */}
+            <div className="p-4 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary text-xl">calendar_month</span>
+                    <h4 className="font-black text-sm uppercase text-stone-700 tracking-wide">
+                        Escala Mensal — {monthNames[monthNum - 1]} de {year}
+                    </h4>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => changeMonth(-1)}
+                        className="px-3 py-1.5 bg-white border border-stone-200 hover:bg-stone-100 text-stone-700 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors shadow-xs"
+                        title="Mês Anterior"
+                    >
+                        <span className="material-symbols-outlined text-sm">chevron_left</span>
+                        Anterior
+                    </button>
+                    <input
+                        type="month"
+                        value={month}
+                        onChange={e => e.target.value && onMonthChange?.(e.target.value)}
+                        className="h-8 px-2 bg-white border border-stone-200 text-xs font-bold rounded-lg text-stone-700"
+                    />
+                    <button
+                        onClick={() => changeMonth(1)}
+                        className="px-3 py-1.5 bg-white border border-stone-200 hover:bg-stone-100 text-stone-700 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors shadow-xs"
+                        title="Próximo Mês"
+                    >
+                        Próximo
+                        <span className="material-symbols-outlined text-sm">chevron_right</span>
+                    </button>
+                </div>
+            </div>
+
             <div className="overflow-x-auto">
                 <table className="w-full text-[10px] border-collapse">
                     <thead>
