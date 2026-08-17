@@ -227,14 +227,70 @@ export const ScaleAdjustmentService = {
             created_at: new Date().toISOString()
         });
 
-        // 2. Registrar no Histórico escala_alteracoes
+        // Buscar dados da guarnição destino para saber o código/letra (A, B, C ou D)
+        const { data: gData } = await supabase.from('guarnicoes').select('*').eq('id', guarnicaoDestinoId).maybeSingle();
+        const nomeDestino = gData?.nome || guarnicaoDestinoId;
+
+        const mapNomeToCodigo = (nome: string): string => {
+            const normalizado = nome.trim().toUpperCase();
+            if (normalizado.includes('ALPHA')   || normalizado.includes('AZUL'))     return 'A';
+            if (normalizado.includes('BRAVO')   || normalizado.includes('VERMELH'))  return 'B';
+            if (normalizado.includes('CHARLIE') || normalizado.includes('AMAREL'))   return 'C';
+            if (normalizado.includes('DELTA')   || normalizado.includes('BRANC'))    return 'D';
+            const ultimaPalavra = normalizado.split(/\s+/).pop() || '';
+            if (['A', 'B', 'C', 'D'].includes(ultimaPalavra)) return ultimaPalavra;
+            const ultimoChar = normalizado.slice(-1);
+            if (['A', 'B', 'C', 'D'].includes(ultimoChar)) return ultimoChar;
+            return 'A';
+        };
+
+        const codigoDestino = mapNomeToCodigo(nomeDestino);
+
+        // 2. Projetar a transferência nas escalas publicadas já existentes a partir da dataVigencia
+        const { data: escalasPublicadas } = await supabase
+            .from('escalas')
+            .select('*')
+            .gte('data', dataVigencia);
+
+        if (escalasPublicadas && escalasPublicadas.length > 0) {
+            for (const esc of escalasPublicadas) {
+                const codigoDia = mapNomeToCodigo(esc.turma || esc.equipe || '');
+                let mils: number[] = Array.isArray(esc.militares) ? esc.militares.map(Number) : [];
+                let alterado = false;
+
+                if (codigoDia === codigoDestino) {
+                    // Militar deve estar de serviço neste dia (se pertencer à guarnição destino)
+                    if (!mils.includes(militarId)) {
+                        mils.push(militarId);
+                        alterado = true;
+                    }
+                } else {
+                    // Militar sai de serviço neste dia (pertencia a outra guarnição)
+                    if (mils.includes(militarId)) {
+                        mils = mils.filter(id => id !== militarId);
+                        alterado = true;
+                    }
+                }
+
+                if (alterado) {
+                    await supabase.from('escalas').update({
+                        militares: mils,
+                        manual_override: true,
+                        override_reason: `Transferência para Guarnição ${codigoDestino} a partir de ${dataVigencia}`,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', esc.id);
+                }
+            }
+        }
+
+        // 3. Registrar no Histórico escala_alteracoes
         const record = {
             tipo_alteracao: 'transferencia_guarnicao',
             militar_a_id: militarId,
             guarnicao_origem_id: guarnicaoOrigemId || null,
             guarnicao_destino_id: guarnicaoDestinoId,
             data_vigencia: dataVigencia,
-            detalhes: detalhes || `Transferência de guarnição do Militar #${militarId} para Guarnição ${guarnicaoDestinoId} a partir de ${dataVigencia}`,
+            detalhes: detalhes || `Transferência de guarnição do Militar #${militarId} para Guarnição ${nomeDestino} a partir de ${dataVigencia}`,
             criado_por: usuario,
             criado_em: new Date().toISOString()
         };

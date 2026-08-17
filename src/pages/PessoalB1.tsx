@@ -677,18 +677,24 @@ const PessoalB1: React.FC = () => {
 
   const handleSyncCalendar = async (months: { mes: number; ano: number }[]) => {
     setCalendarSyncing(true);
-    setCalendarProgress('Carregando escala do banco...');
+    setCalendarProgress('Garantindo projeção dos meses selecionados no banco...');
     try {
-      // Buscar a escala do banco para os meses solicitados
-      let todasEscalas = [...escalas];
+      // 1. Garantir que a escala esteja projetada e publicada no banco para TODOS os meses solicitados
       if (months.length > 0) {
-        const minYear = Math.min(...months.map(m => m.ano));
-        const minMonth = Math.min(...months.filter(m => m.ano === minYear).map(m => m.mes));
-        const maxYear = Math.max(...months.map(m => m.ano));
-        const maxMonth = Math.max(...months.filter(m => m.ano === maxYear).map(m => m.mes));
+        await handlePublishScale(scaleMonth, '24x72', scaleAnchorDate, months);
+      }
 
-        const startDate = `${minYear}-${String(minMonth).padStart(2, '0')}-01`;
-        const endDate = `${maxYear}-${String(maxMonth).padStart(2, '0')}-${new Date(maxYear, maxMonth, 0).getDate()}`;
+      setCalendarProgress('Carregando escala completa do banco...');
+
+      // 2. Buscar a escala do banco para os meses solicitados
+      let todasEscalas: Escala[] = [];
+      if (months.length > 0) {
+        const sortedMonths = [...months].sort((a, b) => (a.ano * 100 + a.mes) - (b.ano * 100 + b.mes));
+        const first = sortedMonths[0];
+        const last = sortedMonths[sortedMonths.length - 1];
+
+        const startDate = `${first.ano}-${String(first.mes).padStart(2, '0')}-01`;
+        const endDate = `${last.ano}-${String(last.mes).padStart(2, '0')}-${new Date(last.ano, last.mes, 0).getDate()}`;
 
         const { data: dbEscalas } = await supabase
           .from('escalas')
@@ -718,7 +724,7 @@ const PessoalB1: React.FC = () => {
         setCalendarProgress('');
       }
     } catch (error: any) {
-      toast.error('Erro ao contactar servidor: ' + error.message);
+      toast.error('Erro ao sincronizar: ' + error.message);
       setCalendarProgress('');
     } finally {
       setCalendarSyncing(false);
