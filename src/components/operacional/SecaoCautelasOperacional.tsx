@@ -558,67 +558,74 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
               {/* Seleção do Item */}
               <div>
                 <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
-                  Buscar & Selecionar Item do Catálogo B4 *
+                  Selecionar Item do Catálogo B4 * (Menu Suspenso)
                 </label>
+                <select
+                  value={selectedItem?.id || ''}
+                  onChange={e => {
+                    const item = catalogo.find(i => i.id === e.target.value);
+                    if (item && item.status !== 'cautelado' && !item.is_cautelado) {
+                      setSelectedItem(item);
+                    } else if (item) {
+                      toast.error('Este item está cautelado e não pode ser selecionado.');
+                      setSelectedItem(null);
+                    } else {
+                      setSelectedItem(null);
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 border-2 border-rustic-border rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary focus:border-primary bg-white text-rustic-brown mb-2 shadow-xs"
+                >
+                  <option value="">-- Selecione um item do catálogo ({catalogo.length} cadastrados) --</option>
+                  {itensCatalogoFiltrados.map(item => {
+                    const isCautelado = item.status === 'cautelado' || item.is_cautelado;
+                    return (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                        disabled={isCautelado}
+                        className={isCautelado ? 'text-red-600 bg-red-50 font-semibold' : 'text-stone-900 font-bold'}
+                      >
+                        {isCautelado ? `🔒 [CAUTELADO] ${item.name} (${item.type})` : `✅ ${item.name} (${item.type}) — Disponível`}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                {/* Filtro auxiliar */}
                 <input
                   type="text"
-                  placeholder="Digite o nome do equipamento ou viatura..."
+                  placeholder="Ou digite o nome do equipamento para filtrar as opções acima..."
                   value={retiradaSearch}
                   onChange={e => setRetiradaSearch(e.target.value)}
-                  className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-medium focus:ring-2 focus:ring-primary mb-2"
+                  className="w-full px-3 py-1.5 border border-rustic-border/80 rounded-lg text-xs font-medium focus:ring-1 focus:ring-primary bg-stone-50 mb-2"
                 />
 
-                <div className="max-h-40 overflow-y-auto border border-rustic-border rounded-xl divide-y divide-rustic-border/60">
-                  {itensCatalogoFiltrados.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-stone-400">Nenhum item encontrado no catálogo.</div>
-                  ) : (
-                    itensCatalogoFiltrados.map(item => {
-                      const isCautelado = item.status === 'cautelado' || item.is_cautelado;
-                      const isSelected = selectedItem?.id === item.id;
-
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => {
-                            if (!isCautelado) setSelectedItem(item);
-                          }}
-                          className={`p-2.5 flex items-center justify-between cursor-pointer transition-colors ${
-                            isCautelado
-                              ? 'bg-stone-100 cursor-not-allowed opacity-60'
-                              : isSelected
-                              ? 'bg-primary/10 border-l-4 border-primary font-bold'
-                              : 'hover:bg-stone-50'
-                          }`}
-                        >
-                          <div>
-                            <div className="text-xs font-bold text-rustic-brown flex items-center gap-2">
-                              {item.name}
-                              <span className="text-[10px] px-1.5 py-0.2 bg-stone-200 text-stone-700 rounded font-normal uppercase">
-                                {item.type}
-                              </span>
-                            </div>
-                            {item.details && <div className="text-[10px] text-stone-500">{item.details}</div>}
-                          </div>
-                          <div>
-                            {isCautelado ? (
-                              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-black uppercase">
-                                🔒 CAUTELADO
-                              </span>
-                            ) : isSelected ? (
-                              <span className="px-2 py-0.5 bg-primary text-white rounded text-[10px] font-black uppercase">
-                                Selecionado
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-black uppercase">
-                                Disponível
-                              </span>
-                            )}
-                          </div>
+                {/* Card de confirmação do Item Selecionado */}
+                {selectedItem ? (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-blue-950 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-sm">check_circle</span>
+                        {selectedItem.name}
+                        <span className="text-[10px] px-2 py-0.5 bg-blue-200 text-blue-900 rounded font-black uppercase">
+                          {selectedItem.type}
+                        </span>
+                      </div>
+                      {selectedItem.location && (
+                        <div className="text-[10px] text-blue-800 font-medium mt-0.5">
+                          Localização: <strong>{selectedItem.location}</strong> {selectedItem.patrimonio_number ? `| Patrimônio: ${selectedItem.patrimonio_number}` : ''}
                         </div>
-                      );
-                    })
-                  )}
-                </div>
+                      )}
+                    </div>
+                    <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase shadow-xs">
+                      Item Selecionado
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-amber-800 font-semibold italic">
+                    ⚠️ Selecione um item no menu suspenso acima para autorizar a retirada.
+                  </p>
+                )}
               </div>
 
               {/* Solicitante & Retirante */}

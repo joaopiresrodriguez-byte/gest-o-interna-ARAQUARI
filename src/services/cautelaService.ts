@@ -81,10 +81,10 @@ export const CautelaService = {
       throw error;
     }
 
-    // Atualizar status do item no catálogo B4 (vehicles)
+    // Atualizar status do item na tabela `fleet` do B4
     if (payload.item_id) {
       const { error: itemError } = await supabase
-        .from('vehicles')
+        .from('fleet')
         .update({
           status: 'cautelado',
           is_cautelado: true,
@@ -93,7 +93,7 @@ export const CautelaService = {
         .eq('id', payload.item_id);
 
       if (itemError) {
-        console.warn('Aviso: erro ao atualizar status do item no catálogo B4:', itemError);
+        console.warn('Aviso: erro ao atualizar status do item no catálogo fleet B4:', itemError);
       }
     }
 
@@ -127,10 +127,10 @@ export const CautelaService = {
       throw error;
     }
 
-    // Retornar item no catálogo B4 para disponível (active)
+    // Retornar item no catálogo B4 (`fleet`) para disponível (active)
     if (itemId) {
       const { error: itemError } = await supabase
-        .from('vehicles')
+        .from('fleet')
         .update({
           status: 'active',
           is_cautelado: false,
@@ -139,7 +139,7 @@ export const CautelaService = {
         .eq('id', itemId);
 
       if (itemError) {
-        console.warn('Aviso: erro ao atualizar item para disponivel no catálogo B4:', itemError);
+        console.warn('Aviso: erro ao atualizar item para disponivel no catálogo fleet B4:', itemError);
       }
     }
 
@@ -167,10 +167,10 @@ export const CautelaService = {
       throw error;
     }
 
-    // Retornar item no catálogo B4 para disponível (active)
+    // Retornar item no catálogo B4 (`fleet`) para disponível (active)
     if (itemId) {
       const { error: itemError } = await supabase
-        .from('vehicles')
+        .from('fleet')
         .update({
           status: 'active',
           is_cautelado: false,
@@ -179,7 +179,7 @@ export const CautelaService = {
         .eq('id', itemId);
 
       if (itemError) {
-        console.warn('Aviso: erro ao atualizar item para disponivel no catálogo B4:', itemError);
+        console.warn('Aviso: erro ao atualizar item para disponivel no catálogo fleet B4:', itemError);
       }
     }
 
@@ -188,12 +188,12 @@ export const CautelaService = {
 
   async getItensDisponiveisCat(): Promise<Vehicle[]> {
     const { data, error } = await supabase
-      .from('vehicles')
+      .from('fleet')
       .select('*')
       .order('name', { ascending: true });
 
     if (error) {
-      console.error('Erro ao buscar catálogo de itens B4:', error);
+      console.error('Erro ao buscar catálogo de itens fleet B4:', error);
       return [];
     }
     return data || [];
