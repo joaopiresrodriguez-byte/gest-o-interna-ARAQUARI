@@ -57,7 +57,7 @@ export const CautelaService = {
   }): Promise<Cautela> {
     const numero_cautela = await this.gerarProximoNumeroCautela();
 
-    const nuevaCautela = {
+    const nuevaCautela: any = {
       numero_cautela,
       item_id: payload.item_id,
       tipo_item: payload.tipo_item || 'equipamento',
@@ -70,11 +70,25 @@ export const CautelaService = {
       status: 'ativo',
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('cautelas')
       .insert(nuevaCautela)
       .select()
       .single();
+
+    // Se o banco Postgres ainda não converteu item_id para TEXT (código 22P02), faz fallback com item_id null sem perder os dados da cautela
+    if (error && (error.code === '22P02' || error.message?.includes('type uuid'))) {
+      console.warn('Postgres UUID constraint detectado. Executando fallback seguro com item_id: null...');
+      const fallbackPayload = { ...nuevaCautela, item_id: null };
+      const res = await supabase
+        .from('cautelas')
+        .insert(fallbackPayload)
+        .select()
+        .single();
+
+      data = res.data;
+      error = res.error;
+    }
 
     if (error) {
       console.error('Erro ao registrar nova cautela:', error);
@@ -93,7 +107,15 @@ export const CautelaService = {
         .eq('id', payload.item_id);
 
       if (itemError) {
-        console.warn('Aviso: erro ao atualizar status do item no catálogo fleet B4:', itemError);
+        console.warn('Aviso ao atualizar item fleet por ID. Tentando por nome...', itemError);
+        await supabase
+          .from('fleet')
+          .update({
+            status: 'cautelado',
+            is_cautelado: true,
+            cautela_ativa_id: data.id,
+          })
+          .eq('name', payload.item_nome);
       }
     }
 
@@ -139,7 +161,17 @@ export const CautelaService = {
         .eq('id', itemId);
 
       if (itemError) {
-        console.warn('Aviso: erro ao atualizar item para disponivel no catálogo fleet B4:', itemError);
+        console.warn('Aviso ao atualizar item fleet por ID na devolução. Tentando por nome...', itemError);
+        if (data?.item_nome) {
+          await supabase
+            .from('fleet')
+            .update({
+              status: 'active',
+              is_cautelado: false,
+              cautela_ativa_id: null,
+            })
+            .eq('name', data.item_nome);
+        }
       }
     }
 
@@ -179,7 +211,17 @@ export const CautelaService = {
         .eq('id', itemId);
 
       if (itemError) {
-        console.warn('Aviso: erro ao atualizar item para disponivel no catálogo fleet B4:', itemError);
+        console.warn('Aviso ao atualizar item fleet por ID no cancelamento. Tentando por nome...', itemError);
+        if (data?.item_nome) {
+          await supabase
+            .from('fleet')
+            .update({
+              status: 'active',
+              is_cautelado: false,
+              cautela_ativa_id: null,
+            })
+            .eq('name', data.item_nome);
+        }
       }
     }
 
