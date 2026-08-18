@@ -28,11 +28,34 @@ export interface CompartimentoViatura {
     created_at?: string;
 }
 
+export type StatusCautela = 'ativo' | 'devolvido' | 'cancelado';
+export type CondicaoDevolucao = 'perfeito_estado' | 'avaria_leve' | 'avaria_grave' | 'item_perdido';
+
+export interface Cautela {
+    id: string;
+    numero_cautela: string;
+    item_id: string;
+    tipo_item: 'equipamento' | 'viatura' | 'material' | string;
+    item_nome: string;
+    solicitante: string;
+    retirado_por: string;
+    data_retirada: string;
+    data_prevista_devolucao?: string | null;
+    data_devolucao_real?: string | null;
+    condicao_devolucao?: CondicaoDevolucao | null;
+    observacoes?: string | null;
+    observacoes_devolucao?: string | null;
+    motivo_cancelamento?: string | null;
+    status: StatusCautela;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface Vehicle {
     id: string;
     name: string;
     type: 'Viatura' | 'Equipamento' | 'Material' | 'Outro';
-    status: 'active' | 'down' | 'maintenance';
+    status: 'active' | 'down' | 'maintenance' | 'cautelado';
     details: string;
     plate?: string;
     current_km?: number;
@@ -49,6 +72,8 @@ export interface Vehicle {
     patrimonio_number?: string;
     patrimonio_type?: string;
     atividades?: string[];
+    is_cautelado?: boolean;
+    cautela_ativa_id?: string;
     // Joined
     local?: LocalEquipamento;
     compartimento?: CompartimentoViatura;

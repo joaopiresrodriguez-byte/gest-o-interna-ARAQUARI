@@ -6,9 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { Button, Input, TextArea } from '../components/ui';
 import { STATUS_MISSAO, STATUS_RESULTADO, StatusMissao, atualizarMissao } from '../services/missoesService';
 import ConferenciaDiaria from '../components/operacional/ConferenciaDiaria';
+import SecaoCautelasOperacional from '../components/operacional/SecaoCautelasOperacional';
 import HistoricoConferencias from '../components/b4/HistoricoConferencias';
 import { DailyMissionModal } from '../components/shared/DailyMissionModal';
-import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
 
 // ============ SUB-COMPONENTS ============
 
@@ -480,7 +480,7 @@ const CardMissao: React.FC<{
   );
 };
 
-type MainTab = 'resumo' | 'missoes' | 'conferencia' | 'recebimentos';
+type MainTab = 'resumo' | 'missoes' | 'conferencia' | 'cautelas' | 'recebimentos';
 
 // ============ MAIN COMPONENT ============
 
@@ -657,6 +657,7 @@ const Operacional: React.FC = () => {
     { key: 'resumo', label: 'Resumo', icon: 'dashboard' },
     { key: 'missoes', label: 'Missões do Dia', icon: 'target', badge: dashboardStats.activeMissions },
     { key: 'conferencia', label: 'Conferência', icon: 'checklist' },
+    { key: 'cautelas', label: 'Cautelas', icon: 'assignment_return' },
     { key: 'recebimentos', label: 'Recebimentos', icon: 'local_shipping' },
   ];
 
@@ -997,6 +998,12 @@ const Operacional: React.FC = () => {
         )}
 
         {/* ========== TAB: RECEBIMENTOS ========== */}
+        {activeTab === 'cautelas' && (
+          <div className="animate-in fade-in duration-300">
+            <SecaoCautelasOperacional isEditor={isEditor} />
+          </div>
+        )}
+
         {activeTab === 'recebimentos' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <section className="bg-white rounded-xl shadow-sm border border-rustic-border overflow-hidden">

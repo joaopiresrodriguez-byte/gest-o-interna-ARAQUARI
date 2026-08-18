@@ -8,6 +8,7 @@ import ExtratoB4 from '../components/b4/ExtratoB4';
 import GerenciarCompartimentos from '../components/b4/GerenciarCompartimentos';
 import VisualizacaoViatura from '../components/b4/VisualizacaoViatura';
 import HistoricoConferencias from '../components/b4/HistoricoConferencias';
+import SecaoCautelasB4 from '../components/b4/SecaoCautelasB4';
 import { supabase } from '../services/supabase';
 
 import { useEdicao } from '../hooks/useEdicao';
@@ -63,8 +64,14 @@ const ItemCard: React.FC<ItemCardProps> = ({
       <span className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity material-symbols-outlined text-rustic-brown/30 text-[18px]">open_in_full</span>
 
       <div className="flex justify-between items-start mb-3">
-        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {item.status === 'active' ? 'Ativo' : 'Inativo'}
+        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
+          item.status === 'cautelado' || item.is_cautelado
+            ? 'bg-blue-600 text-white shadow-xs'
+            : item.status === 'active'
+            ? 'bg-green-100 text-green-700'
+            : 'bg-red-100 text-red-700'
+        }`}>
+          {item.status === 'cautelado' || item.is_cautelado ? '🔒 CAUTELADO' : item.status === 'active' ? 'Ativo' : 'Inativo'}
         </span>
         <div className="flex gap-2 items-center">
           <span className="text-[10px] font-bold text-rustic-brown/30 font-mono">{item.type}</span>
@@ -188,7 +195,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
 const PatrimonioB4: React.FC = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'compras' | 'missoes' | 'conferencias' | 'relatorios'>('missoes');
+  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'cautelas' | 'compras' | 'missoes' | 'conferencias' | 'relatorios'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
   const [locais, setLocais] = useState<LocalEquipamento[]>([]);
@@ -750,16 +757,16 @@ const PatrimonioB4: React.FC = () => {
           {/* Tabs */}
           <div className="bg-surface rounded-xl shadow-sm border border-rustic-border overflow-hidden">
             <div className="border-b border-rustic-border bg-stone-50/50 px-6 pt-4 flex gap-8 overflow-x-auto">
-              {(['missoes', 'listagem', 'cadastro', 'compras', 'conferencias', 'relatorios'] as const).map(tab => (
+              {(['missoes', 'listagem', 'cautelas', 'cadastro', 'compras', 'conferencias', 'relatorios'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
                 >
                   <span className="material-symbols-outlined">
-                    {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'relatorios' ? 'analytics' : 'checklist'}
+                    {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cautelas' ? 'folder_shared' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'relatorios' ? 'analytics' : 'checklist'}
                   </span>
-                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'conferencias' ? 'Conferências' : tab === 'relatorios' ? 'Relatórios' : tab}
+                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'cautelas' ? 'Cautelas' : tab === 'conferencias' ? 'Conferências' : tab === 'relatorios' ? 'Relatórios' : tab}
                 </button>
               ))}
             </div>
@@ -1864,6 +1871,10 @@ const PatrimonioB4: React.FC = () => {
 
               {activeTab === 'relatorios' && (
                 <RelatoriosMensais />
+              )}
+
+              {activeTab === 'cautelas' && (
+                <SecaoCautelasB4 />
               )}
 
             </div>
