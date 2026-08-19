@@ -33,6 +33,8 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
   const [endTime, setEndTime] = useState('');
   const [responsibleId, setResponsibleId] = useState('');
   const [responsibleName, setResponsibleName] = useState('');
+  const [chefeSocorroId, setChefeSocorroId] = useState('');
+  const [chefeSocorroNome, setChefeSocorroNome] = useState('');
   const [priority, setPriority] = useState<DailyMission['priority']>('media');
   
   // Localização
@@ -58,6 +60,8 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
         setEndTime(initialData.end_time || '');
         setResponsibleId(initialData.responsible_id || '');
         setResponsibleName(initialData.responsible_name || '');
+        setChefeSocorroId(initialData.chefe_socorro_id || '');
+        setChefeSocorroNome(initialData.chefe_socorro_nome || '');
         setPriority(initialData.priority || 'media');
         setLocationAddress(initialData.location_address || '');
         setLocationLink(initialData.location_link || '');
@@ -72,6 +76,8 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
         setEndTime('');
         setResponsibleId('');
         setResponsibleName('');
+        setChefeSocorroId('');
+        setChefeSocorroNome('');
         setPriority('media');
         setLocationAddress('');
         setLocationLink('');
@@ -108,6 +114,19 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
     }
   };
 
+  const handleSelectChefeSocorro = (pId: string) => {
+    setChefeSocorroId(pId);
+    if (!pId) {
+      setChefeSocorroNome('');
+      return;
+    }
+    const p = personnelList.find(item => item.id === pId);
+    if (p) {
+      const rank = p.rank ? `${p.rank} ` : '';
+      setChefeSocorroNome(`${rank}${p.war_name || p.name || ''}`.trim());
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -126,6 +145,8 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
         end_time: endTime.trim() || undefined,
         responsible_id: responsibleId || undefined,
         responsible_name: responsibleName.trim() || undefined,
+        chefe_socorro_id: chefeSocorroId || undefined,
+        chefe_socorro_nome: chefeSocorroNome.trim() || undefined,
         priority: priority || 'media',
         status: initialData?.status || 'agendada',
         location_address: locationAddress.trim() || undefined,
@@ -297,6 +318,40 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
                 <option value="urgente">Urgente</option>
               </select>
             </div>
+          </div>
+
+          {/* Chefe de Socorro */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-red-600 text-sm">local_fire_department</span>
+              Chefe de Socorro
+              <span className="text-gray-400 font-normal">(Opcional)</span>
+            </label>
+            {personnelList.length > 0 ? (
+              <select
+                value={chefeSocorroId}
+                onChange={e => handleSelectChefeSocorro(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-red-500"
+              >
+                <option value="">Selecione o chefe de socorro...</option>
+                {personnelList.map(p => {
+                  const label = `${p.rank ? p.rank + ' ' : ''}${p.war_name || p.name}`;
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={chefeSocorroNome}
+                onChange={e => setChefeSocorroNome(e.target.value)}
+                placeholder="Nome do chefe de socorro"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+              />
+            )}
           </div>
 
           {/* Endereço e Localização com Links para Maps/Waze */}

@@ -34,6 +34,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
   const [dataDevolucaoReal, setDataDevolucaoReal] = useState<string>(new Date().toISOString().slice(0, 16));
   const [condicaoDevolucao, setCondicaoDevolucao] = useState<CondicaoDevolucao>('perfeito_estado');
   const [observacoesDevolucao, setObservacoesDevolucao] = useState<string>('');
+  const [devolvidoPor, setDevolvidoPor] = useState<string>('');
   const [salvandoDevolucao, setSalvandoDevolucao] = useState<boolean>(false);
 
   // Form Cancelar State
@@ -178,6 +179,10 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
   const handleConfirmarDevolucao = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cautelaDevolucao) return;
+    if (!devolvidoPor.trim()) {
+      toast.error('Informe quem está realizando a devolução.');
+      return;
+    }
 
     setSalvandoDevolucao(true);
     try {
@@ -186,12 +191,14 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
         cautelaDevolucao.item_id,
         condicaoDevolucao,
         observacoesDevolucao.trim() || undefined,
-        dataDevolucaoReal ? new Date(dataDevolucaoReal).toISOString() : undefined
+        dataDevolucaoReal ? new Date(dataDevolucaoReal).toISOString() : undefined,
+        devolvidoPor.trim()
       );
 
       toast.success(`Devolução da Cautela ${cautelaDevolucao.numero_cautela} concluída!`);
       setShowModalDevolucao(false);
       setCautelaDevolucao(null);
+      setDevolvidoPor('');
       await loadData();
 
       // Opção de imprimir termo de devolução
@@ -394,8 +401,9 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                   <th className="p-3">Item / Equipamento</th>
                   <th className="p-3">Tipo</th>
                   <th className="p-3">Solicitante / Retirante</th>
-                  <th className="p-3">Data Retirada</th>
+                  <th className="p-3">Data/Hora Retirada</th>
                   <th className="p-3">Data Prevista</th>
+                  {activeTab === 'devolvidas' && <th className="p-3">Devolvido Por</th>}
                   {activeTab === 'devolvidas' && <th className="p-3">Condição Devolução</th>}
                   {activeTab === 'canceladas' && <th className="p-3">Motivo Cancelamento</th>}
                   <th className="p-3">Status</th>
@@ -430,7 +438,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                         )}
                       </td>
                       <td className="p-3 text-stone-600 font-medium">
-                        {new Date(cautela.data_retirada).toLocaleDateString('pt-BR')}
+                        {new Date(cautela.data_retirada).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </td>
                       <td className="p-3 font-medium">
                         {cautela.data_prevista_devolucao ? (
@@ -441,6 +449,16 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                           <span className="text-stone-400 italic">Sem prazo</span>
                         )}
                       </td>
+
+                      {activeTab === 'devolvidas' && (
+                        <td className="p-3 font-semibold text-stone-700">
+                          {cautela.devolvido_por ? (
+                            <span className="text-xs font-bold text-emerald-800">{cautela.devolvido_por}</span>
+                          ) : (
+                            <span className="text-stone-400 italic text-[10px]">Não informado</span>
+                          )}
+                        </td>
+                      )}
 
                       {activeTab === 'devolvidas' && (
                         <td className="p-3 font-semibold text-stone-700">
@@ -503,6 +521,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                                   setDataDevolucaoReal(new Date().toISOString().slice(0, 16));
                                   setCondicaoDevolucao('perfeito_estado');
                                   setObservacoesDevolucao('');
+                                  setDevolvidoPor('');
                                   setShowModalDevolucao(true);
                                 }}
                                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors"
@@ -753,6 +772,21 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                 <div className="text-xs text-stone-500">
                   Solicitante: <strong className="text-rustic-brown">{cautelaDevolucao.solicitante}</strong>
                 </div>
+              </div>
+
+              {/* Quem está Devolvendo */}
+              <div>
+                <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
+                  Quem Está Devolvendo (Nome / Posto) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Cb Oliveira"
+                  value={devolvidoPor}
+                  onChange={e => setDevolvidoPor(e.target.value)}
+                  className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
 
               {/* Data Devolução Real */}

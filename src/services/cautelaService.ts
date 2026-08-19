@@ -127,7 +127,8 @@ export const CautelaService = {
     itemId: string,
     condicao: CondicaoDevolucao,
     observacoesDevolucao?: string,
-    dataDevolucao?: string
+    dataDevolucao?: string,
+    devolvidoPor?: string
   ): Promise<Cautela> {
     const dataReal = dataDevolucao || new Date().toISOString();
 
@@ -138,6 +139,7 @@ export const CautelaService = {
         data_devolucao_real: dataReal,
         condicao_devolucao: condicao,
         observacoes_devolucao: observacoesDevolucao || null,
+        devolvido_por: devolvidoPor || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', cautelaId)

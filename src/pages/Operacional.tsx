@@ -312,6 +312,12 @@ const CardMissao: React.FC<{
                   {missao.responsible_name}
                 </span>
               )}
+              {missao.chefe_socorro_nome && (
+                <span className="text-[10px] text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-bold border border-red-100">
+                  <span className="material-symbols-outlined text-[12px] align-middle">local_fire_department</span>{' '}
+                  Chefe: {missao.chefe_socorro_nome}
+                </span>
+              )}
               {missao.completed_by && (
                 <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-bold border border-emerald-100">
                   Concluído por: {missao.completed_by}

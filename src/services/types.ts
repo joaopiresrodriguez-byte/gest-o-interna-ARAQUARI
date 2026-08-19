@@ -39,6 +39,7 @@ export interface Cautela {
     item_nome: string;
     solicitante: string;
     retirado_por: string;
+    devolvido_por?: string | null;
     data_retirada: string;
     data_prevista_devolucao?: string | null;
     data_devolucao_real?: string | null;
@@ -424,6 +425,8 @@ export interface DailyMission {
     end_time?: string;
     responsible_id?: string;
     responsible_name?: string;
+    chefe_socorro_id?: string;
+    chefe_socorro_nome?: string;
     priority?: 'urgente' | 'alta' | 'media' | 'baixa';
     status: 'agendada' | 'em_andamento' | 'concluida' | 'cancelada' | 'parcialmente_concluida' | 'nao_realizada';
     notes?: string;

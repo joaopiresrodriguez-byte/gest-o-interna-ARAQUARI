@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../services/supabase';
 import { useToast } from './useToast';
 
-export function useEdicao<T extends { id: string }>(tabela: string) {
+export function useEdicao<T extends { id?: string }>(tabela: string) {
   const [itemEditando, setItemEditando] = useState<T | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -28,6 +28,12 @@ export function useEdicao<T extends { id: string }>(tabela: string) {
     setErro(null);
 
     const { id, ...dados } = itemEditando as Record<string, any>;
+
+    if (!id) {
+      setErro('ID do registro não encontrado. Não é possível salvar.');
+      setSalvando(false);
+      return false;
+    }
 
     // Filtrar campos de relacionamento e objetos virtuais que não são colunas reais
     const dadosLimpos: Record<string, any> = {};

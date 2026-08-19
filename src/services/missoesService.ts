@@ -81,7 +81,23 @@ export async function atualizarMissao(
     throw new Error('Usuário não autenticado. Faça login para editar missões.');
   }
 
-  const nomeMilitar = dados.completed_by || user.email || 'Usuário desconhecido';
+  // Buscar nome e posto do militar pelo e-mail cadastrado em personnel
+  let nomeMilitar = dados.completed_by || user.email || 'Usuário desconhecido';
+  try {
+    const { data: pessoal } = await supabase
+      .from('personnel')
+      .select('rank, war_name, name')
+      .ilike('email', user.email || '')
+      .maybeSingle();
+
+    if (pessoal) {
+      const posto = pessoal.rank ? `${pessoal.rank} ` : '';
+      const nome = pessoal.war_name || pessoal.name || '';
+      if (nome) nomeMilitar = `${posto}${nome}`.trim();
+    }
+  } catch {
+    // fallback: mantém o e-mail se a consulta falhar
+  }
 
   const { data: missaoAtual } = await supabase
     .from('daily_missions')
