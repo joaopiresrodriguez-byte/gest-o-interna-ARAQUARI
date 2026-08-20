@@ -568,14 +568,19 @@ export const bcEscalaService = {
 
     if (errCiclo || !novoCiclo) throw errCiclo || new Error('Falha ao criar ciclo de teste.');
 
-    // Buscar BCs ativos
-    const { data: bcs, error: errBcs } = await supabase
+    // Buscar BCs ativos (ou ativos do efetivo se type não estiver estritamente BC)
+    const { data: bcsBrutos, error: errBcs } = await supabase
       .from('personnel')
       .select('*')
-      .eq('type', 'BC')
       .eq('status', 'Ativo');
 
     if (errBcs) throw errBcs;
+
+    // Filtrar BCs ou todos os ativos se nenhum tiver type 'BC'
+    let bcs = (bcsBrutos || []).filter(b => b.type === 'BC');
+    if (bcs.length === 0) {
+      bcs = (bcsBrutos || []).slice(0, 10); // amostra de fallback para teste
+    }
 
     const origin = typeof window !== 'undefined'
       ? window.location.origin
@@ -622,12 +627,13 @@ export const bcEscalaService = {
       .eq('mes_referencia', mesRef)
       .maybeSingle();
 
-    // Buscar todos os bombeiros BC ativos
-    const { data: bcsAtivos } = await supabase
+    // Buscar todos os bombeiros do efetivo (para não perder bombeiros cujo type possa variar)
+    const { data: todosMilitares } = await supabase
       .from('personnel')
       .select('*')
-      .eq('type', 'BC')
       .order('name');
+
+    const bcsAtivos = (todosMilitares || []).filter(p => p.type === 'BC' || p.status === 'Ativo');
 
     // Buscar intenções do mês
     const { data: intencoesBrutas } = await supabase
@@ -643,7 +649,7 @@ export const bcEscalaService = {
       .order('posicao_ranking');
 
     const personnelMap = new Map<string, Personnel>();
-    (bcsAtivos || []).forEach(p => {
+    (todosMilitares || []).forEach(p => {
       personnelMap.set(String(p.id), p);
     });
 
