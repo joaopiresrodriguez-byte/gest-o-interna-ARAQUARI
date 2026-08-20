@@ -306,16 +306,27 @@ export const bcEscalaService = {
   },
 
   /**
-   * BLOCO 5 & 6 — Encerramento de Ciclo e Motor de Seleção
+   * BLOCO 5 & 6 — Motor de Seleção com 6 Critérios
+   *
+   * Critérios em ordem de prioridade:
+   * 1. Menor nº de dias selecionados no mês corrente
+   * 2. CNH Categoria D com validade vigente
+   * 3. CVE com status ativo e dentro da validade
+   * 4. Solicitação de turno 24h
+   * 5. Data de última promoção mais antiga
+   * 6. Data de inclusão mais antiga
    */
   rodarMotorSelecao: async (mesRef: string): Promise<{ processados: number; diasComEscala: number }> => {
-    // 1. Atualizar ciclo para encerrado/processado
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    // 1. Atualizar ciclo para processado
     await supabase
       .from('bc_ciclos')
       .update({ status: 'processado' })
       .eq('mes_referencia', mesRef);
 
-    // 2. Buscar todas as intenções do mês
+    // 2. Buscar todas as intenções do mês com dados do bombeiro
     const { data: intencoes, error: errInt } = await supabase
       .from('bc_intencoes')
       .select('*, personnel(*)')
@@ -326,13 +337,8 @@ export const bcEscalaService = {
       return { processados: 0, diasComEscala: 0 };
     }
 
-    // Limpar seleções anteriores do mês (se houver re-processamento)
-    const { data: intencaoDias } = await supabase
-      .from('bc_intencoes')
-      .select('dia')
-      .eq('mes_referencia', mesRef);
-
-    const diasUnicos = Array.from(new Set((intencaoDias || []).map(i => i.dia))).sort();
+    // 3. Limpar seleções anteriores do mês (re-processamento seguro)
+    const diasUnicos = Array.from(new Set(intencoes.map(i => i.dia as string))).sort();
 
     if (diasUnicos.length > 0) {
       await supabase
@@ -341,73 +347,151 @@ export const bcEscalaService = {
         .in('dia', diasUnicos);
     }
 
+    // 4. Mapa de contagem de dias selecionados POR bombeiro neste mês
+    //    (vai sendo atualizado dinamicamente a cada dia processado)
+    const diasSelecionadosNoMes: Record<string, number> = {};
+
+    // Inicializar todos os bombeiros com 0
+    intencoes.forEach(i => {
+      const bid = String(i.bombeiro_id);
+      if (!(bid in diasSelecionadosNoMes)) {
+        diasSelecionadosNoMes[bid] = 0;
+      }
+    });
+
     let totalSelecionados = 0;
 
-    // Agrupar intenções por dia
+    // 5. Processar cada dia em ordem cronológica
     for (const dia of diasUnicos) {
       const intencoesDoDia = intencoes.filter(i => i.dia === dia);
       if (intencoesDoDia.length === 0) continue;
 
-      // Ordenar candidatos conforme CRITÉRIOS DE PRIORIDADE
-      // CRITÉRIO 1 — ÚLTIMA PROMOÇÃO (Mais antiga tem prioridade)
-      // CRITÉRIO 2 — CNH D E CVE ATIVO (Simultaneamente possuem prioridade)
-      // CRITÉRIO 3 — DATA DE INCLUSÃO (Mais antiga tem prioridade)
+      // Ordenar candidatos pelos 6 critérios
       const candidatosOrdenados = [...intencoesDoDia].sort((a, b) => {
         const bombA: Personnel = a.personnel;
         const bombB: Personnel = b.personnel;
+        const bidA = String(a.bombeiro_id);
+        const bidB = String(b.bombeiro_id);
 
-        // --- CRITÉRIO 1: Data última promoção mais antiga ---
-        const dtPromA = bombA.data_ultima_promocao ? new Date(bombA.data_ultima_promocao).getTime() : Infinity;
-        const dtPromB = bombB.data_ultima_promocao ? new Date(bombB.data_ultima_promocao).getTime() : Infinity;
+        // ── CRITÉRIO 1: Menor número de dias já selecionados no mês ──
+        const diasA = diasSelecionadosNoMes[bidA] ?? 0;
+        const diasB = diasSelecionadosNoMes[bidB] ?? 0;
+        if (diasA !== diasB) return diasA - diasB;
 
-        if (dtPromA !== dtPromB) {
-          return dtPromA - dtPromB; // Menor timestamp = data mais antiga = prioridade
-        }
+        // ── CRITÉRIO 2: CNH Categoria D com validade vigente ──
+        const temCnhDA = (() => {
+          if (!bombA?.cnh_category?.toUpperCase().includes('D')) return false;
+          if (!bombA.cnh_expiry_date) return true; // sem data = considera válida
+          return new Date(bombA.cnh_expiry_date) >= hoje;
+        })();
+        const temCnhDB = (() => {
+          if (!bombB?.cnh_category?.toUpperCase().includes('D')) return false;
+          if (!bombB.cnh_expiry_date) return true;
+          return new Date(bombB.cnh_expiry_date) >= hoje;
+        })();
+        if (temCnhDA !== temCnhDB) return temCnhDA ? -1 : 1;
 
-        // --- CRITÉRIO 2: CNH D E CVE ATIVO ---
-        const cnhDA = bombA.cnh_category?.toUpperCase().includes('D') ?? false;
-        const cveAtivoA = ['SIM', 'ATIVO'].includes(bombA.cve_active?.toUpperCase() || '');
-        const req2A = cnhDA && cveAtivoA;
+        // ── CRITÉRIO 3: CVE válido e ativo ──
+        const temCveA = (() => {
+          const ativo = ['SIM', 'ATIVO'].includes((bombA?.cve_active || '').toUpperCase());
+          if (!ativo) return false;
+          if (!bombA.cve_expiry_date) return true;
+          return new Date(bombA.cve_expiry_date) >= hoje;
+        })();
+        const temCveB = (() => {
+          const ativo = ['SIM', 'ATIVO'].includes((bombB?.cve_active || '').toUpperCase());
+          if (!ativo) return false;
+          if (!bombB.cve_expiry_date) return true;
+          return new Date(bombB.cve_expiry_date) >= hoje;
+        })();
+        if (temCveA !== temCveB) return temCveA ? -1 : 1;
 
-        const cnhDB = bombB.cnh_category?.toUpperCase().includes('D') ?? false;
-        const cveAtivoB = ['SIM', 'ATIVO'].includes(bombB.cve_active?.toUpperCase() || '');
-        const req2B = cnhDB && cveAtivoB;
+        // ── CRITÉRIO 4: Solicitação de 24h ──
+        const h24A = (a.total_horas ?? 0) >= 24;
+        const h24B = (b.total_horas ?? 0) >= 24;
+        if (h24A !== h24B) return h24A ? -1 : 1;
 
-        if (req2A !== req2B) {
-          return req2A ? -1 : 1; // Prioridade para quem tem ambos os requisitos
-        }
+        // ── CRITÉRIO 5: Data de última promoção mais antiga ──
+        const dtPromA = bombA?.data_ultima_promocao ? new Date(bombA.data_ultima_promocao).getTime() : Infinity;
+        const dtPromB = bombB?.data_ultima_promocao ? new Date(bombB.data_ultima_promocao).getTime() : Infinity;
+        if (dtPromA !== dtPromB) return dtPromA - dtPromB;
 
-        // --- CRITÉRIO 3: Data de inclusão mais antiga ---
-        const dtIncA = bombA.data_inclusao ? new Date(bombA.data_inclusao).getTime() : Infinity;
-        const dtIncB = bombB.data_inclusao ? new Date(bombB.data_inclusao).getTime() : Infinity;
-
-        return dtIncA - dtIncB; // Menor timestamp = data mais antiga = prioridade
+        // ── CRITÉRIO 6: Data de inclusão mais antiga ──
+        const dtIncA = bombA?.data_inclusao ? new Date(bombA.data_inclusao).getTime() : Infinity;
+        const dtIncB = bombB?.data_inclusao ? new Date(bombB.data_inclusao).getTime() : Infinity;
+        return dtIncA - dtIncB;
       });
 
-      // Gravar ranking em bc_selecionados
-      const registrosSelecionados = candidatosOrdenados.map((item, index) => {
+      // 6. Determinar qual critério foi decisivo para o 1º colocado (posição 1)
+      const gerarDescCriterio = (item: typeof candidatosOrdenados[0], posicao: number): string => {
         const bomb: Personnel = item.personnel;
+        const bid = String(item.bombeiro_id);
+        const diasAcumulados = diasSelecionadosNoMes[bid] ?? 0;
 
-        const dtPromA = bomb.data_ultima_promocao ? new Date(bomb.data_ultima_promocao).toLocaleDateString('pt-BR') : 'N/I';
-        let descCriterio = `Critério 1 (Promoção: ${dtPromA})`;
-        const cnhD = bomb.cnh_category?.toUpperCase().includes('D');
-        const cve = ['SIM', 'ATIVO'].includes(bomb.cve_active?.toUpperCase() || '');
+        // Comparar com o 2º candidato para detectar qual critério foi desempatador
+        const proximo = candidatosOrdenados[posicao]; // posicao == index do próximo
+        if (!proximo) return 'Critério 1 — Único candidato';
 
-        if (cnhD && cve) {
-          descCriterio += ' + CNH D & CVE Ativo';
+        const bombP: Personnel = proximo.personnel;
+        const bidP = String(proximo.bombeiro_id);
+        const diasP = diasSelecionadosNoMes[bidP] ?? 0;
+
+        if (diasAcumulados !== diasP) {
+          return `Critério 1 — Menos dias no mês (${diasAcumulados} vs ${diasP})`;
         }
-        if (bomb.data_inclusao) {
-          descCriterio += ` + Inc: ${new Date(bomb.data_inclusao).toLocaleDateString('pt-BR')}`;
+
+        const cnhD = (() => {
+          if (!bomb?.cnh_category?.toUpperCase().includes('D')) return false;
+          if (!bomb.cnh_expiry_date) return true;
+          return new Date(bomb.cnh_expiry_date) >= hoje;
+        })();
+        const cnhDP = (() => {
+          if (!bombP?.cnh_category?.toUpperCase().includes('D')) return false;
+          if (!bombP.cnh_expiry_date) return true;
+          return new Date(bombP.cnh_expiry_date) >= hoje;
+        })();
+        if (cnhD !== cnhDP) return `Critério 2 — CNH D válida`;
+
+        const cve = (() => {
+          const ativo = ['SIM', 'ATIVO'].includes((bomb?.cve_active || '').toUpperCase());
+          if (!ativo) return false;
+          if (!bomb.cve_expiry_date) return true;
+          return new Date(bomb.cve_expiry_date) >= hoje;
+        })();
+        const cveP = (() => {
+          const ativo = ['SIM', 'ATIVO'].includes((bombP?.cve_active || '').toUpperCase());
+          if (!ativo) return false;
+          if (!bombP.cve_expiry_date) return true;
+          return new Date(bombP.cve_expiry_date) >= hoje;
+        })();
+        if (cve !== cveP) return `Critério 3 — CVE válido`;
+
+        const h24 = (item.total_horas ?? 0) >= 24;
+        const h24P = (proximo.total_horas ?? 0) >= 24;
+        if (h24 !== h24P) return `Critério 4 — Turno 24h solicitado`;
+
+        const dtProm = bomb?.data_ultima_promocao ? new Date(bomb.data_ultima_promocao).getTime() : Infinity;
+        const dtPromP = bombP?.data_ultima_promocao ? new Date(bombP.data_ultima_promocao).getTime() : Infinity;
+        if (dtProm !== dtPromP) {
+          const dtStr = bomb?.data_ultima_promocao ? new Date(bomb.data_ultima_promocao).toLocaleDateString('pt-BR') : 'N/I';
+          return `Critério 5 — Promoção mais antiga (${dtStr})`;
         }
 
+        const dtInc = bomb?.data_inclusao ? new Date(bomb.data_inclusao).toLocaleDateString('pt-BR') : 'N/I';
+        return `Critério 6 — Inclusão mais antiga (${dtInc})`;
+      };
+
+      // 7. Montar registros para bc_selecionados
+      const registrosSelecionados = candidatosOrdenados.map((item, index) => {
+        const desc = gerarDescCriterio(item, index + 1);
         return {
-          bombeiro_id: item.bombeiro_id,
+          bombeiro_id: String(item.bombeiro_id),
           ciclo_id: item.ciclo_id,
           dia: item.dia,
           horario_inicio: item.horario_inicio,
           horario_fim: item.horario_fim,
           total_horas: item.total_horas,
-          criterio_aplicado: descCriterio,
+          criterio_aplicado: desc,
           posicao_ranking: index + 1,
           origem: 'motor',
           notificado: false,
@@ -420,9 +504,92 @@ export const bcEscalaService = {
 
       if (errInsSel) throw errInsSel;
       totalSelecionados += registrosSelecionados.length;
+
+      // 8. Atualizar contagem dinâmica: o 1º colocado foi selecionado
+      //    (só o ranking 1 conta como dia trabalhado no motor)
+      if (candidatosOrdenados.length > 0) {
+        const bid1 = String(candidatosOrdenados[0].bombeiro_id);
+        diasSelecionadosNoMes[bid1] = (diasSelecionadosNoMes[bid1] ?? 0) + 1;
+      }
     }
 
     return { processados: totalSelecionados, diasComEscala: diasUnicos.length };
+  },
+
+  /**
+   * BLOCO 2-EXTRA — Gerar Ciclo de Teste manualmente
+   * Cria um ciclo com status 'aberto' e datas de hoje + 5 dias,
+   * gerando tokens para todos os BCs ativos sem necessitar do dia 20.
+   */
+  gerarCicloTeste: async (mesRef: string): Promise<{
+    ciclo: BcCiclo;
+    tokensGerados: number;
+    links: Array<{ bombeiro: Personnel; token: string; link: string }>;
+  }> => {
+    // Forçar recriação do ciclo de teste
+    await supabase
+      .from('bc_ciclos')
+      .delete()
+      .eq('mes_referencia', mesRef);
+
+    const hoje = new Date();
+    const encerramento = new Date(hoje);
+    encerramento.setDate(encerramento.getDate() + 5);
+
+    const { data: novoCiclo, error: errCiclo } = await supabase
+      .from('bc_ciclos')
+      .insert({
+        mes_referencia: mesRef,
+        data_abertura: hoje.toISOString().split('T')[0],
+        data_encerramento: encerramento.toISOString().split('T')[0],
+        status: 'aberto',
+      })
+      .select()
+      .single();
+
+    if (errCiclo || !novoCiclo) throw errCiclo || new Error('Falha ao criar ciclo de teste.');
+
+    // Buscar BCs ativos
+    const { data: bcs, error: errBcs } = await supabase
+      .from('personnel')
+      .select('*')
+      .eq('type', 'BC')
+      .eq('status', 'Ativo');
+
+    if (errBcs) throw errBcs;
+
+    const origin = typeof window !== 'undefined'
+      ? window.location.origin
+      : 'https://gest-o-interna-araquari.vercel.app';
+
+    const linksList: Array<{ bombeiro: Personnel; token: string; link: string }> = [];
+
+    for (const bc of bcs || []) {
+      const token = bcEscalaService.gerarToken();
+      await supabase.from('bc_intencoes').insert({
+        bombeiro_id: String(bc.id),
+        ciclo_id: novoCiclo.id,
+        mes_referencia: mesRef,
+        dia: `${mesRef}-01`,
+        horario_inicio: '07:00',
+        horario_fim: '19:00',
+        total_horas: 12,
+        status: 'pendente',
+        token_acesso: token,
+      });
+
+      linksList.push({
+        bombeiro: bc as Personnel,
+        token,
+        link: `${origin}/bc-intencao?token=${token}`,
+      });
+    }
+
+    return {
+      ciclo: novoCiclo as BcCiclo,
+      tokensGerados: linksList.length,
+      links: linksList,
+    };
   },
 
   /**

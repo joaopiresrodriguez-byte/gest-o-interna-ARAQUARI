@@ -37,6 +37,11 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
   const [processando, setProcessando] = useState<boolean>(false);
   const [mensagemStatus, setMensagemStatus] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
+  const [modalLinksTeste, setModalLinksTeste] = useState<{
+    aberto: boolean;
+    links: Array<{ bombeiro: Personnel; token: string; link: string }>;
+    mesRef: string;
+  }>({ aberto: false, links: [], mesRef: '' });
 
   const carregarDados = async () => {
     try {
@@ -106,6 +111,26 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
       await carregarDados();
     } catch (err: any) {
       setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao rodar motor de seleção.' });
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  // Gerar Link de Teste — cria ciclo de teste para qualquer mês sem esperar dia 20
+  const handleGerarLinkTeste = async () => {
+    if (!confirm(`Isso irá RECRIAR o ciclo de ${mesRef} como TESTE, apagando quaisquer dados anteriores. Confirmar?`)) return;
+    try {
+      setProcessando(true);
+      setMensagemStatus(null);
+      const res = await bcEscalaService.gerarCicloTeste(mesRef);
+      setModalLinksTeste({ aberto: true, links: res.links, mesRef });
+      setMensagemStatus({
+        tipo: 'sucesso',
+        texto: `Ciclo de TESTE criado para ${mesRef}! ${res.tokensGerados} link(s) gerado(s). Válido por 5 dias.`
+      });
+      await carregarDados();
+    } catch (err: any) {
+      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao gerar ciclo de teste.' });
     } finally {
       setProcessando(false);
     }
@@ -260,9 +285,18 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                 onClick={handleRodarMotor}
                 disabled={processando}
                 className="px-3 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-                title="Executar motor de seleção dos 3 critérios"
+                title="Executar motor de seleção com 6 critérios"
               >
                 <span>⚙️</span> Dia 26: Rodar Motor
+              </button>
+
+              <button
+                onClick={handleGerarLinkTeste}
+                disabled={processando}
+                className="px-3 py-2 bg-violet-950/60 hover:bg-violet-900/70 text-violet-300 border border-violet-700/50 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                title="[ADMIN] Gerar ciclo de teste para o mês selecionado, sem aguardar o dia 20"
+              >
+                <span>🧪</span> Gerar Link de Teste
               </button>
 
               <button
@@ -393,12 +427,27 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                       </div>
 
                       {/* DETALHE DO CRITÉRIO APLICADO */}
-                      <div className="bg-slate-900/90 border border-slate-800/80 rounded-lg p-2 text-[11px] text-slate-400 flex items-center justify-between">
-                        <span className="truncate">🎯 {s.criterio_aplicado}</span>
-                        {s.substituido_por_gestor && (
-                          <span className="text-amber-400 font-semibold ml-2 shrink-0">⚠️ Alterado pelo Gestor</span>
-                        )}
-                      </div>
+                      {(() => {
+                        const c = s.criterio_aplicado || '';
+                        const criterioNum = c.match(/Critério (\d)/)?.[1];
+                        const badgeColor =
+                          criterioNum === '1' ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400' :
+                          criterioNum === '2' ? 'bg-blue-950/60 border-blue-800/60 text-blue-400' :
+                          criterioNum === '3' ? 'bg-cyan-950/60 border-cyan-800/60 text-cyan-400' :
+                          criterioNum === '4' ? 'bg-yellow-950/60 border-yellow-700/60 text-yellow-400' :
+                          criterioNum === '5' ? 'bg-orange-950/60 border-orange-800/60 text-orange-400' :
+                          criterioNum === '6' ? 'bg-rose-950/60 border-rose-800/60 text-rose-400' :
+                          s.substituido_por_gestor ? 'bg-amber-950/60 border-amber-800/60 text-amber-400' :
+                          'bg-slate-900/90 border-slate-800/80 text-slate-400';
+                        return (
+                          <div className={`${badgeColor} border rounded-lg p-2 text-[11px] flex items-center justify-between gap-2`}>
+                            <span className="truncate">🎯 {c || 'N/I'}</span>
+                            {s.substituido_por_gestor && (
+                              <span className="text-amber-400 font-semibold shrink-0">⚠️ Gestor</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -530,6 +579,71 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                   Adicionar Bombeiro
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL LINKS DE TESTE */}
+      {modalLinksTeste.aberto && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-violet-800/50 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>🧪</span> Links de Teste — {modalLinksTeste.mesRef}
+                </h3>
+                <p className="text-xs text-violet-400 mt-0.5">Ciclo criado manualmente para teste. Válido por 5 dias a partir de hoje.</p>
+              </div>
+              <button
+                onClick={() => setModalLinksTeste({ aberto: false, links: [], mesRef: '' })}
+                className="text-slate-400 hover:text-white p-1 text-base font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {modalLinksTeste.links.length === 0 ? (
+                <p className="text-xs text-slate-400 italic text-center py-6">Nenhum bombeiro comunitário ativo encontrado.</p>
+              ) : (
+                modalLinksTeste.links.map((item, idx) => (
+                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <strong className="text-white text-sm block">{item.bombeiro.name}</strong>
+                      <span className="text-slate-400 font-mono text-[11px] select-all block truncate max-w-md">{item.link}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(item.link);
+                          setMensagemStatus({ tipo: 'sucesso', texto: `Link copiado para ${item.bombeiro.name}!` });
+                        }}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold"
+                      >
+                        📋 Copiar
+                      </button>
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 text-white rounded-lg text-xs font-bold"
+                      >
+                        🔗 Abrir
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="border-t border-slate-800 pt-4 mt-4 flex justify-end">
+              <button
+                onClick={() => setModalLinksTeste({ aberto: false, links: [], mesRef: '' })}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
