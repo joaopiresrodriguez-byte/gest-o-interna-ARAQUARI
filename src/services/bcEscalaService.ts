@@ -330,16 +330,31 @@ export const bcEscalaService = {
       .update({ status: 'processado' })
       .eq('mes_referencia', mesRef);
 
-    // 2. Buscar todas as intenções do mês com dados do bombeiro
-    const { data: intencoes, error: errInt } = await supabase
+    // 2. Buscar todas as intenções do mês
+    const { data: intencoesBrutas, error: errInt } = await supabase
       .from('bc_intencoes')
-      .select('*, personnel(*)')
+      .select('*')
       .eq('mes_referencia', mesRef);
 
     if (errInt) throw errInt;
-    if (!intencoes || intencoes.length === 0) {
+    if (!intencoesBrutas || intencoesBrutas.length === 0) {
       return { processados: 0, diasComEscala: 0 };
     }
+
+    // Buscar todos os bombeiros em personnel para fazer o merge em memória
+    const { data: todosBcs } = await supabase
+      .from('personnel')
+      .select('*');
+
+    const personnelMap = new Map<string, Personnel>();
+    (todosBcs || []).forEach(p => {
+      personnelMap.set(String(p.id), p);
+    });
+
+    const intencoes = intencoesBrutas.map(item => ({
+      ...item,
+      personnel: personnelMap.get(String(item.bombeiro_id)) || null,
+    }));
 
     // 3. Limpar seleções anteriores do mês (re-processamento seguro)
     const diasUnicos = Array.from(new Set(intencoes.map(i => i.dia as string))).sort();
@@ -615,25 +630,39 @@ export const bcEscalaService = {
       .order('name');
 
     // Buscar intenções do mês
-    const { data: intencoes } = await supabase
+    const { data: intencoesBrutas } = await supabase
       .from('bc_intencoes')
-      .select('*, personnel(*)')
+      .select('*')
       .eq('mes_referencia', mesRef);
 
     // Buscar selecionados
-    const { data: selecionados } = await supabase
+    const { data: selecionadosBrutos } = await supabase
       .from('bc_selecionados')
-      .select('*, personnel(*)')
+      .select('*')
       .order('dia')
       .order('posicao_ranking');
 
-    // Filtrar selecionados do mês de referência
-    const selecionadosMes = (selecionados || []).filter(s => s.dia.startsWith(mesRef));
+    const personnelMap = new Map<string, Personnel>();
+    (bcsAtivos || []).forEach(p => {
+      personnelMap.set(String(p.id), p);
+    });
+
+    const intencoes = (intencoesBrutas || []).map(i => ({
+      ...i,
+      personnel: personnelMap.get(String(i.bombeiro_id)),
+    }));
+
+    const selecionadosMes = (selecionadosBrutos || [])
+      .filter(s => s.dia.startsWith(mesRef))
+      .map(s => ({
+        ...s,
+        personnel: personnelMap.get(String(s.bombeiro_id)),
+      }));
 
     return {
       ciclo: ciclo as BcCiclo | null,
       bcsAtivos: (bcsAtivos || []) as Personnel[],
-      intencoes: (intencoes || []) as BcIntencao[],
+      intencoes: intencoes as BcIntencao[],
       selecionados: selecionadosMes as (BcSelecionado & { personnel?: Personnel })[],
     };
   },
@@ -657,7 +686,7 @@ export const bcEscalaService = {
     const { error } = await supabase
       .from('bc_selecionados')
       .update({
-        bombeiro_id: novoBombeiroId,
+        bombeiro_id: String(novoBombeiroId),
         criterio_aplicado: `Substituição Manual Gestor: ${motivo}`,
         substituido_por_gestor: true,
         motivo_substituicao: motivo,
@@ -684,7 +713,7 @@ export const bcEscalaService = {
       .maybeSingle();
 
     const record = {
-      bombeiro_id: bombeiroId,
+      bombeiro_id: String(bombeiroId),
       ciclo_id: ciclo?.id || null,
       dia,
       horario_inicio: horarioInicio,
@@ -727,7 +756,7 @@ export const bcEscalaService = {
     // 2. Buscar selecionados do mês
     const { data: selecionados } = await supabase
       .from('bc_selecionados')
-      .select('*, personnel(*)')
+      .select('*')
       .order('dia');
 
     const selecionadosMes = (selecionados || []).filter(s => s.dia.startsWith(mesRef));
