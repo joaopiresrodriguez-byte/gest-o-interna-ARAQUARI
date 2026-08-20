@@ -29,7 +29,7 @@ CREATE TABLE public.bc_intencoes (
   horario_fim TIME NOT NULL,
   total_horas INTEGER NOT NULL CHECK (total_horas IN (12, 24)),
   status TEXT NOT NULL DEFAULT 'pendente',
-  token_acesso TEXT UNIQUE,
+  token_acesso TEXT,
   criado_em TIMESTAMPTZ DEFAULT NOW()
 );
 

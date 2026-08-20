@@ -74,7 +74,12 @@ export const BcIntencaoPublica: React.FC = () => {
     if (!ciclo) return;
     const proximoDiaNum = intencoes.length + 1;
     const diaFormatted = `${ciclo.mes_referencia}-${String(proximoDiaNum).padStart(2, '0')}`;
-    setIntencoes([...intencoes, { dia: diaFormatted, horario_inicio: '07:00', horario_fim: '19:00' }]);
+    setIntencoes(prev => [...prev, { dia: diaFormatted, horario_inicio: '07:00', horario_fim: '19:00' }]);
+
+    // Rolar a tela suavemente para baixo para acompanhar o novo item adicionado
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }, 100);
   };
 
   // Remover intenção

@@ -273,11 +273,11 @@ export const bcEscalaService = {
       }
     }
 
-    // Remover intenções anteriores do mesmo bombeiro no mês
+    // Remover intenções anteriores do mesmo bombeiro no mês pelo token e pelo bombeiro_id
     await supabase
       .from('bc_intencoes')
       .delete()
-      .eq('bombeiro_id', bombeiro.id)
+      .or(`bombeiro_id.eq.${bombeiro.id},token_acesso.eq.${token}`)
       .eq('mes_referencia', ciclo.mes_referencia);
 
     if (novasIntencoes.length === 0) {
