@@ -13,6 +13,7 @@ import { supabase } from '../services/supabase';
 
 import { useEdicao } from '../hooks/useEdicao';
 import { ModalEdicao } from '../components/shared/ModalEdicao';
+import { ModalEditarItemB4 } from '../components/b4/ModalEditarItemB4';
 import { ActionButton } from '../components/ui/Icons';
 import { DailyMissionModal } from '../components/shared/DailyMissionModal';
 import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
@@ -64,15 +65,22 @@ const ItemCard: React.FC<ItemCardProps> = ({
       <span className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity material-symbols-outlined text-rustic-brown/30 text-[18px]">open_in_full</span>
 
       <div className="flex justify-between items-start mb-3">
-        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-          item.status === 'cautelado' || item.is_cautelado
-            ? 'bg-blue-600 text-white shadow-xs'
-            : item.status === 'active'
-            ? 'bg-green-100 text-green-700'
-            : 'bg-red-100 text-red-700'
-        }`}>
-          {item.status === 'cautelado' || item.is_cautelado ? '🔒 CAUTELADO' : item.status === 'active' ? 'Ativo' : 'Inativo'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
+            item.status === 'cautelado' || item.is_cautelado
+              ? 'bg-blue-600 text-white shadow-xs'
+              : item.status === 'active'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-red-100 text-red-700'
+          }`}>
+            {item.status === 'cautelado' || item.is_cautelado ? '🔒 CAUTELADO' : item.status === 'active' ? 'Ativo' : 'Inativo'}
+          </span>
+          {item.quantidade && item.quantidade > 1 && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded">
+              (x{item.quantidade})
+            </span>
+          )}
+        </div>
         <div className="flex gap-2 items-center">
           <span className="text-[10px] font-bold text-rustic-brown/30 font-mono">{item.type}</span>
           {item.type === 'Viatura' && onVisualizarViatura && (
@@ -302,6 +310,7 @@ const PatrimonioB4: React.FC = () => {
 
   // Form State for Manual Entry (Vehicles)
   const [newItemName, setNewItemName] = useState("");
+  const [newItemQuantidade, setNewItemQuantidade] = useState<number>(1);
   const [newItemType, setNewItemType] = useState<Vehicle['type']>('Equipamento');
   const [newItemStatus] = useState<Vehicle['status']>('active');
   const [newItemDetails, setNewItemDetails] = useState("");
@@ -494,6 +503,7 @@ const PatrimonioB4: React.FC = () => {
       type: newItemType,
       status: newItemStatus,
       details: newItemDetails || "Sem detalhes adicionais",
+      quantidade: newItemQuantidade,
       brand: newItemBrand || undefined,
       plate: newItemPlate || undefined,
       renavam: newItemRenavam || undefined,
@@ -519,7 +529,7 @@ const PatrimonioB4: React.FC = () => {
             nome: newItemName,
             tipo: newItemType,
             numero_serie: newItemPatrimonioNumber || undefined,
-            quantidade: 1,
+            quantidade: newItemQuantidade,
             status: 'Ok',
             viatura_id: newItemViaturaId || undefined,
             compartimento_id: newItemCompartimentoId || undefined,
@@ -550,6 +560,7 @@ const PatrimonioB4: React.FC = () => {
 
       toast.success("Item salvo com sucesso!");
       setNewItemName("");
+      setNewItemQuantidade(1);
       setNewItemDetails("");
       setNewItemViaturaId("");
       setTipoLocal("");
@@ -1442,7 +1453,22 @@ const PatrimonioB4: React.FC = () => {
                     Novo Cadastro
                   </h2>
                   <div className="space-y-4">
-                    <input value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border" placeholder="Nome do Item" />
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase ml-1 block mb-1">Nome do Item *</label>
+                      <input value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border" placeholder="Nome do Item" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase ml-1 block mb-1">Quantidade *</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={newItemQuantidade}
+                        onChange={e => setNewItemQuantidade(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full h-11 px-4 rounded-lg border border-rustic-border font-bold text-amber-900 bg-white"
+                        placeholder="Quantidade"
+                        required
+                      />
+                    </div>
                     <select value={newItemType} onChange={e => setNewItemType(e.target.value as any)} className="w-full h-11 px-4 rounded-lg border border-rustic-border">
                       <option value="Equipamento">Equipamento</option>
                       <option value="Material">Material (Conserto/Consumo)</option>
@@ -1883,146 +1909,15 @@ const PatrimonioB4: React.FC = () => {
       </div>
 
       {/* Modal de Edição de Equipamento / Viatura B4 */}
-      <ModalEdicao
-        titulo={`Editar ${fleetItemEditando?.type || 'Item B4'}: ${fleetItemEditando?.name || ''}`}
-        aberto={editandoFleetItem}
-        salvando={salvandoFleetItem}
-        erro={erroFleetItem}
-        onSalvar={handleSalvarFleetItem}
-        onCancelar={cancelarEdicaoFleetItem}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nome / Descrição Curta</label>
-            <input
-              value={fleetItemEditando?.name || ''}
-              onChange={e => atualizarCampoFleetItem('name', e.target.value)}
-              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-            />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Tipo</label>
-              <select
-                value={fleetItemEditando?.type || 'Equipamento'}
-                onChange={e => atualizarCampoFleetItem('type', e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              >
-                <option value="Equipamento">Equipamento</option>
-                <option value="Viatura">Viatura</option>
-                <option value="EPI">EPI</option>
-                <option value="Ferramenta">Ferramenta</option>
-                <option value="Outro">Outro</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Status</label>
-              <select
-                value={fleetItemEditando?.status || 'active'}
-                onChange={e => atualizarCampoFleetItem('status', e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              >
-                <option value="active">Ativo</option>
-                <option value="inactive">Inativo</option>
-              </select>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Nº Patrimônio / Série</label>
-              <input
-                value={fleetItemEditando?.patrimonio_number || ''}
-                onChange={e => atualizarCampoFleetItem('patrimonio_number', e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Local de Armazenamento</label>
-              <select
-                value={fleetItemEditando?.local_id || ''}
-                onChange={e => {
-                  const locId = e.target.value;
-                  atualizarCampoFleetItem('local_id', locId);
-                  const selectedLoc = locais.find(l => l.id === locId);
-                  if (selectedLoc) {
-                    atualizarCampoFleetItem('location', selectedLoc.nome);
-                  }
-                }}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-              >
-                <option value="">Selecione um local...</option>
-                {locais.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.nome} ({l.tipo})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {fleetItemEditando?.type === 'Viatura' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Placa</label>
-                <input
-                  value={fleetItemEditando?.plate || ''}
-                  onChange={e => atualizarCampoFleetItem('plate', e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Marca / Modelo</label>
-                <input
-                  value={fleetItemEditando?.brand || ''}
-                  onChange={e => atualizarCampoFleetItem('brand', e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Ano</label>
-                <input
-                  value={fleetItemEditando?.year || ''}
-                  onChange={e => atualizarCampoFleetItem('year', e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
-                />
-              </div>
-            </div>
-          )}
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px' }}>Atividades Operacionais</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              {ATIVIDADES_LIST.map(at => {
-                const currentAts = fleetItemEditando?.atividades || [];
-                const checked = currentAts.includes(at);
-                return (
-                  <label key={at} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={e => {
-                        const newAts = e.target.checked
-                          ? [...currentAts, at]
-                          : currentAts.filter((a: string) => a !== at);
-                        atualizarCampoFleetItem('atividades', newAts);
-                      }}
-                      style={{ borderRadius: '4px' }}
-                    />
-                    {at}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Observações / Detalhes</label>
-            <textarea
-              value={fleetItemEditando?.details || ''}
-              onChange={e => atualizarCampoFleetItem('details', e.target.value)}
-              rows={3}
-              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', resize: 'none' }}
-            />
-          </div>
-        </div>
-      </ModalEdicao>
+      <ModalEditarItemB4
+        item={fleetItemEditando}
+        isOpen={editandoFleetItem}
+        onClose={cancelarEdicaoFleetItem}
+        onSaved={() => {
+          loadData();
+          toast.success('Item B4 atualizado!');
+        }}
+      />
 
       {/* Modal de Edição de Local B4 */}
       <ModalEdicao

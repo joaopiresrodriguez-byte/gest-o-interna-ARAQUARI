@@ -69,6 +69,7 @@ export interface Vehicle {
     location?: string;
     local_id?: string;
     compartimento_id?: string; // FK para compartimentos_viatura(id)
+    quantidade?: number;
     nf_number?: string;
     patrimonio_number?: string;
     patrimonio_type?: string;

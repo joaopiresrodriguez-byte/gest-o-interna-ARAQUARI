@@ -28,6 +28,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
   const [itens, setItens] = useState<EquipamentoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [qrModalComp, setQrModalComp] = useState<CompartimentoViatura | null>(null);
+  const [itemParaEditar, setItemParaEditar] = useState<Vehicle | null>(null);
 
   const carregarDados = async () => {
     try {
@@ -44,29 +45,27 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
       if (errComp) throw errComp;
       const compsCarregados = dataComp || [];
       setCompartimentos(compsCarregados);
-      const compIds = compsCarregados.map(c => c.id);
 
-      // 2. Buscar itens fleet por compartimento_id (fleet não tem viatura_id direto)
-      //    Se não há compartimentos, não busca itens fleet desta forma
-      let fleetFormatado: EquipamentoItem[] = [];
-      if (compIds.length > 0) {
-        const { data: dataFleet } = await supabase
-          .from('fleet')
-          .select('id, name, type, status, compartimento_id')
-          .in('compartimento_id', compIds)
-          .neq('type', 'Viatura');
+      // 2. Buscar itens da tabela fleet desta viatura (ou de seus compartimentos)
+      const { data: dataFleet } = await supabase
+        .from('fleet')
+        .select('*')
+        .neq('type', 'Viatura');
 
-        fleetFormatado = (dataFleet || []).map(f => ({
+      const compIds = new Set(compsCarregados.map(c => c.id));
+      const fleetFormatado: EquipamentoItem[] = (dataFleet || [])
+        .filter(f => f.compartimento_id && compIds.has(f.compartimento_id))
+        .map(f => ({
           id: f.id,
           nome: f.name,
           tipo: `🔧 ${f.type}`,
-          status: f.status === 'active' ? 'Ok' : 'Em Manutenção',
-          quantidade: 1,
+          status: f.status === 'active' || !f.status ? 'Ok' : f.status,
+          quantidade: f.quantidade || 1,
           compartimento_id: f.compartimento_id,
+          rawItem: f,
         }));
-      }
 
-      // 3. Buscar na tabela equipamentos (tem viatura_id direto)
+      // 3. Buscar na tabela equipamentos
       const { data: dataEq } = await supabase
         .from('equipamentos')
         .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id')
@@ -77,33 +76,25 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
         nome: e.nome,
         tipo: `🔧 ${e.tipo || 'Equipamento'}`,
         numero_serie: e.numero_serie,
-        quantidade: e.quantidade,
+        quantidade: e.quantidade || 1,
         status: e.status || 'Ok',
         compartimento_id: e.compartimento_id,
+        rawItem: {
+          id: e.id,
+          name: e.nome,
+          type: (e.tipo as any) || 'Equipamento',
+          status: e.status === 'Ok' ? 'active' : 'maintenance',
+          details: e.numero_serie ? `Série: ${e.numero_serie}` : '',
+          quantidade: e.quantidade || 1,
+          compartimento_id: e.compartimento_id,
+        },
       }));
 
-      // 4. Buscar materiais de consumo
-      const { data: dataConsumo } = await supabase
-        .from('materiais_consumo')
-        .select('id, nome, categoria, unidade, quantidade, estoque_minimo, compartimento_id')
-        .eq('viatura_id', viatura.id);
-
-      const consumoFormatado: EquipamentoItem[] = (dataConsumo || []).map(c => ({
-        id: c.id,
-        nome: `${c.nome} (${c.quantidade} ${c.unidade || 'un'})`,
-        tipo: `📦 Consumo (${c.categoria || 'Geral'})`,
-        quantidade: c.quantidade,
-        status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
-        compartimento_id: c.compartimento_id,
-      }));
-
-      // Combinar sem duplicatas (fleet é preferencial; equipamentos e consumo são complementares)
+      // Combinar sem duplicatas
       const fleetIds = new Set(fleetFormatado.map(f => f.id));
       const equipNovos = equipFormatado.filter(e => !fleetIds.has(e.id));
-      const idsJaIncluidos = new Set([...fleetFormatado.map(f => f.id), ...equipNovos.map(e => e.id)]);
-      const consumoNovos = consumoFormatado.filter(c => !idsJaIncluidos.has(c.id));
 
-      setItens([...fleetFormatado, ...equipNovos, ...consumoNovos]);
+      setItens([...fleetFormatado, ...equipNovos]);
     } catch (err: any) {
       console.error('Erro ao carregar visualização da viatura:', err);
       toast.error('Erro ao carregar itens da viatura');
@@ -112,7 +103,6 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
     }
   };
 
-
   useEffect(() => {
     if (viatura?.id) {
       carregarDados();
@@ -120,9 +110,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
   }, [viatura?.id]);
 
   // Itens não associados a nenhum compartimento específico
-  const itensSemCompartimento = itens.filter(
-    item => !item.compartimento_id
-  );
+  const itensSemCompartimento = itens.filter(item => !item.compartimento_id);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -216,14 +204,28 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
                     itensComp.map(item => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between text-xs py-1 border-b border-stone-100 last:border-0"
+                        className="flex items-center justify-between text-xs py-1.5 border-b border-stone-100 last:border-0 hover:bg-stone-50 px-1 rounded transition-colors"
                       >
-                        <span className="font-medium text-stone-700">
-                          • {item.nome} {item.quantidade && item.quantidade > 1 ? `(x${item.quantidade})` : ''}
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                          ✅ {item.status || 'Ok'}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-stone-800">
+                            • {item.nome}
+                          </span>
+                          <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
+                            (x{item.quantidade || 1})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                            ✅ {item.status || 'Ok'}
+                          </span>
+                          <button
+                            onClick={() => setItemParaEditar((item as any).rawItem || { id: item.id, name: item.nome, details: '', status: 'active', type: 'Equipamento', quantidade: item.quantidade || 1, compartimento_id: item.compartimento_id })}
+                            className="p-1 text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                            title="Editar item e quantidade/compartimento"
+                          >
+                            ✏️
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -258,16 +260,31 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
             {itensSemCompartimento.map(item => (
-              <div key={item.id} className="bg-white p-2.5 rounded-xl border border-stone-200 text-xs">
-                <span className="font-bold text-stone-800">{item.nome}</span>
-                {item.quantidade && item.quantidade > 1 && (
-                  <span className="text-stone-500 font-normal"> (x{item.quantidade})</span>
-                )}
+              <div key={item.id} className="bg-white p-2.5 rounded-xl border border-stone-200 text-xs flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-stone-800">{item.nome}</span>
+                  <span className="text-amber-700 font-bold ml-1"> (x{item.quantidade || 1})</span>
+                </div>
+                <button
+                  onClick={() => setItemParaEditar((item as any).rawItem || { id: item.id, name: item.nome, details: '', status: 'active', type: 'Equipamento', quantidade: item.quantidade || 1, compartimento_id: item.compartimento_id })}
+                  className="p-1 text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                  title="Editar item"
+                >
+                  ✏️
+                </button>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* MODAL EDITAR ITEM */}
+      <ModalEditarItemB4
+        item={itemParaEditar}
+        isOpen={!!itemParaEditar}
+        onClose={() => setItemParaEditar(null)}
+        onSaved={carregarDados}
+      />
 
       {/* MODAL QR CODE DO COMPARTIMENTO */}
       {qrModalComp && (
@@ -281,7 +298,6 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
             </p>
 
             <div className="flex justify-center py-4 bg-stone-50 rounded-xl border border-stone-200">
-              {/* Gerador de QR Code simples via API rápida */}
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
                   `${window.location.origin}/extrato/compartimento/${qrModalComp.id}`

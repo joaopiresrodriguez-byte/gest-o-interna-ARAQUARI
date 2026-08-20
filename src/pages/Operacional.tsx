@@ -216,7 +216,8 @@ const CardMissao: React.FC<{
   onAtualizar: () => void;
   onIniciar?: () => void;
   onExcluir?: () => void;
-}> = ({ missao, isEditor, onAtualizar, onIniciar, onExcluir }) => {
+  onEditarCompleto?: (missao: DailyMission) => void;
+}> = ({ missao, isEditor, onAtualizar, onIniciar, onExcluir, onEditarCompleto }) => {
   const [editando, setEditando] = useState(false);
   const [status, setStatus] = useState<StatusMissao>((missao.status as StatusMissao) || 'agendada');
   const [observacoes, setObservacoes] = useState(missao.observacoes || '');
@@ -330,6 +331,15 @@ const CardMissao: React.FC<{
         {/* AÇÕES */}
         {isEditor && (
           <div className="flex items-center gap-1 flex-shrink-0">
+            {onEditarCompleto && (
+              <button
+                onClick={() => onEditarCompleto(missao)}
+                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
+                title="Editar dados completos da missão"
+              >
+                <span className="material-symbols-outlined text-[18px]">edit</span>
+              </button>
+            )}
             {missao.status === 'agendada' && onIniciar && (
               <button
                 onClick={onIniciar}
@@ -339,47 +349,25 @@ const CardMissao: React.FC<{
                 <span className="material-symbols-outlined text-[20px]">play_circle</span>
               </button>
             )}
-            {/* Botão de edição padronizado ✏️ — abre painel de registro/observações */}
-            {(missao.status === 'em_andamento' || missao.status === 'agendada') && (
-              <button
-                onClick={() => setEditando(!editando)}
-                title="Editar missão"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  color: '#64748b',
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-              >
-                ✏️
-              </button>
-            )}
-            {(missao.status === 'concluida' || missao.status === 'parcialmente_concluida' || missao.status === 'nao_realizada') && (
-              <button
-                onClick={() => setEditando(!editando)}
-                title="Editar missão"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  color: '#64748b',
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-              >
-                ✏️
-              </button>
-            )}
+            {/* Botão de edição inline ✏️ — altera status/observações */}
+            <button
+              onClick={() => setEditando(!editando)}
+              title="Editar status/resultado"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                color: '#64748b',
+                transition: 'background 0.2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              📝
+            </button>
             {onExcluir && (
               <button
                 onClick={onExcluir}
@@ -508,6 +496,7 @@ const Operacional: React.FC = () => {
   // Daily Missions states
   const [missions, setMissions] = useState<DailyMission[]>([]);
   const [trainings, setTrainings] = useState<Training[]>([]);
+  const [missionToEdit, setMissionToEdit] = useState<DailyMission | null>(null);
   const [missionForm, setMissionForm] = useState({
     title: '', description: '', mission_date: new Date().toISOString().split('T')[0],
     start_time: '', end_time: '', priority: 'media' as DailyMission['priority'],
@@ -855,7 +844,7 @@ const Operacional: React.FC = () => {
                 </select>
               </div>
               {isEditor && (
-                <Button variant="primary" size="md" icon="add" onClick={() => setShowMissionForm(true)}>
+                <Button variant="primary" size="md" icon="add" onClick={() => { setMissionToEdit(null); setShowMissionForm(true); }}>
                   Nova Missão
                 </Button>
               )}
@@ -948,6 +937,10 @@ const Operacional: React.FC = () => {
                     missao={mission}
                     isEditor={isEditor}
                     onAtualizar={loadAllData}
+                    onEditarCompleto={(m) => {
+                      setMissionToEdit(m);
+                      setShowMissionForm(true);
+                    }}
                     onIniciar={
                       mission.status === 'agendada'
                         ? () => handleUpdateMissionStatus(mission.id!, 'em_andamento')
@@ -1101,15 +1094,35 @@ const Operacional: React.FC = () => {
         type={notifModal.type}
       />
 
-      {/* Daily Mission Modal */}
+      {/* Daily Mission Modal (Criação e Edição) */}
       <DailyMissionModal
         isOpen={showMissionForm}
-        onClose={() => setShowMissionForm(false)}
+        initialData={missionToEdit}
+        titleText={missionToEdit ? 'Editar Missão Diária' : 'Nova Missão Diária'}
+        onClose={() => {
+          setShowMissionForm(false);
+          setMissionToEdit(null);
+        }}
         onSave={async (missionData) => {
-          await SupabaseService.addDailyMission({
-            ...missionData,
-            created_by: user?.email || 'N/A',
-          });
+          if (missionToEdit?.id) {
+            // Edição
+            await SupabaseService.updateDailyMission(missionToEdit.id, {
+              ...missionData,
+              editado_por_nome: (profile as any)?.name || (profile as any)?.war_name || user?.email || 'Usuário Operacional',
+              editado_por_id: user?.id || undefined,
+              editado_em: new Date().toISOString(),
+            });
+            toast.success('Missão atualizada!');
+          } else {
+            // Criação
+            await SupabaseService.addDailyMission({
+              ...missionData,
+              created_by: user?.email || 'N/A',
+            });
+            toast.success('Missão cadastrada!');
+          }
+          setShowMissionForm(false);
+          setMissionToEdit(null);
           loadAllData();
         }}
       />
