@@ -210,15 +210,19 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
       setMensagemStatus(null);
       const res = await bcEscalaService.publicarEscala(mesRef);
 
-      // Invocação da Edge Function para disparo de notificações de confirmação
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: 'notificar_selecionados', mesRef }),
-      });
+      // Invocação da Edge Function para disparo de notificações de confirmação (opcional/resiliente)
+      try {
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ action: 'notificar_selecionados', mesRef }),
+        });
+      } catch (_edgeErr) {
+        console.warn('Edge Function processar-ciclo-bc não chamada/não configurada:', _edgeErr);
+      }
 
       setMensagemStatus({ tipo: 'sucesso', texto: `Escala de ${mesRef} publicada com sucesso (${res.publicadas} inserções/notificações)!` });
       await carregarDados();

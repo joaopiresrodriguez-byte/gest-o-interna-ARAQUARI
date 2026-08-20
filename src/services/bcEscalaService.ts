@@ -776,8 +776,9 @@ export const bcEscalaService = {
     const porDia: Record<string, number[]> = {};
     selecionadosMes.forEach(s => {
       if (!porDia[s.dia]) porDia[s.dia] = [];
-      if (!porDia[s.dia].includes(s.bombeiro_id)) {
-        porDia[s.dia].push(s.bombeiro_id);
+      const numId = Number(s.bombeiro_id);
+      if (!isNaN(numId) && !porDia[s.dia].includes(numId)) {
+        porDia[s.dia].push(numId);
       }
     });
 
