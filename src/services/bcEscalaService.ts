@@ -356,7 +356,26 @@ export const bcEscalaService = {
       personnel: personnelMap.get(String(item.bombeiro_id)) || null,
     }));
 
-    // 3. Limpar seleções anteriores do mês (re-processamento seguro)
+    // 3. Buscar configurações de vagas/horas do ciclo e exceções diárias
+    const { data: ciclo } = await supabase
+      .from('bc_ciclos')
+      .select('*')
+      .eq('mes_referencia', mesRef)
+      .maybeSingle();
+
+    const horasPadraoDia = ciclo?.horas_padrao_dia || 36;
+
+    const { data: excecoesVagas } = await supabase
+      .from('bc_config_vagas')
+      .select('*')
+      .eq('mes_referencia', mesRef);
+
+    const excecoesMap = new Map<string, number>();
+    (excecoesVagas || []).forEach(ev => {
+      excecoesMap.set(ev.dia, ev.horas_disponiveis);
+    });
+
+    // 4. Limpar seleções anteriores do mês (re-processamento seguro)
     const diasUnicos = Array.from(new Set(intencoes.map(i => i.dia as string))).sort();
 
     if (diasUnicos.length > 0) {
@@ -366,7 +385,7 @@ export const bcEscalaService = {
         .in('dia', diasUnicos);
     }
 
-    // 4. Mapa de contagem de dias selecionados POR bombeiro neste mês
+    // 5. Mapa de contagem de dias selecionados POR bombeiro neste mês
     //    (vai sendo atualizado dinamicamente a cada dia processado)
     const diasSelecionadosNoMes: Record<string, number> = {};
 
@@ -380,10 +399,13 @@ export const bcEscalaService = {
 
     let totalSelecionados = 0;
 
-    // 5. Processar cada dia em ordem cronológica
+    // 6. Processar cada dia em ordem cronológica respeitando a capacidade de horas
     for (const dia of diasUnicos) {
       const intencoesDoDia = intencoes.filter(i => i.dia === dia);
       if (intencoesDoDia.length === 0) continue;
+
+      // Capacidade máxima de horas para este dia específico
+      const limiteHorasDia = excecoesMap.has(dia) ? excecoesMap.get(dia)! : horasPadraoDia;
 
       // Ordenar candidatos pelos 6 critérios
       const candidatosOrdenados = [...intencoesDoDia].sort((a, b) => {
@@ -400,7 +422,7 @@ export const bcEscalaService = {
         // ── CRITÉRIO 2: CNH Categoria D com validade vigente ──
         const temCnhDA = (() => {
           if (!bombA?.cnh_category?.toUpperCase().includes('D')) return false;
-          if (!bombA.cnh_expiry_date) return true; // sem data = considera válida
+          if (!bombA.cnh_expiry_date) return true;
           return new Date(bombA.cnh_expiry_date) >= hoje;
         })();
         const temCnhDB = (() => {
@@ -441,15 +463,28 @@ export const bcEscalaService = {
         return dtIncA - dtIncB;
       });
 
-      // 6. Determinar qual critério foi decisivo para o 1º colocado (posição 1)
+      // Alocar candidatos sem estourar o limite de horas do dia
+      let horasAlocadas = 0;
+      const selecionadosDoDia: typeof candidatosOrdenados = [];
+
+      for (const cand of candidatosOrdenados) {
+        const horasCand = cand.total_horas || 12;
+        if (horasAlocadas + horasCand <= limiteHorasDia) {
+          selecionadosDoDia.push(cand);
+          horasAlocadas += horasCand;
+          // Contabilizar para o ranking dinâmico do mês
+          const bid = String(cand.bombeiro_id);
+          diasSelecionadosNoMes[bid] = (diasSelecionadosNoMes[bid] ?? 0) + 1;
+        }
+      }
+
       const gerarDescCriterio = (item: typeof candidatosOrdenados[0], posicao: number): string => {
         const bomb: Personnel = item.personnel;
         const bid = String(item.bombeiro_id);
         const diasAcumulados = diasSelecionadosNoMes[bid] ?? 0;
 
-        // Comparar com o 2º candidato para detectar qual critério foi desempatador
-        const proximo = candidatosOrdenados[posicao]; // posicao == index do próximo
-        if (!proximo) return 'Critério 1 — Único candidato';
+        const proximo = candidatosOrdenados[posicao];
+        if (!proximo) return `Critério 1 — Único candidato (Vaga ${horasAlocadas}h/${limiteHorasDia}h)`;
 
         const bombP: Personnel = proximo.personnel;
         const bidP = String(proximo.bombeiro_id);
@@ -500,8 +535,7 @@ export const bcEscalaService = {
         return `Critério 6 — Inclusão mais antiga (${dtInc})`;
       };
 
-      // 7. Montar registros para bc_selecionados
-      const registrosSelecionados = candidatosOrdenados.map((item, index) => {
+      const registrosSelecionados = selecionadosDoDia.map((item, index) => {
         const desc = gerarDescCriterio(item, index + 1);
         return {
           bombeiro_id: String(item.bombeiro_id),
@@ -517,22 +551,84 @@ export const bcEscalaService = {
         };
       });
 
-      const { error: errInsSel } = await supabase
-        .from('bc_selecionados')
-        .insert(registrosSelecionados);
+      if (registrosSelecionados.length > 0) {
+        const { error: errInsSel } = await supabase
+          .from('bc_selecionados')
+          .insert(registrosSelecionados);
 
-      if (errInsSel) throw errInsSel;
-      totalSelecionados += registrosSelecionados.length;
-
-      // 8. Atualizar contagem dinâmica: o 1º colocado foi selecionado
-      //    (só o ranking 1 conta como dia trabalhado no motor)
-      if (candidatosOrdenados.length > 0) {
-        const bid1 = String(candidatosOrdenados[0].bombeiro_id);
-        diasSelecionadosNoMes[bid1] = (diasSelecionadosNoMes[bid1] ?? 0) + 1;
+        if (errInsSel) throw errInsSel;
+        totalSelecionados += registrosSelecionados.length;
       }
     }
 
     return { processados: totalSelecionados, diasComEscala: diasUnicos.length };
+  },
+
+  /**
+   * MÉTODOS DE GESTÃO DE VAGAS / CAPACIDADE DIÁRIA
+   */
+  obterConfigVagas: async (mesRef: string): Promise<{ horasPadraoDia: number; excecoes: Record<string, number> }> => {
+    const { data: ciclo } = await supabase
+      .from('bc_ciclos')
+      .select('horas_padrao_dia')
+      .eq('mes_referencia', mesRef)
+      .maybeSingle();
+
+    const { data: excecoes } = await supabase
+      .from('bc_config_vagas')
+      .select('*')
+      .eq('mes_referencia', mesRef);
+
+    const mapExcecoes: Record<string, number> = {};
+    (excecoes || []).forEach(e => {
+      mapExcecoes[e.dia] = e.horas_disponiveis;
+    });
+
+    return {
+      horasPadraoDia: ciclo?.horas_padrao_dia || 36,
+      excecoes: mapExcecoes,
+    };
+  },
+
+  salvarConfigVagas: async (
+    mesRef: string,
+    horasPadraoDia: number,
+    excecoes: Record<string, number>
+  ) => {
+    // 1. Atualizar horas padrão no ciclo
+    await supabase
+      .from('bc_ciclos')
+      .update({ horas_padrao_dia: horasPadraoDia })
+      .eq('mes_referencia', mesRef);
+
+    // 2. Buscar ciclo ID
+    const { data: ciclo } = await supabase
+      .from('bc_ciclos')
+      .select('id')
+      .eq('mes_referencia', mesRef)
+      .maybeSingle();
+
+    // 3. Limpar exceções anteriores do mês
+    await supabase
+      .from('bc_config_vagas')
+      .delete()
+      .eq('mes_referencia', mesRef);
+
+    // 4. Inserir novas exceções
+    const records = Object.entries(excecoes).map(([dia, horas]) => ({
+      ciclo_id: ciclo?.id || null,
+      mes_referencia: mesRef,
+      dia,
+      horas_disponiveis: horas,
+    }));
+
+    if (records.length > 0) {
+      const { error } = await supabase
+        .from('bc_config_vagas')
+        .insert(records);
+
+      if (error) throw error;
+    }
   },
 
   /**

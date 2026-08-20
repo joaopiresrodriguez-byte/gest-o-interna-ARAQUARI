@@ -605,6 +605,16 @@ export interface BcCiclo {
     data_abertura: string;
     data_encerramento: string;
     status: 'aberto' | 'encerrado' | 'processado' | 'publicado';
+    horas_padrao_dia?: number;
+    criado_em?: string;
+}
+
+export interface BcConfigVagas {
+    id?: string;
+    ciclo_id?: string;
+    mes_referencia: string;
+    dia: string;
+    horas_disponiveis: number;
     criado_em?: string;
 }
 

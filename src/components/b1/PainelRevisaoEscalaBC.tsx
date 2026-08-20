@@ -43,6 +43,13 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     mesRef: string;
   }>({ aberto: false, links: [], mesRef: '' });
 
+  // Gestão de Vagas / Capacidade Diária
+  const [modalVagas, setModalVagas] = useState<boolean>(false);
+  const [horasPadraoInput, setHorasPadraoInput] = useState<number>(36);
+  const [excecoesVagas, setExcecoesVagas] = useState<Record<string, number>>({});
+  const [diaExcecaoInput, setDiaExcecaoInput] = useState<string>('');
+  const [horasExcecaoInput, setHorasExcecaoInput] = useState<number>(24);
+
   const carregarDados = async () => {
     try {
       setLoading(true);
@@ -51,6 +58,11 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
       setBcsAtivos(res.bcsAtivos);
       setIntencoes(res.intencoes);
       setSelecionados(res.selecionados);
+
+      // Carregar vagas
+      const cfgVagas = await bcEscalaService.obterConfigVagas(mesRef);
+      setHorasPadraoInput(cfgVagas.horasPadraoDia);
+      setExcecoesVagas(cfgVagas.excecoes);
     } catch (err: any) {
       console.error('Erro ao carregar painel BC:', err);
     } finally {
@@ -304,6 +316,15 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
               </button>
 
               <button
+                onClick={() => setModalVagas(true)}
+                disabled={processando}
+                className="px-3 py-2 bg-cyan-950/60 hover:bg-cyan-900/70 text-cyan-300 border border-cyan-700/50 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                title="Configurar limite de horas/vagas diárias para a escala"
+              >
+                <span>⚙️</span> Configurar Vagas ({horasPadraoInput}h/dia)
+              </button>
+
+              <button
                 onClick={handlePublicarEscala}
                 disabled={processando || selecionados.length === 0}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-extrabold transition shadow-lg shadow-emerald-900/30 flex items-center gap-1.5"
@@ -373,7 +394,7 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
             return (
               <div key={dia} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 mb-4 gap-2">
                   <div className="flex items-center gap-3">
                     <span className="w-10 h-10 bg-red-950/80 border border-red-800/80 rounded-xl text-red-400 font-black flex items-center justify-center text-lg">
                       {diaNum}
@@ -383,6 +404,30 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                       <span className="text-xs text-slate-400">{listaDia.length} bombeiro(s) escalado(s)</span>
                     </div>
                   </div>
+
+                  {/* INDICADOR DE CAPACIDADE DE HORAS */}
+                  {(() => {
+                    const totalHorasAlocadas = listaDia.reduce((acc, s) => acc + (s.total_horas || 12), 0);
+                    const limiteHoras = excecoesVagas[dia] ?? horasPadraoInput;
+                    const pct = Math.min(100, Math.round((totalHorasAlocadas / limiteHoras) * 100));
+
+                    return (
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 px-4 min-w-[200px]">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-slate-400 font-medium">Vagas / Horas:</span>
+                          <strong className={`font-bold ${pct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {totalHorasAlocadas}h / {limiteHoras}h ({pct}%)
+                          </strong>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                            style={{ width: `${pct}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -581,6 +626,136 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
                 >
                   Adicionar Bombeiro
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURAR VAGAS / CAPACIDADE */}
+      {modalVagas && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-cyan-800/50 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>⚙️</span> Configurar Vagas Diárias — {mesRef}
+                </h3>
+                <p className="text-xs text-cyan-400 mt-0.5">Defina o limite de horas disponíveis para alocação do motor.</p>
+              </div>
+              <button
+                onClick={() => setModalVagas(false)}
+                className="text-slate-400 hover:text-white p-1 text-base font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              {/* PADRÃO MENSAL */}
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Horas Padrão por Dia no Mês
+                </label>
+                <p className="text-[11px] text-slate-400 mb-2">Ex: 36h permite até 3 BCs de 12h, ou 1 de 24h + 1 de 12h.</p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    step="12"
+                    min="12"
+                    max="120"
+                    value={horasPadraoInput}
+                    onChange={e => setHorasPadraoInput(Number(e.target.value))}
+                    className="w-32 bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm font-bold text-center"
+                  />
+                  <span className="text-xs text-slate-400 font-semibold">horas por dia</span>
+                </div>
+              </div>
+
+              {/* EXCEÇÕES DIÁRIAS */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-300 mb-2">Exceções por Dia Específico (Finais de Semana / Feriados)</h4>
+                
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="date"
+                    value={diaExcecaoInput}
+                    onChange={e => setDiaExcecaoInput(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-xs flex-1"
+                  />
+                  <input
+                    type="number"
+                    step="12"
+                    min="12"
+                    max="120"
+                    value={horasExcecaoInput}
+                    onChange={e => setHorasExcecaoInput(Number(e.target.value))}
+                    className="w-20 bg-slate-950 border border-slate-700 text-white rounded-lg px-2 py-1.5 text-xs text-center font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!diaExcecaoInput) return;
+                      setExcecoesVagas(prev => ({ ...prev, [diaExcecaoInput]: horasExcecaoInput }));
+                      setDiaExcecaoInput('');
+                    }}
+                    className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg text-xs font-bold shrink-0"
+                  >
+                    ➕ Adicionar
+                  </button>
+                </div>
+
+                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                  {Object.keys(excecoesVagas).length === 0 ? (
+                    <p className="text-xs text-slate-500 italic text-center py-2">Nenhuma exceção cadastrada (todos usam {horasPadraoInput}h).</p>
+                  ) : (
+                    Object.entries(excecoesVagas).map(([d, h]) => (
+                      <div key={d} className="bg-slate-950 border border-slate-800 rounded-lg p-2 flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-mono">📅 Dia {d.split('-').reverse().join('/')}: <strong className="text-cyan-400">{h}h</strong></span>
+                        <button
+                          onClick={() => {
+                            const copy = { ...excecoesVagas };
+                            delete copy[d];
+                            setExcecoesVagas(copy);
+                          }}
+                          className="text-slate-500 hover:text-red-400 text-xs px-2"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* AÇÕES DA MODAL */}
+              <div className="border-t border-slate-800 pt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModalVagas(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setProcessando(true);
+                      await bcEscalaService.salvarConfigVagas(mesRef, horasPadraoInput, excecoesVagas);
+                      setModalVagas(false);
+                      setMensagemStatus({ tipo: 'sucesso', texto: 'Configuração de vagas diárias salva com sucesso!' });
+                      await carregarDados();
+                    } catch (err: any) {
+                      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao salvar vagas.' });
+                    } finally {
+                      setProcessando(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold"
+                >
+                  Salvar Vagas
                 </button>
               </div>
             </div>
