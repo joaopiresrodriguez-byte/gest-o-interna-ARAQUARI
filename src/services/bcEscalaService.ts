@@ -194,26 +194,30 @@ export const bcEscalaService = {
     // Buscar intenção de amostra para identificar o bombeiro e ciclo
     const { data: intencaoAmostra, error: errInt } = await supabase
       .from('bc_intencoes')
-      .select('*, personnel(*)')
+      .select('*')
       .eq('token_acesso', token)
       .limit(1)
       .maybeSingle();
 
     if (errInt || !intencaoAmostra) {
+      console.error('Erro ao buscar intenção por token:', errInt);
       throw new Error('Token inválido ou não encontrado.');
     }
 
     const bombeiroId = intencaoAmostra.bombeiro_id;
     const mesRef = intencaoAmostra.mes_referencia;
 
-    // Buscar bombeiro
+    // Buscar bombeiro por ID (pode ser number ou string)
     const { data: bombeiro, error: errBomb } = await supabase
       .from('personnel')
       .select('*')
       .eq('id', bombeiroId)
-      .single();
+      .maybeSingle();
 
-    if (errBomb || !bombeiro) throw new Error('Bombeiro não encontrado.');
+    if (errBomb || !bombeiro) {
+      console.error('Erro ao buscar bombeiro associado ao token:', errBomb);
+      throw new Error('Bombeiro não encontrado.');
+    }
 
     // Buscar ciclo
     const { data: ciclo, error: errCiclo } = await supabase

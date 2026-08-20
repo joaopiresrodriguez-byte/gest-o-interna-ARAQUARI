@@ -88,5 +88,11 @@ CREATE POLICY "publico_bc_ciclos"
   ON public.bc_ciclos FOR SELECT TO anon
   USING (true);
 
+-- Permissão de leitura pública da tabela personnel para exibição do nome do BC via token
+DROP POLICY IF EXISTS "publico_personnel_select" ON public.personnel;
+CREATE POLICY "publico_personnel_select"
+  ON public.personnel FOR SELECT TO anon
+  USING (true);
+
 -- PASSO 4: Forçar reload do schema cache do PostgREST
 NOTIFY pgrst, 'reload schema';
