@@ -261,7 +261,7 @@ export const bcEscalaService = {
     horasRestantes: number;
     minutosRestantes: number;
   }> => {
-    if (!token) throw new Error('Token não fornecido');
+    if (!token) throw new Error('Link inválido. Verifique se o link recebido está completo.');
 
     // Buscar intenção de amostra para identificar o bombeiro e ciclo
     const { data: intencaoAmostra, error: errInt } = await supabase
@@ -271,9 +271,18 @@ export const bcEscalaService = {
       .limit(1)
       .maybeSingle();
 
-    if (errInt || !intencaoAmostra) {
+    if (errInt) {
+      // Erro de RLS ou de rede — expõe mensagem original para diagnóstico
       console.error('Erro ao buscar intenção por token:', errInt);
-      throw new Error('Token inválido ou não encontrado.');
+      throw new Error(
+        `Erro de acesso ao banco de dados: ${errInt.message || errInt.code || 'permissão negada'}. ` +
+        `Informe o código ao responsável: ${errInt.code || 'RLS_ERR'}`
+      );
+    }
+    if (!intencaoAmostra) {
+      throw new Error(
+        'Link não encontrado ou expirado. Solicite ao gestor que gere um novo link de intenção.'
+      );
     }
 
     const bombeiroId = intencaoAmostra.bombeiro_id;
@@ -288,7 +297,7 @@ export const bcEscalaService = {
 
     if (errBomb || !bombeiro) {
       console.error('Erro ao buscar bombeiro associado ao token:', errBomb);
-      throw new Error('Bombeiro não encontrado.');
+      throw new Error('Cadastro do bombeiro comunitário não encontrado. Contate o gestor.');
     }
 
     // Buscar ciclo
@@ -298,7 +307,7 @@ export const bcEscalaService = {
       .eq('mes_referencia', mesRef)
       .single();
 
-    if (errCiclo || !ciclo) throw new Error('Ciclo de escala não encontrado.');
+    if (errCiclo || !ciclo) throw new Error('Ciclo de escala não encontrado para este mês.');
 
     // Buscar todas as intenções salvas para este bombeiro neste mês
     const { data: intencoes } = await supabase
