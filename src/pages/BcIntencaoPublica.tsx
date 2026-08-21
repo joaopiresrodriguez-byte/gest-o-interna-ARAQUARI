@@ -159,7 +159,7 @@ export const BcIntencaoPublica: React.FC = () => {
 
   if (errorMsg && !bombeiro) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="h-screen overflow-y-auto bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-2xl">
           <div className="w-16 h-16 bg-red-950/60 border border-red-800/80 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-2xl">
             ⚠️
@@ -174,7 +174,7 @@ export const BcIntencaoPublica: React.FC = () => {
 
   if (expirado) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="h-screen overflow-y-auto bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
         <div className="max-w-lg w-full bg-slate-900 border border-amber-900/50 rounded-2xl p-8 text-center shadow-2xl relative overflow-hidden">
           <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-amber-500/5 rounded-full blur-3xl"></div>
           <div className="w-16 h-16 bg-amber-950/60 border border-amber-800/80 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 text-3xl">
@@ -199,8 +199,8 @@ export const BcIntencaoPublica: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-4 sm:p-6 md:p-8 selection:bg-red-500 selection:text-white">
-      <div className="max-w-4xl mx-auto">
+    <div className="h-screen overflow-y-auto bg-slate-950 text-slate-100 font-sans p-4 sm:p-6 md:p-8 selection:bg-red-500 selection:text-white">
+      <div className="max-w-4xl mx-auto pb-12">
 
         {/* CABEÇALHO DA PÁGINA */}
         <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 mb-6 shadow-2xl relative overflow-hidden">
