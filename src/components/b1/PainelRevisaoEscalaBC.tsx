@@ -248,6 +248,17 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     }
   };
 
+  // Agrupar selecionados por dia de forma defensiva
+  const selecionadosPorDia: Record<string, typeof selecionados> = {};
+  (selecionados || []).forEach(s => {
+    if (s && s.dia) {
+      if (!selecionadosPorDia[s.dia]) selecionadosPorDia[s.dia] = [];
+      selecionadosPorDia[s.dia].push(s);
+    }
+  });
+
+  const diasOrdenados = Object.keys(selecionadosPorDia).sort();
+
   return (
     <div className="space-y-6">
       {/* PAINEL DE CONTROLE SUPERIOR */}

@@ -23,7 +23,7 @@ import ScaleCalendar from '../components/b1/ScaleCalendar';
 import PainelAfastamentos from '../components/b1/PainelAfastamentos';
 import RankingAcesso from '../components/b1/RankingAcesso';
 import PainelDinossauros from '../components/b1/PainelDinossauros';
-import ModalCadastroMilitar from '../components/b1/ModalCadastroMilitar';
+import ModalCadastroMilitar, { BC_RANKS_CONFIG } from '../components/b1/ModalCadastroMilitar';
 import ModalEdicaoFerias from '../components/b1/ModalEdicaoFerias';
 import { SecaoAlteracoesEscala } from '../components/b1/SecaoAlteracoesEscala';
 import { PainelRevisaoEscalaBC } from '../components/b1/PainelRevisaoEscalaBC';
@@ -952,7 +952,33 @@ const PessoalB1: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     {formField('Nome Completo', 'name')}
                     {formField('Nome de Guerra', 'war_name')}
-                    {formField('Posto / Graduação', 'graduation', 'text', RANKS_BM)}
+                    {/* Posto / Graduação */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1">Posto / Graduação</label>
+                      <select
+                        value={formData.graduation || formData.rank || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          const bcMatch = BC_RANKS_CONFIG.find(bc => bc.label === val);
+                          setFormData(prev => ({
+                            ...prev,
+                            graduation: val,
+                            rank: val,
+                            type: bcMatch ? 'BC' : (prev.type || 'BM'),
+                            bc_graduacao_ordem: bcMatch ? bcMatch.ordem : null
+                          }));
+                        }}
+                        className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm"
+                      >
+                        <option value="">Selecionar...</option>
+                        <optgroup label="Bombeiro Militar (Regular)">
+                          {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+                        </optgroup>
+                        <optgroup label="Bombeiro Comunitário">
+                          {BC_RANKS_CONFIG.map(bc => <option key={bc.label} value={bc.label}>{bc.label}</option>)}
+                        </optgroup>
+                      </select>
+                    </div>
                     {formField('Tipo', 'type', 'text', ['BM', 'BC'])}
                     {formField('Status', 'status', 'text', STATUS_OPTIONS)}
                     {formField('Função', 'role')}
@@ -1672,12 +1698,25 @@ const PessoalB1: React.FC = () => {
               <select
                 value={militarEditando?.graduation || militarEditando?.rank || 'Sd'}
                 onChange={e => {
-                  atualizarCampoMilitar('graduation', e.target.value);
-                  atualizarCampoMilitar('rank', e.target.value);
+                  const val = e.target.value;
+                  const bcMatch = BC_RANKS_CONFIG.find(bc => bc.label === val);
+                  atualizarCampoMilitar('graduation', val);
+                  atualizarCampoMilitar('rank', val);
+                  if (bcMatch) {
+                    atualizarCampoMilitar('type', 'BC');
+                    atualizarCampoMilitar('bc_graduacao_ordem', bcMatch.ordem);
+                  } else {
+                    atualizarCampoMilitar('bc_graduacao_ordem', null);
+                  }
                 }}
                 style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
               >
-                {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+                <optgroup label="Bombeiro Militar (Regular)">
+                  {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+                </optgroup>
+                <optgroup label="Bombeiro Comunitário">
+                  {BC_RANKS_CONFIG.map(bc => <option key={bc.label} value={bc.label}>{bc.label}</option>)}
+                </optgroup>
               </select>
             </div>
           </div>
