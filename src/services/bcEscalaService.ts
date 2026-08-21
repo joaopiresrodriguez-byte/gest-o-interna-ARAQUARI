@@ -483,6 +483,22 @@ export const bcEscalaService = {
       // Capacidade máxima de horas para este dia específico
       const limiteHorasDia = excecoesMap.has(dia) ? excecoesMap.get(dia)! : horasPadraoDia;
 
+      // Funções auxiliares para verificação de CNH D + CVE válidos simultaneamente
+      const temCnhDValida = (p?: Personnel) => {
+        if (!p?.cnh_category?.toUpperCase().includes('D')) return false;
+        if (!p.cnh_expiry_date) return true;
+        return new Date(p.cnh_expiry_date) >= hoje;
+      };
+
+      const temCveValido = (p?: Personnel) => {
+        const ativo = ['SIM', 'ATIVO'].includes((p?.cve_active || '').toUpperCase());
+        if (!ativo) return false;
+        if (!p.cve_expiry_date) return true;
+        return new Date(p.cve_expiry_date) >= hoje;
+      };
+
+      const temAmbosValidos = (p?: Personnel) => temCnhDValida(p) && temCveValido(p);
+
       // Ordenar candidatos pelos 6 critérios
       const candidatosOrdenados = [...intencoesDoDia].sort((a, b) => {
         const bombA: Personnel = a.personnel;
@@ -495,33 +511,15 @@ export const bcEscalaService = {
         const diasB = diasSelecionadosNoMes[bidB] ?? 0;
         if (diasA !== diasB) return diasA - diasB;
 
-        // ── CRITÉRIO 2: CNH Categoria D com validade vigente ──
-        const temCnhDA = (() => {
-          if (!bombA?.cnh_category?.toUpperCase().includes('D')) return false;
-          if (!bombA.cnh_expiry_date) return true;
-          return new Date(bombA.cnh_expiry_date) >= hoje;
-        })();
-        const temCnhDB = (() => {
-          if (!bombB?.cnh_category?.toUpperCase().includes('D')) return false;
-          if (!bombB.cnh_expiry_date) return true;
-          return new Date(bombB.cnh_expiry_date) >= hoje;
-        })();
-        if (temCnhDA !== temCnhDB) return temCnhDA ? -1 : 1;
+        // ── CRITÉRIO 2: CNH D válida E CVE válido simultaneamente ──
+        const ambosA = temAmbosValidos(bombA);
+        const ambosB = temAmbosValidos(bombB);
+        if (ambosA !== ambosB) return ambosA ? -1 : 1;
 
-        // ── CRITÉRIO 3: CVE válido e ativo ──
-        const temCveA = (() => {
-          const ativo = ['SIM', 'ATIVO'].includes((bombA?.cve_active || '').toUpperCase());
-          if (!ativo) return false;
-          if (!bombA.cve_expiry_date) return true;
-          return new Date(bombA.cve_expiry_date) >= hoje;
-        })();
-        const temCveB = (() => {
-          const ativo = ['SIM', 'ATIVO'].includes((bombB?.cve_active || '').toUpperCase());
-          if (!ativo) return false;
-          if (!bombB.cve_expiry_date) return true;
-          return new Date(bombB.cve_expiry_date) >= hoje;
-        })();
-        if (temCveA !== temCveB) return temCveA ? -1 : 1;
+        // ── CRITÉRIO 3: Graduação BC do mais antigo ao mais moderno (bc_graduacao_ordem 1 a 10) ──
+        const ordA = typeof bombA?.bc_graduacao_ordem === 'number' ? bombA.bc_graduacao_ordem : 999;
+        const ordB = typeof bombB?.bc_graduacao_ordem === 'number' ? bombB.bc_graduacao_ordem : 999;
+        if (ordA !== ordB) return ordA - ordB;
 
         // ── CRITÉRIO 4: Solicitação de 24h ──
         const h24A = (a.total_horas ?? 0) >= 24;
@@ -560,55 +558,41 @@ export const bcEscalaService = {
         const diasAcumulados = diasSelecionadosNoMes[bid] ?? 0;
 
         const proximo = candidatosOrdenados[posicao];
-        if (!proximo) return `Critério 1 — Único candidato (Vaga ${horasAlocadas}h/${limiteHorasDia}h)`;
+        if (!proximo) return `Critério 1 — Menos Dias no Mês`;
 
         const bombP: Personnel = proximo.personnel;
         const bidP = String(proximo.bombeiro_id);
         const diasP = diasSelecionadosNoMes[bidP] ?? 0;
 
         if (diasAcumulados !== diasP) {
-          return `Critério 1 — Menos dias no mês (${diasAcumulados} vs ${diasP})`;
+          return `Critério 1 — Menos Dias no Mês`;
         }
 
-        const cnhD = (() => {
-          if (!bomb?.cnh_category?.toUpperCase().includes('D')) return false;
-          if (!bomb.cnh_expiry_date) return true;
-          return new Date(bomb.cnh_expiry_date) >= hoje;
-        })();
-        const cnhDP = (() => {
-          if (!bombP?.cnh_category?.toUpperCase().includes('D')) return false;
-          if (!bombP.cnh_expiry_date) return true;
-          return new Date(bombP.cnh_expiry_date) >= hoje;
-        })();
-        if (cnhD !== cnhDP) return `Critério 2 — CNH D válida`;
+        const ambosA = temAmbosValidos(bomb);
+        const ambosP = temAmbosValidos(bombP);
+        if (ambosA !== ambosP) {
+          return `Critério 2 — CNH D e CVE Válidos`;
+        }
 
-        const cve = (() => {
-          const ativo = ['SIM', 'ATIVO'].includes((bomb?.cve_active || '').toUpperCase());
-          if (!ativo) return false;
-          if (!bomb.cve_expiry_date) return true;
-          return new Date(bomb.cve_expiry_date) >= hoje;
-        })();
-        const cveP = (() => {
-          const ativo = ['SIM', 'ATIVO'].includes((bombP?.cve_active || '').toUpperCase());
-          if (!ativo) return false;
-          if (!bombP.cve_expiry_date) return true;
-          return new Date(bombP.cve_expiry_date) >= hoje;
-        })();
-        if (cve !== cveP) return `Critério 3 — CVE válido`;
+        const ordA = typeof bomb?.bc_graduacao_ordem === 'number' ? bomb.bc_graduacao_ordem : 999;
+        const ordP = typeof bombP?.bc_graduacao_ordem === 'number' ? bombP.bc_graduacao_ordem : 999;
+        if (ordA !== ordP) {
+          return `Critério 3 — Graduação BC`;
+        }
 
         const h24 = (item.total_horas ?? 0) >= 24;
         const h24P = (proximo.total_horas ?? 0) >= 24;
-        if (h24 !== h24P) return `Critério 4 — Turno 24h solicitado`;
+        if (h24 !== h24P) {
+          return `Critério 4 — Solicitação de 24h`;
+        }
 
         const dtProm = bomb?.data_ultima_promocao ? new Date(bomb.data_ultima_promocao).getTime() : Infinity;
         const dtPromP = bombP?.data_ultima_promocao ? new Date(bombP.data_ultima_promocao).getTime() : Infinity;
         if (dtProm !== dtPromP) {
-          const dtStr = bomb?.data_ultima_promocao ? new Date(bomb.data_ultima_promocao).toLocaleDateString('pt-BR') : 'N/I';
-          return `Critério 5 — Promoção mais antiga (${dtStr})`;
+          return `Critério 5 — Data de Promoção`;
         }
 
-        const dtInc = bomb?.data_inclusao ? new Date(bomb.data_inclusao).toLocaleDateString('pt-BR') : 'N/I';
-        return `Critério 6 — Inclusão mais antiga (${dtInc})`;
+        return `Critério 6 — Data de Inclusão`;
       };
 
       const registrosSelecionados = selecionadosDoDia.map((item, index) => {

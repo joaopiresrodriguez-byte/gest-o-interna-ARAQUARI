@@ -115,6 +115,7 @@ export interface Personnel {
     cidade_residencia?: string;
     data_inclusao?: string;
     data_ultima_promocao?: string;
+    bc_graduacao_ordem?: number | null;
     created_at?: string;
 }
 

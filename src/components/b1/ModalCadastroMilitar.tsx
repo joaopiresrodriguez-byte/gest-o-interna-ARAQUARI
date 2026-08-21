@@ -9,11 +9,24 @@ interface Props {
     onSave: (data: Omit<Personnel, 'id'> | Personnel) => Promise<void>;
 }
 
-const RANKS_BM = [
+export const RANKS_BM = [
     'Cel BM', 'Ten Cel BM', 'Maj BM', 'Cap BM',
     '1º Ten BM', '2º Ten BM', 'Asp Of BM',
     'Sub Ten BM', '1º Sgt BM', '2º Sgt BM', '3º Sgt BM',
     'Cb BM', 'Sd BM'
+];
+
+export const BC_RANKS_CONFIG: Array<{ label: string; ordem: number }> = [
+    { label: '1º Grau – Bombeiro Comunitário', ordem: 1 },
+    { label: '2º Grau – BC Júnior Classe 3', ordem: 2 },
+    { label: '3º Grau – BC Júnior Classe 2', ordem: 3 },
+    { label: '4º Grau – BC Júnior Classe 1', ordem: 4 },
+    { label: '5º Grau – BC Sênior Classe 3', ordem: 5 },
+    { label: '6º Grau – BC Sênior Classe 2', ordem: 6 },
+    { label: '7º Grau – BC Sênior Classe 1', ordem: 7 },
+    { label: '8º Grau – BC Pleno Classe 3', ordem: 8 },
+    { label: '9º Grau – BC Pleno Classe 2', ordem: 9 },
+    { label: '10º Grau – BC Pleno Classe 1', ordem: 10 },
 ];
 
 const STATUS_OPTIONS: Array<Personnel['status']> = ['Ativo', 'Férias', 'Licença', 'Afastado', 'Cedido'];
@@ -32,6 +45,7 @@ export default function ModalCadastroMilitar({ open, initialData, onClose, onSav
                 graduation: 'Sd BM',
                 rank: 'Sd BM',
                 type: 'BM',
+                bc_graduacao_ordem: null,
                 status: 'Ativo',
                 role: 'Bombeiro Militar',
                 matricula: '',
@@ -97,7 +111,7 @@ export default function ModalCadastroMilitar({ open, initialData, onClose, onSav
                 cve_expiry_date: formData.cve_issue_date ? calcExpiry(formData.cve_issue_date, 5) : formData.cve_expiry_date
             };
             await onSave(payload as Personnel);
-            toast.success(initialData?.id ? 'Cadastro atualizado com sucesso!' : 'Militar cadastrado com sucesso!');
+            toast.success(initialData?.id ? 'Cadastro de Efetivo atualizado com sucesso!' : 'Novo Efetivo cadastrado com sucesso!');
             onClose();
         } catch (err: any) {
             toast.error(err.message || 'Erro ao salvar cadastro do militar.');
@@ -171,10 +185,25 @@ export default function ModalCadastroMilitar({ open, initialData, onClose, onSav
                                 </label>
                                 <select
                                     value={formData.graduation || formData.rank || 'Sd BM'}
-                                    onChange={e => setFormData(p => ({ ...p, graduation: e.target.value, rank: e.target.value }))}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        const bcMatch = BC_RANKS_CONFIG.find(bc => bc.label === val);
+                                        setFormData(p => ({
+                                            ...p,
+                                            graduation: val,
+                                            rank: val,
+                                            type: bcMatch ? 'BC' : (p.type || 'BM'),
+                                            bc_graduacao_ordem: bcMatch ? bcMatch.ordem : null
+                                        }));
+                                    }}
                                     className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
                                 >
-                                    {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+                                    <optgroup label="Bombeiro Militar (Regular)">
+                                        {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+                                    </optgroup>
+                                    <optgroup label="Bombeiro Comunitário">
+                                        {BC_RANKS_CONFIG.map(bc => <option key={bc.label} value={bc.label}>{bc.label}</option>)}
+                                    </optgroup>
                                 </select>
                             </div>
 
@@ -447,7 +476,7 @@ export default function ModalCadastroMilitar({ open, initialData, onClose, onSav
                             className="px-6 py-2.5 bg-primary text-white font-black text-xs rounded-xl hover:brightness-110 shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
                         >
                             <span className="material-symbols-outlined text-base">save</span>
-                            {saving ? 'SALVANDO...' : initialData?.id ? 'ATUALIZAR' : 'CADASTRAR MILITAR'}
+                            {saving ? 'SALVANDO...' : initialData?.id ? 'ATUALIZAR' : 'CADASTRAR EFETIVO'}
                         </button>
                     </div>
                 </form>

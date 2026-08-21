@@ -884,12 +884,12 @@ const PessoalB1: React.FC = () => {
                         className="px-4 py-2.5 bg-primary text-white text-xs font-black rounded-xl flex items-center gap-2 shadow-md hover:brightness-110 shrink-0"
                       >
                         <span className="material-symbols-outlined text-[16px]">add</span>
-                        NOVO MILITAR
+                        NOVO EFETIVO
                       </button>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Militar</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">E-mail</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
+                    <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Efetivo</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">E-mail</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
                       <tbody className="divide-y">{filteredPersonnel.map(p => {
                         const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-teal-100 text-teal-700' };
                         return (
@@ -919,7 +919,7 @@ const PessoalB1: React.FC = () => {
                                   variant="alteration"
                                   size="sm"
                                   onClick={() => abrirEdicaoMilitar(p)}
-                                  title="Alterar dados rápidos do Militar"
+                                  title="Alterar dados rápidos do Efetivo"
                                 />
                                 <ActionButton
                                   variant="edit"
@@ -931,7 +931,7 @@ const PessoalB1: React.FC = () => {
                                   variant="delete"
                                   size="sm"
                                   onClick={() => handleDeletePersonnel(p.id!)}
-                                  title="Excluir Militar"
+                                  title="Excluir Efetivo"
                                 />
                               </div>
                             </td>
@@ -940,7 +940,7 @@ const PessoalB1: React.FC = () => {
                         );
                       })}</tbody>
                     </table>
-                    {filteredPersonnel.length === 0 && <p className="text-center py-12 text-gray-300">Nenhum militar encontrado.</p>}
+                    {filteredPersonnel.length === 0 && <p className="text-center py-12 text-gray-300">Nenhum efetivo encontrado.</p>}
                   </div>
                 </div>
               )}
@@ -948,7 +948,7 @@ const PessoalB1: React.FC = () => {
               {/* TAB: CADASTRO */}
               {tab === 'CADASTRO' && (
                 <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                  <h2 className="font-black text-xl mb-6">{editId ? 'Editar Militar' : 'Novo Cadastro de Militar'}</h2>
+                  <h2 className="font-black text-xl mb-6">{editId ? 'Editar Efetivo' : 'Novo Cadastro de Efetivo'}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     {formField('Nome Completo', 'name')}
                     {formField('Nome de Guerra', 'war_name')}

@@ -245,24 +245,30 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                     ? `${year}-${String(monthNum).padStart(2, '0')}-${String(cell.dayNum).padStart(2, '0')}`
                                     : '';
 
+                                const safeEscalas = Array.isArray(escalas) ? escalas : [];
+                                const safePersonnel = Array.isArray(personnelList) ? personnelList : [];
+                                const safeVacations = Array.isArray(vacations) ? vacations : [];
+
                                 // Buscar dados da escala do dia
-                                const dayEscala = cell.dayNum ? escalas.find(e => e.data === dateStr) : null;
+                                const dayEscala = cell.dayNum ? safeEscalas.find(e => e && e.data === dateStr) : null;
                                 const teamLetter = dayEscala ? getTurmaLetter(dayEscala.turma, dayEscala.equipe) : null;
                                 const teamInfo = teamLetter ? CORES[teamLetter] : null;
 
                                 // Buscar bombeiros escalados no dia (excluindo os que estiverem em férias/afastamento na data)
-                                const escaladosNoDia = dayEscala?.militares
-                                    ?.filter(id => {
-                                        const emAfastamento = (vacations || []).some(v =>
-                                            v && v.personnel_id === id &&
-                                            v.start_date && v.end_date &&
-                                            dateStr >= v.start_date &&
-                                            dateStr <= v.end_date
-                                        );
-                                        return !emAfastamento;
-                                    })
-                                    ?.map(id => personnelList.find(p => p.id === id))
-                                    .filter(Boolean) || [];
+                                const escaladosNoDia = (dayEscala?.militares && Array.isArray(dayEscala.militares))
+                                    ? dayEscala.militares
+                                        .filter(id => {
+                                            const emAfastamento = safeVacations.some(v =>
+                                                v && v.personnel_id === id &&
+                                                v.start_date && v.end_date &&
+                                                dateStr >= v.start_date &&
+                                                dateStr <= v.end_date
+                                            );
+                                            return !emAfastamento;
+                                        })
+                                        .map(id => safePersonnel.find(p => p && p.id === id))
+                                        .filter(Boolean) as Personnel[]
+                                    : [];
 
                                 return (
                                     <div
