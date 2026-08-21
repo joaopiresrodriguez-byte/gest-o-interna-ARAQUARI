@@ -537,6 +537,9 @@ export const bcEscalaService = {
         return dtIncA - dtIncB;
       });
 
+      // Snapshot dos dias ANTES de alocar (para que a descrição seja fiel ao estado do sort)
+      const snapshotDias: Record<string, number> = { ...diasSelecionadosNoMes };
+
       // Alocar candidatos sem estourar o limite de horas do dia
       let horasAlocadas = 0;
       const selecionadosDoDia: typeof candidatosOrdenados = [];
@@ -552,51 +555,50 @@ export const bcEscalaService = {
         }
       }
 
-      const gerarDescCriterio = (item: typeof candidatosOrdenados[0], posicao: number): string => {
+      // Gera a descrição do critério que efetivamente elegeu o bombeiro:
+      // compara o selecionado com TODOS os outros candidatos do dia usando o
+      // snapshot dos dias (antes da alocação), percorrendo os critérios em ordem
+      // até encontrar o primeiro que o diferencia de pelo menos um concorrente.
+      const gerarDescCriterio = (item: typeof candidatosOrdenados[0]): string => {
         const bomb: Personnel = item.personnel;
         const bid = String(item.bombeiro_id);
-        const diasAcumulados = diasSelecionadosNoMes[bid] ?? 0;
+        const diasSel = snapshotDias[bid] ?? 0;
 
-        const proximo = candidatosOrdenados[posicao];
-        if (!proximo) return `Critério 1 — Menos Dias no Mês`;
+        const outros = candidatosOrdenados.filter(o => String(o.bombeiro_id) !== bid);
+        if (outros.length === 0) return `Critério 1 — Único Candidato`;
 
-        const bombP: Personnel = proximo.personnel;
-        const bidP = String(proximo.bombeiro_id);
-        const diasP = diasSelecionadosNoMes[bidP] ?? 0;
+        // Critério 1: Menor número de dias no mês
+        const diasOutros = outros.map(o => snapshotDias[String(o.bombeiro_id)] ?? 0);
+        if (diasOutros.some(d => d !== diasSel)) return `Critério 1 — Menos Dias no Mês`;
 
-        if (diasAcumulados !== diasP) {
-          return `Critério 1 — Menos Dias no Mês`;
-        }
-
+        // Critério 2: CNH D válida E CVE válido simultaneamente
         const ambosA = temAmbosValidos(bomb);
-        const ambosP = temAmbosValidos(bombP);
-        if (ambosA !== ambosP) {
-          return `Critério 2 — CNH D e CVE Válidos`;
-        }
+        if (outros.some(o => temAmbosValidos(o.personnel) !== ambosA)) return `Critério 2 — CNH D e CVE Válidos`;
 
+        // Critério 3: Graduação BC (menor ordem = mais antigo = preferido)
         const ordA = typeof bomb?.bc_graduacao_ordem === 'number' ? bomb.bc_graduacao_ordem : 999;
-        const ordP = typeof bombP?.bc_graduacao_ordem === 'number' ? bombP.bc_graduacao_ordem : 999;
-        if (ordA !== ordP) {
-          return `Critério 3 — Graduação BC`;
-        }
+        if (outros.some(o => {
+          const ordO = typeof o.personnel?.bc_graduacao_ordem === 'number' ? o.personnel.bc_graduacao_ordem : 999;
+          return ordO !== ordA;
+        })) return `Critério 3 — Graduação BC`;
 
-        const h24 = (item.total_horas ?? 0) >= 24;
-        const h24P = (proximo.total_horas ?? 0) >= 24;
-        if (h24 !== h24P) {
-          return `Critério 4 — Solicitação de 24h`;
-        }
+        // Critério 4: Solicitação de 24h
+        const h24A = (item.total_horas ?? 0) >= 24;
+        if (outros.some(o => ((o.total_horas ?? 0) >= 24) !== h24A)) return `Critério 4 — Solicitação de 24h`;
 
-        const dtProm = bomb?.data_ultima_promocao ? new Date(bomb.data_ultima_promocao).getTime() : Infinity;
-        const dtPromP = bombP?.data_ultima_promocao ? new Date(bombP.data_ultima_promocao).getTime() : Infinity;
-        if (dtProm !== dtPromP) {
-          return `Critério 5 — Data de Promoção`;
-        }
+        // Critério 5: Data de última promoção mais antiga
+        const dtPromA = bomb?.data_ultima_promocao ? new Date(bomb.data_ultima_promocao).getTime() : Infinity;
+        if (outros.some(o => {
+          const dtO = o.personnel?.data_ultima_promocao ? new Date(o.personnel.data_ultima_promocao).getTime() : Infinity;
+          return dtO !== dtPromA;
+        })) return `Critério 5 — Data de Promoção`;
 
+        // Critério 6: Data de inclusão mais antiga
         return `Critério 6 — Data de Inclusão`;
       };
 
       const registrosSelecionados = selecionadosDoDia.map((item, index) => {
-        const desc = gerarDescCriterio(item, index + 1);
+        const desc = gerarDescCriterio(item);
         return {
           bombeiro_id: String(item.bombeiro_id),
           ciclo_id: item.ciclo_id,
