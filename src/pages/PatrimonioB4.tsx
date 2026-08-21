@@ -380,6 +380,7 @@ const PatrimonioB4: React.FC = () => {
 
   // Modais Unificados de Missão
   const [isNewMissionModalOpen, setIsNewMissionModalOpen] = useState(false);
+  const [missionToEdit, setMissionToEdit] = useState<DailyMission | null>(null);
   const [selectedMissionForConclusion, setSelectedMissionForConclusion] = useState<DailyMission | null>(null);
 
   // Listing filters & grouping
@@ -809,7 +810,10 @@ const PatrimonioB4: React.FC = () => {
 
                     {profile?.p_logistica === 'editor' && (
                       <button
-                        onClick={() => setIsNewMissionModalOpen(true)}
+                        onClick={() => {
+                          setMissionToEdit(null);
+                          setIsNewMissionModalOpen(true);
+                        }}
                         className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-md hover:bg-red-700 transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[18px]">add_task</span>
@@ -833,14 +837,26 @@ const PatrimonioB4: React.FC = () => {
                             </span>
                             <div className="flex gap-1 items-center">
                               {profile?.p_logistica === 'editor' && (
-                                <button
-                                  onClick={() => setSelectedMissionForConclusion(mission)}
-                                  className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors flex items-center gap-0.5"
-                                  title="Registrar Resultado / Observação"
-                                >
-                                  <span className="material-symbols-outlined text-[14px]">edit_note</span>
-                                  Resultado
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setMissionToEdit(mission);
+                                      setIsNewMissionModalOpen(true);
+                                    }}
+                                    className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1.5 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                    title="Editar dados completos da missão"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setSelectedMissionForConclusion(mission)}
+                                    className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors flex items-center gap-0.5"
+                                    title="Registrar Resultado / Observação"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">edit_note</span>
+                                    Resultado
+                                  </button>
+                                </>
                               )}
                               <ActionButton
                                 variant="delete"
@@ -2199,12 +2215,30 @@ const PatrimonioB4: React.FC = () => {
       {/* Modais Unificados de Missão */}
       <DailyMissionModal
         isOpen={isNewMissionModalOpen}
-        onClose={() => setIsNewMissionModalOpen(false)}
+        initialData={missionToEdit}
+        titleText={missionToEdit ? 'Editar Missão Diária' : 'Nova Missão Diária'}
+        onClose={() => {
+          setIsNewMissionModalOpen(false);
+          setMissionToEdit(null);
+        }}
         onSave={async (missionData) => {
-          await SupabaseService.addDailyMission({
-            ...missionData,
-            created_by: "Administrador B4"
-          });
+          if (missionToEdit?.id) {
+            await SupabaseService.updateDailyMission(missionToEdit.id, {
+              ...missionData,
+              editado_por_nome: profile?.name || profile?.war_name || user?.email || 'Administrador B4',
+              editado_por_id: user?.id || undefined,
+              editado_em: new Date().toISOString(),
+            });
+            toast.success('Missão atualizada com sucesso!');
+          } else {
+            await SupabaseService.addDailyMission({
+              ...missionData,
+              created_by: user?.email || 'Administrador B4'
+            });
+            toast.success('Missão criada com sucesso!');
+          }
+          setIsNewMissionModalOpen(false);
+          setMissionToEdit(null);
           loadData();
         }}
       />
