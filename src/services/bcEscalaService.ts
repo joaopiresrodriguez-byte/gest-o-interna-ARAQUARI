@@ -390,8 +390,8 @@ export const bcEscalaService = {
    *
    * Critérios em ordem de prioridade:
    * 1. Menor nº de dias selecionados no mês corrente
-   * 2. CNH Categoria D com validade vigente
-   * 3. CVE com status ativo e dentro da validade
+   * 2. CNH categoria D, AD, E ou AE dentro da validade E CVE dentro da validade
+   * 3. Graduação BC (bc_graduacao_ordem maior = mais antigo = preferido)
    * 4. Solicitação de turno 24h
    * 5. Data de última promoção mais antiga
    * 6. Data de inclusão mais antiga
@@ -475,6 +475,26 @@ export const bcEscalaService = {
 
     let totalSelecionados = 0;
 
+    // Critério 2: CNH válida = categorias D, AD, E ou AE (whitelist do quadro BC)
+    // Definido UMA vez fora do loop para não recriar o Set a cada dia
+    const CNH_CATEGORIAS_VALIDAS = new Set(['D', 'AD', 'E', 'AE']);
+
+    const temCnhDValida = (p?: Personnel) => {
+      const categoria = (p?.cnh_category || '').toUpperCase().replace(/\s/g, '');
+      if (!CNH_CATEGORIAS_VALIDAS.has(categoria)) return false;
+      if (!p!.cnh_expiry_date) return true;
+      return new Date(p!.cnh_expiry_date) >= hoje;
+    };
+
+    const temCveValido = (p?: Personnel) => {
+      const ativo = ['SIM', 'ATIVO'].includes((p?.cve_active || '').toUpperCase());
+      if (!ativo) return false;
+      if (!p!.cve_expiry_date) return true;
+      return new Date(p!.cve_expiry_date) >= hoje;
+    };
+
+    const temAmbosValidos = (p?: Personnel) => temCnhDValida(p) && temCveValido(p);
+
     // 6. Processar cada dia em ordem cronológica respeitando a capacidade de horas
     for (const dia of diasUnicos) {
       const intencoesDoDia = intencoes.filter(i => i.dia === dia);
@@ -482,26 +502,6 @@ export const bcEscalaService = {
 
       // Capacidade máxima de horas para este dia específico
       const limiteHorasDia = excecoesMap.has(dia) ? excecoesMap.get(dia)! : horasPadraoDia;
-
-      // Funções auxiliares para verificação de CNH D + CVE válidos simultaneamente
-      // Critério 2: aceita SOMENTE as categorias D, AD e AE (únicas do quadro BC)
-      const CNH_CATEGORIAS_VALIDAS = new Set(['D', 'AD', 'AE']);
-      const temCnhDValida = (p?: Personnel) => {
-        const categoria = (p?.cnh_category || '').toUpperCase().replace(/\s/g, '');
-        if (!CNH_CATEGORIAS_VALIDAS.has(categoria)) return false;
-        // CNH não expirada (sem data de vencimento = considera válida)
-        if (!p!.cnh_expiry_date) return true;
-        return new Date(p!.cnh_expiry_date) >= hoje;
-      };
-
-      const temCveValido = (p?: Personnel) => {
-        const ativo = ['SIM', 'ATIVO'].includes((p?.cve_active || '').toUpperCase());
-        if (!ativo) return false;
-        if (!p.cve_expiry_date) return true;
-        return new Date(p.cve_expiry_date) >= hoje;
-      };
-
-      const temAmbosValidos = (p?: Personnel) => temCnhDValida(p) && temCveValido(p);
 
       // Ordenar candidatos pelos 6 critérios
       const candidatosOrdenados = [...intencoesDoDia].sort((a, b) => {
@@ -515,15 +515,17 @@ export const bcEscalaService = {
         const diasB = diasSelecionadosNoMes[bidB] ?? 0;
         if (diasA !== diasB) return diasA - diasB;
 
-        // ── CRITÉRIO 2: CNH D válida E CVE válido simultaneamente ──
+        // ── CRITÉRIO 2: CNH D/AD/E/AE válida E CVE válido simultaneamente ──
         const ambosA = temAmbosValidos(bombA);
         const ambosB = temAmbosValidos(bombB);
         if (ambosA !== ambosB) return ambosA ? -1 : 1;
 
-        // ── CRITÉRIO 3: Graduação BC do mais antigo ao mais moderno (bc_graduacao_ordem 1 a 10) ──
-        const ordA = typeof bombA?.bc_graduacao_ordem === 'number' ? bombA.bc_graduacao_ordem : 999;
-        const ordB = typeof bombB?.bc_graduacao_ordem === 'number' ? bombB.bc_graduacao_ordem : 999;
-        if (ordA !== ordB) return ordA - ordB;
+        // ── CRITÉRIO 3: Graduação BC — MAIOR ordem = mais antigo = preferido ──
+        // 10º grau (bc_graduacao_ordem=10) vem antes de 1º grau (bc_graduacao_ordem=1)
+        // Bombeiros sem ordem (BM) ficam no final com valor 0
+        const ordA = typeof bombA?.bc_graduacao_ordem === 'number' ? bombA.bc_graduacao_ordem : 0;
+        const ordB = typeof bombB?.bc_graduacao_ordem === 'number' ? bombB.bc_graduacao_ordem : 0;
+        if (ordA !== ordB) return ordB - ordA; // DECRESCENTE: maior ordem primeiro
 
         // ── CRITÉRIO 4: Solicitação de 24h ──
         const h24A = (a.total_horas ?? 0) >= 24;
@@ -575,14 +577,14 @@ export const bcEscalaService = {
         const diasOutros = outros.map(o => snapshotDias[String(o.bombeiro_id)] ?? 0);
         if (diasOutros.some(d => d !== diasSel)) return `Critério 1 — Menos Dias no Mês`;
 
-        // Critério 2: CNH D válida E CVE válido simultaneamente
+        // Critério 2: CNH D/AD/E/AE válida E CVE válido simultaneamente
         const ambosA = temAmbosValidos(bomb);
-        if (outros.some(o => temAmbosValidos(o.personnel) !== ambosA)) return `Critério 2 — CNH D e CVE Válidos`;
+        if (outros.some(o => temAmbosValidos(o.personnel) !== ambosA)) return `Critério 2 — CNH e CVE Válidos`;
 
-        // Critério 3: Graduação BC (menor ordem = mais antigo = preferido)
-        const ordA = typeof bomb?.bc_graduacao_ordem === 'number' ? bomb.bc_graduacao_ordem : 999;
+        // Critério 3: Graduação BC (maior ordem = mais antigo = preferido)
+        const ordA = typeof bomb?.bc_graduacao_ordem === 'number' ? bomb.bc_graduacao_ordem : 0;
         if (outros.some(o => {
-          const ordO = typeof o.personnel?.bc_graduacao_ordem === 'number' ? o.personnel.bc_graduacao_ordem : 999;
+          const ordO = typeof o.personnel?.bc_graduacao_ordem === 'number' ? o.personnel.bc_graduacao_ordem : 0;
           return ordO !== ordA;
         })) return `Critério 3 — Graduação BC`;
 
@@ -795,7 +797,7 @@ export const bcEscalaService = {
       .select('*')
       .order('name');
 
-    const bcsAtivos = (todosMilitares || []).filter(p => p.type === 'BC' || p.status === 'Ativo');
+    const bcsAtivos = (todosMilitares || []).filter(p => p.type === 'BC' && p.status === 'Ativo');
 
     // Buscar intenções do mês
     const { data: intencoesBrutas } = await supabase
