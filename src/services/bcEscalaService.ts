@@ -104,14 +104,84 @@ export const bcEscalaService = {
 
   /**
    * Dispara abertura do ciclo e gera/recupera links únicos para cada BC ativo
+   * modo 'auto': Mantém abertura automática no dia 20 com prazo de 5 dias (até dia 25)
+   * modo 'manual': Abertura manual pelo gestor com prazo de 1 dia (24h)
    */
-  abrirCicloEDispararLinks: async (mesRef?: string): Promise<{
+  abrirCicloEDispararLinks: async (
+    mesRef?: string,
+    modo: 'auto' | 'manual' = 'auto'
+  ): Promise<{
     ciclo: BcCiclo;
     tokensGerados: number;
     links: Array<{ bombeiro: Personnel; token: string; link: string }>;
   }> => {
-    const ciclo = await bcEscalaService.obterOuCriarCiclo(mesRef);
-    const targetMesRef = ciclo.mes_referencia;
+    const agora = new Date();
+    let targetMesRef = mesRef;
+
+    if (!targetMesRef) {
+      let targetAno = agora.getFullYear();
+      let targetMes = agora.getMonth() + 1;
+      if (agora.getDate() >= 20) {
+        targetMes += 1;
+        if (targetMes > 12) {
+          targetMes = 1;
+          targetAno += 1;
+        }
+      }
+      targetMesRef = `${targetAno}-${String(targetMes).padStart(2, '0')}`;
+    }
+
+    let ciclo: BcCiclo;
+
+    if (modo === 'manual') {
+      const dataAbertura = agora.toISOString();
+      const dataEncerramento = new Date(agora.getTime() + 24 * 60 * 60 * 1000).toISOString(); // 1 dia (24 horas)
+
+      const { data: existente } = await supabase
+        .from('bc_ciclos')
+        .select('*')
+        .eq('mes_referencia', targetMesRef)
+        .maybeSingle();
+
+      if (existente) {
+        const { data: updated, error } = await supabase
+          .from('bc_ciclos')
+          .update({
+            data_abertura: dataAbertura,
+            data_encerramento: dataEncerramento,
+            status: 'aberto',
+          })
+          .eq('id', existente.id)
+          .select()
+          .single();
+        if (error) throw error;
+        ciclo = updated as BcCiclo;
+      } else {
+        const { data: created, error } = await supabase
+          .from('bc_ciclos')
+          .insert({
+            mes_referencia: targetMesRef,
+            data_abertura: dataAbertura,
+            data_encerramento: dataEncerramento,
+            status: 'aberto',
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        ciclo = created as BcCiclo;
+      }
+    } else {
+      ciclo = await bcEscalaService.obterOuCriarCiclo(targetMesRef);
+      if (ciclo.status !== 'aberto') {
+        const { data: updated } = await supabase
+          .from('bc_ciclos')
+          .update({ status: 'aberto' })
+          .eq('id', ciclo.id)
+          .select()
+          .single();
+        if (updated) ciclo = updated as BcCiclo;
+      }
+    }
 
     // Buscar todos os BCs ativos
     const { data: bcs, error: errBcs } = await supabase
@@ -172,7 +242,7 @@ export const bcEscalaService = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ action: 'abrir_ciclo_dia20', mesRef: targetMesRef }),
+        body: JSON.stringify({ action: modo === 'manual' ? 'abrir_ciclo_manual' : 'abrir_ciclo_dia20', mesRef: targetMesRef }),
       }).catch(() => {});
     } catch (_) {}
 
@@ -188,6 +258,8 @@ export const bcEscalaService = {
     intencoes: BcIntencao[];
     expirado: boolean;
     diasRestantes: number;
+    horasRestantes: number;
+    minutosRestantes: number;
   }> => {
     if (!token) throw new Error('Token não fornecido');
 
@@ -235,13 +307,15 @@ export const bcEscalaService = {
       .eq('bombeiro_id', bombeiroId)
       .eq('mes_referencia', mesRef);
 
-    // Calcular expiração (dia 25 às 23:59:59)
+    // Calcular expiração detalhada
     const agora = new Date();
     const dataEnc = new Date(ciclo.data_encerramento);
     const expirado = ciclo.status !== 'aberto' || agora > dataEnc;
 
-    const diffTime = dataEnc.getTime() - agora.getTime();
-    const diasRestantes = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    const diffMs = Math.max(0, dataEnc.getTime() - agora.getTime());
+    const diasRestantes = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const horasRestantes = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutosRestantes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
     return {
       bombeiro: bombeiro as Personnel,
@@ -249,6 +323,8 @@ export const bcEscalaService = {
       intencoes: (intencoes || []) as BcIntencao[],
       expirado,
       diasRestantes,
+      horasRestantes,
+      minutosRestantes,
     };
   },
 

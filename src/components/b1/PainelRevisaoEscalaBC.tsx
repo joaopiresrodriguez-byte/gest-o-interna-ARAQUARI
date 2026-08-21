@@ -79,16 +79,35 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     links: Array<{ bombeiro: Personnel; token: string; link: string }>;
   }>({ aberto: false, links: [] });
 
-  // Executar Disparo Dia 20 Manualmente / Gerar Links
+  // Executar Disparo Manual com Prazo de 1 Dia (24h)
+  const handleAberturaManual = async () => {
+    try {
+      setProcessando(true);
+      setMensagemStatus(null);
+      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'manual');
+      setModalLinks({ aberto: true, links: res.links });
+      setMensagemStatus({
+        tipo: 'sucesso',
+        texto: `Abertura MANUAL do ciclo ${mesRef} realizada com sucesso! Links válidos por 1 DIA (24 horas).`
+      });
+      await carregarDados();
+    } catch (err: any) {
+      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro na abertura manual do ciclo.' });
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  // Executar Disparo Dia 20 Manualmente (5 dias) / Gerar Links
   const handleDispararDia20 = async () => {
     try {
       setProcessando(true);
       setMensagemStatus(null);
-      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef);
+      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'auto');
       setModalLinks({ aberto: true, links: res.links });
       setMensagemStatus({
         tipo: 'sucesso',
-        texto: `Ciclo ${mesRef} aberto com sucesso! ${res.tokensGerados} link(s) de acesso gerado(s).`
+        texto: `Ciclo ${mesRef} aberto com prazo de 5 DIAS (até o dia 25)! ${res.tokensGerados} link(s) de acesso gerado(s).`
       });
       await carregarDados();
     } catch (err: any) {
@@ -101,7 +120,7 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
   const handleVerLinks = async () => {
     try {
       setProcessando(true);
-      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef);
+      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'auto');
       setModalLinks({ aberto: true, links: res.links });
     } catch (err: any) {
       setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao buscar links.' });
@@ -219,52 +238,28 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     if (!confirm('Deseja publicar esta escala? Os registros serão inseridos no módulo de escala oficial e os bombeiros serão notificados via WhatsApp.')) return;
     try {
       setProcessando(true);
-      setMensagemStatus(null);
-      const res = await bcEscalaService.publicarEscala(mesRef);
-
-      // Invocação da Edge Function para disparo de notificações de confirmação (opcional/resiliente)
-      try {
-        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ action: 'notificar_selecionados', mesRef }),
-        });
-      } catch (_edgeErr) {
-        console.warn('Edge Function processar-ciclo-bc não chamada/não configurada:', _edgeErr);
-      }
-
-      setMensagemStatus({ tipo: 'sucesso', texto: `Escala de ${mesRef} publicada com sucesso (${res.publicadas} inserções/notificações)!` });
+      await bcEscalaService.publicarEscalaDefinitiva(mesRef);
+      setMensagemStatus({ tipo: 'sucesso', texto: 'Escala publicada com sucesso no módulo oficial B1!' });
       await carregarDados();
     } catch (err: any) {
-      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao publicar escala.' });
+      setMensagemStatus({ tipo: 'erro', texto: err.message });
     } finally {
       setProcessando(false);
     }
   };
 
-  // Agrupar selecionados por dia
-  const selecionadosPorDia: Record<string, typeof selecionados> = {};
-  selecionados.forEach(s => {
-    if (!selecionadosPorDia[s.dia]) selecionadosPorDia[s.dia] = [];
-    selecionadosPorDia[s.dia].push(s);
-  });
-
-  const diasOrdenados = Object.keys(selecionadosPorDia).sort();
-
   return (
     <div className="space-y-6">
-      {/* CABEÇALHO E CONTROLES DE MÊS */}
+      {/* PAINEL DE CONTROLE SUPERIOR */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-950/80 border border-red-800/80 rounded-full text-red-400 text-xs font-bold uppercase tracking-wider mb-2">
-              🚨 Módulo Bombeiros Comunitários
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-950/80 border border-red-800/60 rounded-full text-red-400 text-xs font-bold uppercase tracking-wider mb-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+              Escala de Bombeiros Comunitários — B1
             </div>
-            <h2 className="text-2xl font-black text-white">Revisão de Escala Mensal</h2>
-            <p className="text-sm text-slate-400">Coleta automatizada de intenções e motor de seleção por critérios</p>
+            <h2 className="text-2xl font-black text-white">Gestão e Seleção BC</h2>
+            <p className="text-slate-400 text-xs mt-1">Abertura de escolha (Auto/Manual), motor de critérios e revisão final.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -278,14 +273,23 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-2 mt-5">
+            <div className="flex flex-wrap items-center gap-2 mt-5">
+              <button
+                onClick={handleAberturaManual}
+                disabled={processando}
+                className="px-3 py-2 bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                title="Abrir imediatamente os links de escolha para os BCs com prazo de 1 DIA (24 horas)"
+              >
+                <span>⚡</span> Abertura Manual (1 Dia)
+              </button>
+
               <button
                 onClick={handleDispararDia20}
                 disabled={processando}
                 className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-                title="Simular disparo automático do link no dia 20"
+                title="Abertura padrão do dia 20 com prazo de 5 DIAS (até o dia 25)"
               >
-                <span>📲</span> Dia 20: Abrir Links
+                <span>📲</span> Dia 20: Abertura Auto (5 Dias)
               </button>
 
               <button
@@ -310,9 +314,9 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                 onClick={handleGerarLinkTeste}
                 disabled={processando}
                 className="px-3 py-2 bg-violet-950/60 hover:bg-violet-900/70 text-violet-300 border border-violet-700/50 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-                title="[ADMIN] Gerar ciclo de teste para o mês selecionado, sem aguardar o dia 20"
+                title="[ADMIN] Gerar ciclo de teste para o mês selecionado"
               >
-                <span>🧪</span> Gerar Link de Teste
+                <span>🧪</span> Link de Teste
               </button>
 
               <button
@@ -321,7 +325,7 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                 className="px-3 py-2 bg-cyan-950/60 hover:bg-cyan-900/70 text-cyan-300 border border-cyan-700/50 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
                 title="Configurar limite de horas/vagas diárias para a escala"
               >
-                <span>⚙️</span> Configurar Vagas ({horasPadraoInput}h/dia)
+                <span>⚙️</span> Vagas ({horasPadraoInput}h/dia)
               </button>
 
               <button
@@ -337,7 +341,7 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
         {/* STATUS DO CICLO */}
         <div className="mt-6 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <span className="text-slate-400">Status do Ciclo:</span>
             <span className={`px-2.5 py-1 rounded-full font-bold uppercase ${
               ciclo?.status === 'publicado' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
@@ -346,6 +350,12 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
             }`}>
               {ciclo?.status || 'Não Iniciado'}
             </span>
+
+            {ciclo?.data_encerramento && (
+              <span className="text-slate-400 font-medium">
+                Prazo até: <strong className="text-amber-300">{new Date(ciclo.data_encerramento).toLocaleString('pt-BR')}</strong>
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-6 text-slate-400">

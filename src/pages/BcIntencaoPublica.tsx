@@ -21,6 +21,8 @@ export const BcIntencaoPublica: React.FC = () => {
   const [ciclo, setCiclo] = useState<BcCiclo | null>(null);
   const [expirado, setExpirado] = useState<boolean>(false);
   const [diasRestantes, setDiasRestantes] = useState<number>(0);
+  const [horasRestantes, setHorasRestantes] = useState<number>(0);
+  const [minutosRestantes, setMinutosRestantes] = useState<number>(0);
 
   const [intencoes, setIntencoes] = useState<IntencaoForm[]>([]);
   const [salvando, setSalvando] = useState<boolean>(false);
@@ -43,6 +45,8 @@ export const BcIntencaoPublica: React.FC = () => {
       setCiclo(res.ciclo);
       setExpirado(res.expirado);
       setDiasRestantes(res.diasRestantes);
+      setHorasRestantes(res.horasRestantes || 0);
+      setMinutosRestantes(res.minutosRestantes || 0);
 
       if (res.intencoes && res.intencoes.length > 0) {
         setIntencoes(
@@ -148,7 +152,7 @@ export const BcIntencaoPublica: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mb-4"></div>
-        <p className="text-slate-400 font-medium animate-pulse">Carregando formulário de intenção...</p>
+        <p className="text-sm font-semibold text-slate-400">Carregando formulário de intenção...</p>
       </div>
     );
   }
@@ -185,7 +189,7 @@ export const BcIntencaoPublica: React.FC = () => {
               Olá, <strong className="text-white">{bombeiro?.name}</strong>.
             </p>
             <p>
-              O período de 5 dias para registrar ou alterar intenções de serviço para este mês foi encerrado no dia <strong>25 às 23h59</strong>.
+              O período de 5 dias para registrar ou alterar intenções de serviço para este mês foi encerrado.
             </p>
           </div>
           <p className="text-xs text-slate-500">Dúvidas ou solicitações excepcionais devem ser encaminhadas ao gestor responsável da escala.</p>
@@ -195,8 +199,8 @@ export const BcIntencaoPublica: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 py-8 px-4 sm:px-6">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-4 sm:p-6 md:p-8 selection:bg-red-500 selection:text-white">
+      <div className="max-w-4xl mx-auto">
 
         {/* CABEÇALHO DA PÁGINA */}
         <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 mb-6 shadow-2xl relative overflow-hidden">
@@ -213,12 +217,21 @@ export const BcIntencaoPublica: React.FC = () => {
             </div>
 
             {/* CONTADOR DE PRAZO */}
-            <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 text-center min-w-[150px]">
+            <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 text-center min-w-[170px]">
               <div className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">Prazo Encerra Em</div>
-              <div className="text-xl sm:text-2xl font-black text-amber-400 flex items-center justify-center gap-1">
-                <span>⏳</span> {diasRestantes} {diasRestantes === 1 ? 'dia' : 'dias'}
+              <div className="text-lg sm:text-xl font-black text-amber-400 flex items-center justify-center gap-1">
+                <span>⏳</span>
+                {horasRestantes <= 24 ? (
+                  `${horasRestantes}h ${minutosRestantes}m`
+                ) : (
+                  `${diasRestantes} ${diasRestantes === 1 ? 'dia' : 'dias'}`
+                )}
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">Até 25 às 23h59</div>
+              {ciclo?.data_encerramento && (
+                <div className="text-[10px] text-slate-500 mt-1">
+                  Encerramento: {new Date(ciclo.data_encerramento).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -233,7 +246,7 @@ export const BcIntencaoPublica: React.FC = () => {
               <span className="text-slate-400 block text-xs">Status do Ciclo</span>
               <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Aberto para Edição (Até dia 25)
+                Aberto para Escolha ({horasRestantes <= 24 ? '1 dia' : '5 dias'})
               </span>
             </div>
           </div>
