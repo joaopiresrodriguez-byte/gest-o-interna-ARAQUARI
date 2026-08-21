@@ -484,10 +484,15 @@ export const bcEscalaService = {
       const limiteHorasDia = excecoesMap.has(dia) ? excecoesMap.get(dia)! : horasPadraoDia;
 
       // Funções auxiliares para verificação de CNH D + CVE válidos simultaneamente
+      // Critério 2: CNH "no mínimo D" — aceita qualquer categoria que contenha
+      // a letra D: D, AD, ADE, BD, BDE, etc. (verificação insensível a maiúsculas)
       const temCnhDValida = (p?: Personnel) => {
-        if (!p?.cnh_category?.toUpperCase().includes('D')) return false;
-        if (!p.cnh_expiry_date) return true;
-        return new Date(p.cnh_expiry_date) >= hoje;
+        const categoria = (p?.cnh_category || '').toUpperCase().replace(/\s/g, '');
+        // Letra D presente em qualquer posição da categoria
+        if (!categoria.includes('D')) return false;
+        // CNH não expirada (sem data de vencimento = considera válida)
+        if (!p!.cnh_expiry_date) return true;
+        return new Date(p!.cnh_expiry_date) >= hoje;
       };
 
       const temCveValido = (p?: Personnel) => {
