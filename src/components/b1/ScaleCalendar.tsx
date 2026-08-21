@@ -250,10 +250,19 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                 const teamLetter = dayEscala ? getTurmaLetter(dayEscala.turma, dayEscala.equipe) : null;
                                 const teamInfo = teamLetter ? CORES[teamLetter] : null;
 
-                                // Buscar bombeiros escalados no dia
-                                const escaladosNoDia = dayEscala?.militares?.map(id => {
-                                    return personnelList.find(p => p.id === id);
-                                }).filter(Boolean) || [];
+                                // Buscar bombeiros escalados no dia (excluindo os que estiverem em férias/afastamento na data)
+                                const escaladosNoDia = dayEscala?.militares
+                                    ?.filter(id => {
+                                        const emAfastamento = (vacations || []).some(v =>
+                                            v && v.personnel_id === id &&
+                                            v.start_date && v.end_date &&
+                                            dateStr >= v.start_date &&
+                                            dateStr <= v.end_date
+                                        );
+                                        return !emAfastamento;
+                                    })
+                                    ?.map(id => personnelList.find(p => p.id === id))
+                                    .filter(Boolean) || [];
 
                                 return (
                                     <div
