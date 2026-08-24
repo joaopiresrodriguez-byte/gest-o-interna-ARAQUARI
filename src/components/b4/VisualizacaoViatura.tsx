@@ -354,71 +354,6 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
         </div>
       )}
 
-      {/* ── ITENS SEM COMPARTIMENTO ────────────────────────────────────── */}
-      {itensSemComp.length > 0 && (
-        <div className="bg-white border border-rustic-border rounded-2xl overflow-hidden shadow-sm">
-          <div className="bg-stone-50 p-4 border-b border-stone-200 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📦</span>
-              <div>
-                <h3 className="font-bold text-stone-800 text-sm">Itens da Viatura (geral)</h3>
-                <p className="text-[10px] text-stone-500">Equipamentos sem compartimento específico</p>
-              </div>
-            </div>
-            <span className="text-xs font-black bg-stone-200 text-stone-700 px-2.5 py-1 rounded-full">
-              {itensSemComp.length} {itensSemComp.length === 1 ? 'item' : 'itens'}
-            </span>
-          </div>
-          <div className="divide-y divide-stone-100">
-            {itensSemComp.map(item => {
-              const st = statusInfo(item.status);
-              const emoji = fonteEmoji[item.fonte];
-              const isDeleting = deletandoId === item.id;
-              return (
-                <div key={item.id} className={`flex items-center justify-between px-5 py-3 hover:bg-stone-50 transition-colors group ${isDeleting ? 'opacity-50' : ''}`}>
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-7 h-7 bg-stone-100 rounded-lg flex items-center justify-center text-sm flex-shrink-0">{emoji}</div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-stone-800 truncate">{item.nome}</p>
-                      {item.tipo && <p className="text-[10px] text-stone-500 font-semibold capitalize">{item.tipo}</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 flex-shrink-0">
-                    <span className="text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">x{item.quantidade}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${st.cls}`}>{st.label}</span>
-                    <button
-                      onClick={() => handleEditar(item)}
-                      title="Editar item"
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">edit</span>
-                    </button>
-                    {item.fonte === 'checklist' && (
-                      <button
-                        onClick={() => handleExcluirChecklist(item)}
-                        title="Remover item"
-                        disabled={isDeleting}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-30"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">delete</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="p-3 border-t border-stone-100 bg-stone-50/50">
-            <button
-              onClick={() => abrirModalAdd(null)}
-              className="w-full py-2 text-xs font-bold text-stone-600 hover:text-stone-900 border border-dashed border-stone-300 hover:border-stone-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">add</span> Adicionar item à viatura
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ── COMPARTIMENTOS ─────────────────────────────────────────────── */}
       {compartimentos.length > 0 && (
         <div className="space-y-4">
@@ -537,6 +472,71 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── ITENS SEM COMPARTIMENTO ────────────────────────────────────── */}
+      {itensSemComp.length > 0 && (
+        <div className="bg-white border border-rustic-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-stone-50 p-4 border-b border-stone-200 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📦</span>
+              <div>
+                <h3 className="font-bold text-stone-800 text-sm">Itens da Viatura (geral)</h3>
+                <p className="text-[10px] text-stone-500">Equipamentos sem compartimento específico</p>
+              </div>
+            </div>
+            <span className="text-xs font-black bg-stone-200 text-stone-700 px-2.5 py-1 rounded-full">
+              {itensSemComp.length} {itensSemComp.length === 1 ? 'item' : 'itens'}
+            </span>
+          </div>
+          <div className="divide-y divide-stone-100">
+            {itensSemComp.map(item => {
+              const st = statusInfo(item.status);
+              const emoji = fonteEmoji[item.fonte];
+              const isDeleting = deletandoId === item.id;
+              return (
+                <div key={item.id} className={`flex items-center justify-between px-5 py-3 hover:bg-stone-50 transition-colors group ${isDeleting ? 'opacity-50' : ''}`}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-7 h-7 bg-stone-100 rounded-lg flex items-center justify-center text-sm flex-shrink-0">{emoji}</div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-stone-800 truncate">{item.nome}</p>
+                      {item.tipo && <p className="text-[10px] text-stone-500 font-semibold capitalize">{item.tipo}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                    <span className="text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">x{item.quantidade}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${st.cls}`}>{st.label}</span>
+                    <button
+                      onClick={() => handleEditar(item)}
+                      title="Editar item"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                    {item.fonte === 'checklist' && (
+                      <button
+                        onClick={() => handleExcluirChecklist(item)}
+                        title="Remover item"
+                        disabled={isDeleting}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-30"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="p-3 border-t border-stone-100 bg-stone-50/50">
+            <button
+              onClick={() => abrirModalAdd(null)}
+              className="w-full py-2 text-xs font-bold text-stone-600 hover:text-stone-900 border border-dashed border-stone-300 hover:border-stone-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span> Adicionar item à viatura
+            </button>
           </div>
         </div>
       )}

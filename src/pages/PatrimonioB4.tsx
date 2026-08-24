@@ -1721,25 +1721,7 @@ const PatrimonioB4: React.FC = () => {
                       </div>
                     )}
 
-                    {(newItemType === 'Equipamento' || newItemType === 'Material') && (
-                      <div className="space-y-1 p-3 bg-white border border-rustic-border/50 rounded-xl shadow-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="material-symbols-outlined text-primary text-sm">link</span>
-                          <label className="text-xs font-bold text-rustic-brown">Vincular à Viatura</label>
-                        </div>
-                        <select
-                          value={newItemViaturaId}
-                          onChange={e => setNewItemViaturaId(e.target.value)}
-                          className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-stone-50 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                        >
-                          <option value="">Item de Uso Geral (Quartel)</option>
-                          {fleet.filter(v => v.type === 'Viatura').map(v => (
-                            <option key={v.id} value={v.id}>{v.name}</option>
-                          ))}
-                        </select>
-                        <p className="text-[10px] text-gray-400 italic">O item aparecerá na conferência diária da viatura selecionada.</p>
-                      </div>
-                    )}
+
 
                     {/* Atividades checkboxes */}
                     <div className="space-y-1 p-3 bg-white border border-rustic-border/50 rounded-xl shadow-sm">
