@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import { Vehicle, CompartimentoViatura } from '../../services/types';
 import { toast } from 'sonner';
+import { ModalEditarItemB4 } from './ModalEditarItemB4';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface VisualizacaoViaturaProps {
   viatura: Vehicle;
@@ -9,15 +12,40 @@ interface VisualizacaoViaturaProps {
   onAddItem?: (viaturaId: string, compartimentoId?: string) => void;
 }
 
-interface EquipamentoItem {
+interface ItemFlota {
   id: string;
   nome: string;
   tipo?: string;
-  numero_serie?: string;
-  quantidade?: number;
-  status?: string;
+  quantidade: number;
+  status: string;
   compartimento_id?: string;
+  local_id?: string;
+  rawItem: Vehicle;
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const safeText = (val: any): string => {
+  if (!val) return '';
+  if (typeof val === 'string') {
+    if (val.startsWith('{')) {
+      try { const p = JSON.parse(val); return p.raw || p.descricao || p.details || ''; } catch { return val; }
+    }
+    return val;
+  }
+  if (typeof val === 'object') return (val as any).raw || (val as any).descricao || '';
+  return String(val);
+};
+
+const statusInfo = (s: string) => {
+  if (!s || s === 'active') return { label: 'Ativo', cls: 'bg-green-50 text-green-700 border-green-200' };
+  if (s === 'maintenance') return { label: 'Manutenção', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+  if (s === 'down') return { label: 'Inativo', cls: 'bg-red-50 text-red-700 border-red-200' };
+  if (s === 'cautelado') return { label: 'Cautelado', cls: 'bg-blue-50 text-blue-700 border-blue-200' };
+  return { label: s, cls: 'bg-stone-50 text-stone-600 border-stone-200' };
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
   viatura,
@@ -25,16 +53,17 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
   onAddItem,
 }) => {
   const [compartimentos, setCompartimentos] = useState<CompartimentoViatura[]>([]);
-  const [itens, setItens] = useState<EquipamentoItem[]>([]);
+  const [itens, setItens] = useState<ItemFlota[]>([]);
   const [loading, setLoading] = useState(true);
-  const [qrModalComp, setQrModalComp] = useState<CompartimentoViatura | null>(null);
   const [itemParaEditar, setItemParaEditar] = useState<Vehicle | null>(null);
+  const [expandedComp, setExpandedComp] = useState<Record<string, boolean>>({});
+  const [qrModalComp, setQrModalComp] = useState<CompartimentoViatura | null>(null);
 
-  const carregarDados = async () => {
+  const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
 
-      // 1. Buscar compartimentos desta viatura
+      // 1. Compartimentos desta viatura
       const { data: dataComp, error: errComp } = await supabase
         .from('compartimentos_viatura')
         .select('*')
@@ -43,287 +72,316 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
         .order('ordem', { ascending: true });
 
       if (errComp) throw errComp;
-      const compsCarregados = dataComp || [];
-      setCompartimentos(compsCarregados);
+      const comps = dataComp || [];
+      setCompartimentos(comps);
 
-      // 2. Buscar itens da tabela fleet desta viatura (ou de seus compartimentos)
-      const { data: dataFleet } = await supabase
+      const compIds = comps.map((c: CompartimentoViatura) => c.id);
+
+      // 2. Itens linkados diretamente à viatura (local_id) ou a seus compartimentos
+      let query = supabase
         .from('fleet')
         .select('*')
         .neq('type', 'Viatura');
 
-      const compIds = new Set(compsCarregados.map(c => c.id));
-      const fleetFormatado: EquipamentoItem[] = (dataFleet || [])
-        .filter(f => f.compartimento_id && compIds.has(f.compartimento_id))
-        .map(f => ({
-          id: f.id,
-          nome: f.name,
-          tipo: `🔧 ${f.type}`,
-          status: f.status === 'active' || !f.status ? 'Ok' : f.status,
-          quantidade: f.quantidade || 1,
-          compartimento_id: f.compartimento_id,
-          rawItem: f,
-        }));
+      if (compIds.length > 0) {
+        query = query.or(`local_id.eq.${viatura.id},compartimento_id.in.(${compIds.join(',')})`);
+      } else {
+        query = query.eq('local_id', viatura.id);
+      }
 
-      // 3. Buscar na tabela equipamentos
-      const { data: dataEq } = await supabase
-        .from('equipamentos')
-        .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id')
-        .eq('viatura_id', viatura.id);
+      const { data: dataFleet, error: errFleet } = await query;
+      if (errFleet) throw errFleet;
 
-      const equipFormatado: EquipamentoItem[] = (dataEq || []).map(e => ({
-        id: e.id,
-        nome: e.nome,
-        tipo: `🔧 ${e.tipo || 'Equipamento'}`,
-        numero_serie: e.numero_serie,
-        quantidade: e.quantidade || 1,
-        status: e.status || 'Ok',
-        compartimento_id: e.compartimento_id,
-        rawItem: {
-          id: e.id,
-          name: e.nome,
-          type: (e.tipo as any) || 'Equipamento',
-          status: e.status === 'Ok' ? 'active' : 'maintenance',
-          details: e.numero_serie ? `Série: ${e.numero_serie}` : '',
-          quantidade: e.quantidade || 1,
-          compartimento_id: e.compartimento_id,
-        },
+      const itensFormatados: ItemFlota[] = (dataFleet || []).map((f: any) => ({
+        id: f.id,
+        nome: f.name || 'Item sem nome',
+        tipo: f.type || 'Equipamento',
+        quantidade: Number(f.quantidade) || 1,
+        status: f.status || 'active',
+        compartimento_id: f.compartimento_id || undefined,
+        local_id: f.local_id || undefined,
+        rawItem: { ...f, details: safeText(f.details) } as Vehicle,
       }));
 
-      // Combinar sem duplicatas
-      const fleetIds = new Set(fleetFormatado.map(f => f.id));
-      const equipNovos = equipFormatado.filter(e => !fleetIds.has(e.id));
-
-      setItens([...fleetFormatado, ...equipNovos]);
+      setItens(itensFormatados);
     } catch (err: any) {
       console.error('Erro ao carregar visualização da viatura:', err);
-      toast.error('Erro ao carregar itens da viatura');
+      toast.error('Erro ao carregar itens: ' + (err?.message || 'Falha de conexão'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [viatura.id]);
 
   useEffect(() => {
-    if (viatura?.id) {
-      carregarDados();
-    }
-  }, [viatura?.id]);
+    if (viatura?.id) carregarDados();
+  }, [viatura.id, carregarDados]);
 
-  // Itens não associados a nenhum compartimento específico
-  const itensSemCompartimento = itens.filter(item => !item.compartimento_id);
+  const itensPorComp = (compId: string) => itens.filter(i => i.compartimento_id === compId);
+  const itensSemComp = itens.filter(i => !i.compartimento_id);
+  const totalUnidades = itens.reduce((acc, i) => acc + i.quantidade, 0);
+
+  const handleEditar = (item: ItemFlota) => {
+    setItemParaEditar(item.rawItem || {
+      id: item.id, name: item.nome, details: '', status: 'active',
+      type: 'Equipamento', quantidade: item.quantidade,
+      compartimento_id: item.compartimento_id, local_id: item.local_id,
+    } as Vehicle);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <div className="w-10 h-10 border-4 border-stone-200 border-t-primary rounded-full animate-spin" />
+        <p className="text-sm text-stone-500 font-semibold">Carregando itens da viatura...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Botão voltar se fornecido */}
+    <div className="space-y-5 max-w-5xl mx-auto">
+
+      {/* Botão Voltar */}
       {onBack && (
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1 text-xs font-bold text-stone-600 hover:text-stone-900 transition-colors"
-        >
-          <span className="material-symbols-outlined text-[16px]">arrow_back</span> Voltar
+        <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 transition-colors group">
+          <span className="material-symbols-outlined text-[18px] group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
+          Voltar para listagem
         </button>
       )}
 
-      {/* CABEÇALHO DA VIATURA */}
-      <div className="bg-white border border-rustic-border rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
+      {/* ── HEADER ────────────────────────────────────────────────────── */}
+      <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white rounded-2xl p-5 shadow-lg">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">🚒</span>
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center text-2xl">🚒</div>
             <div>
-              <h1 className="text-2xl font-black text-rustic-brown">{viatura.name}</h1>
-              {viatura.plate && (
-                <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                  Placa: {viatura.plate}
-                </span>
-              )}
+              <h1 className="text-xl font-black">{viatura.name}</h1>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {viatura.plate && <span className="text-xs font-mono font-bold bg-white/20 px-2 py-0.5 rounded">{viatura.plate}</span>}
+                {viatura.brand && <span className="text-xs text-white/60 font-semibold">{viatura.brand}</span>}
+                {viatura.year && <span className="text-xs text-white/60 font-semibold">{viatura.year}</span>}
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-4 text-xs font-medium text-stone-600">
-          <div className="bg-stone-50 border border-stone-200 px-3 py-2 rounded-xl">
-            <span className="text-[10px] uppercase font-bold text-stone-400 block">Tipo</span>
-            <span className="font-bold text-stone-800">{viatura.type || 'ABS'}</span>
-          </div>
-          <div className="bg-stone-50 border border-stone-200 px-3 py-2 rounded-xl">
-            <span className="text-[10px] uppercase font-bold text-stone-400 block">Status</span>
-            <span className="font-bold text-green-700 flex items-center gap-1">
-              ✅ {viatura.status === 'active' || !viatura.status ? 'Ativa' : viatura.status}
-            </span>
-          </div>
-          <div className="bg-stone-50 border border-stone-200 px-3 py-2 rounded-xl">
-            <span className="text-[10px] uppercase font-bold text-stone-400 block">Total de itens</span>
-            <span className="font-bold text-primary">{itens.length}</span>
+          <div className="flex gap-3 flex-wrap">
+            <div className="bg-white/10 rounded-xl px-4 py-2 text-center min-w-[80px]">
+              <p className="text-[10px] uppercase font-bold text-white/50 tracking-wide">Compartimentos</p>
+              <p className="text-xl font-black mt-0.5">{compartimentos.length}</p>
+            </div>
+            <div className="bg-white/10 rounded-xl px-4 py-2 text-center min-w-[80px]">
+              <p className="text-[10px] uppercase font-bold text-white/50 tracking-wide">Tipos de Item</p>
+              <p className="text-xl font-black mt-0.5">{itens.length}</p>
+            </div>
+            <div className="bg-amber-500/80 rounded-xl px-4 py-2 text-center min-w-[80px]">
+              <p className="text-[10px] uppercase font-bold text-white/70 tracking-wide">Total Unidades</p>
+              <p className="text-xl font-black mt-0.5">{totalUnidades}</p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* COMPARTIMENTOS */}
-      {loading ? (
-        <div className="text-center py-12 text-stone-500">Carregando compartimentos e materiais...</div>
-      ) : compartimentos.length === 0 ? (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-6 rounded-2xl text-center">
-          <p className="font-bold">Nenhum compartimento cadastrado nesta viatura.</p>
-          <p className="text-xs mt-1">Cadastre os compartimentos no Painel do Gestor para organizar os materiais.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {compartimentos.map(comp => {
-            const itensComp = itens.filter(i => i.compartimento_id === comp.id);
-
-            return (
-              <div
-                key={comp.id}
-                className="bg-white border border-rustic-border rounded-2xl shadow-sm flex flex-col justify-between overflow-hidden"
-              >
-                {/* Header do Card */}
-                <div className="bg-stone-50 p-4 border-b border-stone-200 flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">📦</span>
-                    <div>
-                      <h3 className="font-bold text-stone-800">{comp.nome}</h3>
-                      {comp.posicao && (
-                        <span className="text-[10px] text-stone-500 font-semibold">
-                          {comp.posicao}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full">
-                    {itensComp.length} {itensComp.length === 1 ? 'item' : 'itens'}
-                  </span>
-                </div>
-
-                {/* Lista de itens do compartimento */}
-                <div className="p-4 space-y-2 min-h-[120px]">
-                  {itensComp.length === 0 ? (
-                    <p className="text-xs text-stone-400 italic py-4 text-center">
-                      Nenhum equipamento neste compartimento.
-                    </p>
-                  ) : (
-                    itensComp.map(item => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between text-xs py-1.5 border-b border-stone-100 last:border-0 hover:bg-stone-50 px-1 rounded transition-colors"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-stone-800">
-                            • {item.nome}
-                          </span>
-                          <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
-                            (x{item.quantidade || 1})
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                            ✅ {item.status || 'Ok'}
-                          </span>
-                          <button
-                            onClick={() => setItemParaEditar((item as any).rawItem || { id: item.id, name: item.nome, details: '', status: 'active', type: 'Equipamento', quantidade: item.quantidade || 1, compartimento_id: item.compartimento_id })}
-                            className="p-1 text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
-                            title="Editar item e quantidade/compartimento"
-                          >
-                            ✏️
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Rodapé do Card */}
-                <div className="bg-stone-50 p-3 border-t border-stone-200 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => onAddItem && onAddItem(viatura.id, comp.id)}
-                    className="text-xs font-bold text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-                  >
-                    <span>➕</span> Adicionar item aqui
-                  </button>
-                  <button
-                    onClick={() => setQrModalComp(comp)}
-                    className="text-xs font-bold text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-                  >
-                    <span>🖨️</span> QR
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+      {/* ── EMPTY STATE ───────────────────────────────────────────────── */}
+      {itens.length === 0 && compartimentos.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+          <p className="text-4xl mb-3">📋</p>
+          <p className="font-bold text-amber-900">Nenhum item cadastrado nesta viatura</p>
+          <p className="text-xs text-amber-700 mt-1">
+            Primeiro cadastre os compartimentos, depois adicione os equipamentos via aba Cadastro.
+          </p>
+          {onAddItem && (
+            <button onClick={() => onAddItem(viatura.id)} className="mt-4 px-5 py-2 bg-amber-600 text-white text-xs font-bold rounded-xl hover:bg-amber-700 transition-colors">
+              + Adicionar item
+            </button>
+          )}
         </div>
       )}
 
-      {/* Itens Sem Compartimento Definido */}
-      {itensSemCompartimento.length > 0 && (
-        <div className="bg-stone-50 border border-rustic-border rounded-2xl p-6 space-y-3">
-          <h3 className="font-bold text-stone-700 flex items-center gap-2">
-            <span>⚠️</span> Equipamentos sem compartimento atribuído ({itensSemCompartimento.length})
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {itensSemCompartimento.map(item => (
-              <div key={item.id} className="bg-white p-2.5 rounded-xl border border-stone-200 text-xs flex justify-between items-center">
-                <div>
-                  <span className="font-bold text-stone-800">{item.nome}</span>
-                  <span className="text-amber-700 font-bold ml-1"> (x{item.quantidade || 1})</span>
-                </div>
-                <button
-                  onClick={() => setItemParaEditar((item as any).rawItem || { id: item.id, name: item.nome, details: '', status: 'active', type: 'Equipamento', quantidade: item.quantidade || 1, compartimento_id: item.compartimento_id })}
-                  className="p-1 text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
-                  title="Editar item"
-                >
-                  ✏️
-                </button>
+      {itens.length === 0 && compartimentos.length > 0 && (
+        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-6 text-center">
+          <p className="text-3xl mb-2">🗂️</p>
+          <p className="font-bold text-stone-700 text-sm">Compartimentos cadastrados, mas sem itens ainda</p>
+          <p className="text-xs text-stone-500 mt-1">Adicione equipamentos a cada compartimento via aba Cadastro.</p>
+        </div>
+      )}
+
+      {/* ── ITENS SEM COMPARTIMENTO ────────────────────────────────────── */}
+      {itensSemComp.length > 0 && (
+        <div className="bg-white border border-rustic-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-stone-50 p-4 border-b border-stone-200 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📦</span>
+              <div>
+                <h3 className="font-bold text-stone-800 text-sm">Itens da Viatura (geral)</h3>
+                <p className="text-[10px] text-stone-500">Equipamentos sem compartimento específico</p>
               </div>
-            ))}
+            </div>
+            <span className="text-xs font-black bg-stone-200 text-stone-700 px-2.5 py-1 rounded-full">
+              {itensSemComp.length} {itensSemComp.length === 1 ? 'item' : 'itens'}
+            </span>
+          </div>
+          <div className="divide-y divide-stone-100">
+            {itensSemComp.map(item => {
+              const st = statusInfo(item.status);
+              return (
+                <div key={item.id} className="flex items-center justify-between px-5 py-3 hover:bg-stone-50 transition-colors group">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-7 h-7 bg-stone-100 rounded-lg flex items-center justify-center text-sm flex-shrink-0">🔧</div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-stone-800 truncate">{item.nome}</p>
+                      {item.tipo && <p className="text-[10px] text-stone-500 font-semibold">{item.tipo}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                    <span className="text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">x{item.quantidade}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${st.cls}`}>{st.label}</span>
+                    <button
+                      onClick={() => handleEditar(item)}
+                      title="Editar item"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {onAddItem && (
+            <div className="p-3 border-t border-stone-100 bg-stone-50/50">
+              <button
+                onClick={() => onAddItem(viatura.id)}
+                className="w-full py-2 text-xs font-bold text-stone-600 hover:text-stone-900 border border-dashed border-stone-300 hover:border-stone-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span> Adicionar item à viatura
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── COMPARTIMENTOS ─────────────────────────────────────────────── */}
+      {compartimentos.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pt-1">
+            <span className="material-symbols-outlined text-stone-400 text-[18px]">view_module</span>
+            <h2 className="text-xs font-black uppercase tracking-widest text-stone-500">Compartimentos ({compartimentos.length})</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {compartimentos.map(comp => {
+              const compItens = itensPorComp(comp.id);
+              const isOpen = expandedComp[comp.id] !== false;
+
+              return (
+                <div key={comp.id} className="bg-white border border-rustic-border rounded-2xl shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => setExpandedComp(p => ({ ...p, [comp.id]: !isOpen }))}
+                    className="w-full bg-stone-50 p-4 border-b border-stone-200 flex justify-between items-center hover:bg-stone-100/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-primary/10 text-primary rounded-xl flex items-center justify-center text-base">📦</div>
+                      <div className="text-left">
+                        <p className="font-bold text-stone-800 text-sm">{comp.nome}</p>
+                        {comp.posicao && <p className="text-[10px] text-stone-500 font-semibold">{comp.posicao}</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${compItens.length > 0 ? 'bg-primary/10 text-primary' : 'bg-stone-200 text-stone-500'}`}>
+                        {compItens.length} {compItens.length === 1 ? 'item' : 'itens'}
+                      </span>
+                      <span className="material-symbols-outlined text-stone-400 text-[18px]">
+                        {isOpen ? 'expand_less' : 'expand_more'}
+                      </span>
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <>
+                      <div className="divide-y divide-stone-100 min-h-[60px]">
+                        {compItens.length === 0 ? (
+                          <p className="text-xs text-stone-400 italic py-5 text-center">Nenhum equipamento neste compartimento.</p>
+                        ) : (
+                          compItens.map(item => {
+                            const st = statusInfo(item.status);
+                            return (
+                              <div key={item.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-stone-50 transition-colors group">
+                                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                  <span className="text-base">🔧</span>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-stone-800 truncate">{item.nome}</p>
+                                    {item.tipo && <p className="text-[10px] text-stone-400">{item.tipo}</p>}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded">x{item.quantidade}</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${st.cls}`}>{st.label}</span>
+                                  <button
+                                    onClick={() => handleEditar(item)}
+                                    title="Editar item"
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                  >
+                                    <span className="material-symbols-outlined text-[15px]">edit</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      <div className="p-3 border-t border-stone-100 bg-stone-50/40 flex items-center gap-2">
+                        {onAddItem && (
+                          <button
+                            onClick={() => onAddItem(viatura.id, comp.id)}
+                            className="flex-1 py-1.5 text-[11px] font-bold text-stone-600 hover:text-stone-900 border border-dashed border-stone-300 hover:border-stone-500 rounded-lg transition-colors flex items-center justify-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">add</span> Adicionar item
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setQrModalComp(comp)}
+                          className="py-1.5 px-3 text-[11px] font-bold text-stone-500 hover:text-stone-800 border border-stone-200 hover:border-stone-400 bg-white rounded-lg transition-colors flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">qr_code</span> QR
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* MODAL EDITAR ITEM */}
+      {/* ── MODAL EDITAR ITEM ──────────────────────────────────────────── */}
       <ModalEditarItemB4
         item={itemParaEditar}
         isOpen={!!itemParaEditar}
         onClose={() => setItemParaEditar(null)}
-        onSaved={carregarDados}
+        onSaved={() => { setItemParaEditar(null); carregarDados(); }}
       />
 
-      {/* MODAL QR CODE DO COMPARTIMENTO */}
+      {/* ── MODAL QR CODE ──────────────────────────────────────────────── */}
       {qrModalComp && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 text-center border border-rustic-border shadow-2xl">
-            <h3 className="text-lg font-bold text-rustic-brown">
-              QR Code do Compartimento
-            </h3>
-            <p className="text-xs text-stone-600 font-semibold">
-              {qrModalComp.nome} — {viatura.name}
-            </p>
-
+            <h3 className="text-base font-bold text-rustic-brown">QR Code do Compartimento</h3>
+            <p className="text-xs text-stone-600 font-semibold">{qrModalComp.nome} — {viatura.name}</p>
             <div className="flex justify-center py-4 bg-stone-50 rounded-xl border border-stone-200">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                  `${window.location.origin}/extrato/compartimento/${qrModalComp.id}`
-                )}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`${window.location.origin}/extrato/compartimento/${qrModalComp.id}`)}`}
                 alt="QR Code"
                 className="w-44 h-44 rounded-lg shadow-sm"
               />
             </div>
-
             <p className="text-[11px] font-mono text-stone-400 break-all bg-stone-100 p-2 rounded">
               {`${window.location.origin}/extrato/compartimento/${qrModalComp.id}`}
             </p>
-
             <div className="flex gap-2">
-              <a
-                href={`/extrato/compartimento/${qrModalComp.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-xl text-center"
-              >
+              <a href={`/extrato/compartimento/${qrModalComp.id}`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-xl text-center transition-colors">
                 Abrir Extrato
               </a>
-              <button
-                onClick={() => setQrModalComp(null)}
-                className="flex-1 py-2 bg-primary text-white text-xs font-bold rounded-xl"
-              >
+              <button onClick={() => setQrModalComp(null)} className="flex-1 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-colors">
                 Fechar
               </button>
             </div>
@@ -335,3 +393,4 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
 };
 
 export default VisualizacaoViatura;
+

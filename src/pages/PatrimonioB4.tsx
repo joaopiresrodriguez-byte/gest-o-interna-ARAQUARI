@@ -21,6 +21,30 @@ import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
 
 // ─── Helper sub-components ───────────────────────────────────────────────────
 
+/**
+ * Safely converts a details field to a displayable string.
+ * Handles cases where Supabase returns JSONB fields as objects.
+ */
+const safeDetails = (details: any): string => {
+  if (!details) return '';
+  if (typeof details === 'string') {
+    // If it looks like JSON and starts with '{', try to extract 'raw' field
+    if (details.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(details);
+        return parsed.raw || parsed.descricao || parsed.details || '';
+      } catch {
+        return details;
+      }
+    }
+    return details;
+  }
+  if (typeof details === 'object') {
+    return (details as any).raw || (details as any).descricao || (details as any).details || '';
+  }
+  return String(details);
+};
+
 const Detail: React.FC<{ label: string; value?: string; icon?: string }> = ({ label, value, icon }) => (
   <div className="bg-stone-50 border border-rustic-border/60 rounded-lg p-3">
     <p className="text-[9px] font-black uppercase tracking-wider text-rustic-brown/40 mb-0.5">{label}</p>
@@ -120,7 +144,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
       </div>
 
       <h3 className="text-base font-bold mb-1 leading-tight">{item.name}</h3>
-      <p className="text-xs text-rustic-brown/60 mb-3 line-clamp-2">{item.details}</p>
+      <p className="text-xs text-rustic-brown/60 mb-3 line-clamp-2">{safeDetails(item.details) || 'Sem detalhes adicionais'}</p>
 
       {/* Atividades badges */}
       {item.atividades && item.atividades.length > 0 && (
@@ -1432,12 +1456,12 @@ const PatrimonioB4: React.FC = () => {
                           )}
 
                           {/* Detalhes */}
-                          {selectedItem.details && (
+                          {safeDetails(selectedItem.details) && (
                             <section>
                               <h4 className="text-[10px] font-black uppercase tracking-widest text-rustic-brown/60 mb-3 flex items-center gap-1.5">
                                 <span className="material-symbols-outlined text-[14px]">description</span> Observações
                               </h4>
-                              <p className="text-sm text-rustic-brown/80 bg-stone-50 rounded-xl p-4 border border-rustic-border leading-relaxed">{selectedItem.details}</p>
+                              <p className="text-sm text-rustic-brown/80 bg-stone-50 rounded-xl p-4 border border-rustic-border leading-relaxed">{safeDetails(selectedItem.details)}</p>
                             </section>
                           )}
 
