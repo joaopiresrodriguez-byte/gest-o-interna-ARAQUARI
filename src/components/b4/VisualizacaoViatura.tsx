@@ -77,33 +77,107 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
 
       const compIds = comps.map((c: CompartimentoViatura) => c.id);
 
-      // 2. Itens linkados diretamente à viatura (local_id) ou a seus compartimentos
-      let query = supabase
+      const todosItens: ItemFlota[] = [];
+
+      // 2. Buscar da tabela `fleet` (onde type != Viatura)
+      let queryFleet = supabase
         .from('fleet')
         .select('*')
         .neq('type', 'Viatura');
 
       if (compIds.length > 0) {
-        query = query.or(`local_id.eq.${viatura.id},compartimento_id.in.(${compIds.join(',')})`);
+        queryFleet = queryFleet.or(`local_id.eq.${viatura.id},compartimento_id.in.(${compIds.join(',')})`);
       } else {
-        query = query.eq('local_id', viatura.id);
+        queryFleet = queryFleet.eq('local_id', viatura.id);
       }
 
-      const { data: dataFleet, error: errFleet } = await query;
-      if (errFleet) throw errFleet;
+      const { data: dataFleet } = await queryFleet;
+      if (dataFleet) {
+        dataFleet.forEach((f: any) => {
+          todosItens.push({
+            id: f.id,
+            nome: f.name || 'Item sem nome',
+            tipo: f.type || 'Equipamento',
+            quantidade: Number(f.quantidade) || 1,
+            status: f.status || 'active',
+            compartimento_id: f.compartimento_id || undefined,
+            local_id: f.local_id || undefined,
+            rawItem: { ...f, details: safeText(f.details) } as Vehicle,
+          });
+        });
+      }
 
-      const itensFormatados: ItemFlota[] = (dataFleet || []).map((f: any) => ({
-        id: f.id,
-        nome: f.name || 'Item sem nome',
-        tipo: f.type || 'Equipamento',
-        quantidade: Number(f.quantidade) || 1,
-        status: f.status || 'active',
-        compartimento_id: f.compartimento_id || undefined,
-        local_id: f.local_id || undefined,
-        rawItem: { ...f, details: safeText(f.details) } as Vehicle,
-      }));
+      // 3. Buscar da tabela `equipamentos`
+      let queryEquip = supabase
+        .from('equipamentos')
+        .select('*');
 
-      setItens(itensFormatados);
+      if (compIds.length > 0) {
+        queryEquip = queryEquip.or(`viatura_id.eq.${viatura.id},compartimento_id.in.(${compIds.join(',')})`);
+      } else {
+        queryEquip = queryEquip.eq('viatura_id', viatura.id);
+      }
+
+      const { data: dataEquip } = await queryEquip;
+      if (dataEquip) {
+        dataEquip.forEach((e: any) => {
+          // Evitar duplicidade se já veio da tabela fleet
+          if (!todosItens.some(i => i.id === e.id)) {
+            todosItens.push({
+              id: e.id,
+              nome: e.nome || 'Equipamento',
+              tipo: e.tipo || 'Equipamento',
+              quantidade: Number(e.quantidade) || 1,
+              status: e.status === 'Ok' || e.status === 'ativo' ? 'active' : (e.status || 'active'),
+              compartimento_id: e.compartimento_id || undefined,
+              local_id: e.viatura_id || undefined,
+              rawItem: {
+                id: e.id,
+                name: e.nome,
+                type: (e.tipo as any) || 'Equipamento',
+                status: e.status === 'Ok' ? 'active' : 'maintenance',
+                details: e.numero_serie ? `Série: ${e.numero_serie}` : '',
+                quantidade: e.quantidade || 1,
+                compartimento_id: e.compartimento_id,
+              } as Vehicle,
+            });
+          }
+        });
+      }
+
+      // 4. Buscar da tabela `materiais_consumo`
+      if (compIds.length > 0) {
+        const { data: dataConsumo } = await supabase
+          .from('materiais_consumo')
+          .select('*')
+          .in('compartimento_id', compIds);
+
+        if (dataConsumo) {
+          dataConsumo.forEach((c: any) => {
+            if (!todosItens.some(i => i.id === c.id)) {
+              todosItens.push({
+                id: c.id,
+                nome: c.nome || c.description || 'Material de Consumo',
+                tipo: 'Material de Consumo',
+                quantidade: Number(c.quantidade || c.quantity) || 1,
+                status: 'active',
+                compartimento_id: c.compartimento_id || undefined,
+                rawItem: {
+                  id: c.id,
+                  name: c.nome || c.description,
+                  type: 'Material',
+                  status: 'active',
+                  details: c.unidade ? `Unidade: ${c.unidade}` : '',
+                  quantidade: c.quantidade || c.quantity || 1,
+                  compartimento_id: c.compartimento_id,
+                } as Vehicle,
+              });
+            }
+          });
+        }
+      }
+
+      setItens(todosItens);
     } catch (err: any) {
       console.error('Erro ao carregar visualização da viatura:', err);
       toast.error('Erro ao carregar itens: ' + (err?.message || 'Falha de conexão'));
