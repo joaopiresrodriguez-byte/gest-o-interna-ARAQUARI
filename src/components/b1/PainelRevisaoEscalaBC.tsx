@@ -814,6 +814,29 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                       <span className="text-slate-400 font-mono text-[11px] select-all block truncate max-w-md">{item.link}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {(() => {
+                        const phone = item.bombeiro.phone || item.bombeiro.emergency_phone;
+                        if (phone) {
+                          const numLimpo = phone.replace(/\D/g, '');
+                          const numFinal = numLimpo.startsWith('55') ? numLimpo : `55${numLimpo}`;
+                          const msg = encodeURIComponent(
+                            `Olá, ${item.bombeiro.name}! 🚒\n\nSegue o seu link individual para preenchimento da Intenção de Serviço (Escala BC) referente ao mês ${modalLinksTeste.mesRef}:\n\n🔗 ${item.link}\n\nPor favor, preencha suas disponibilidades.`
+                          );
+                          const waUrl = `https://api.whatsapp.com/send?phone=${numFinal}&text=${msg}`;
+                          return (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                              title={`Enviar via WhatsApp para ${phone}`}
+                            >
+                              💬 WhatsApp
+                            </a>
+                          );
+                        }
+                        return null;
+                      })()}
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(item.link);
@@ -879,6 +902,29 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                       <span className="text-slate-400 font-mono text-[11px] select-all block truncate max-w-md">{item.link}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {(() => {
+                        const phone = item.bombeiro.phone || item.bombeiro.emergency_phone;
+                        if (phone) {
+                          const numLimpo = phone.replace(/\D/g, '');
+                          const numFinal = numLimpo.startsWith('55') ? numLimpo : `55${numLimpo}`;
+                          const msg = encodeURIComponent(
+                            `Olá, ${item.bombeiro.name}! 🚒\n\nSegue o seu link individual para preenchimento da Intenção de Serviço (Escala BC) para o mês ${mesRef}:\n\n🔗 ${item.link}\n\nPor favor, preencha suas disponibilidades.`
+                          );
+                          const waUrl = `https://api.whatsapp.com/send?phone=${numFinal}&text=${msg}`;
+                          return (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                              title={`Enviar via WhatsApp para ${phone}`}
+                            >
+                              💬 WhatsApp
+                            </a>
+                          );
+                        }
+                        return null;
+                      })()}
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(item.link);
