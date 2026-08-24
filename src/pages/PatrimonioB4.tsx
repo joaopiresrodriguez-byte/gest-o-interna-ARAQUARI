@@ -54,7 +54,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   onGerenciarCompartimentos,
   onVisualizarViatura,
 }) => {
-  const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || n.description.includes(item.name)));
+  const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || (n.description && item.name && n.description.includes(item.name))));
 
   return (
     <div
