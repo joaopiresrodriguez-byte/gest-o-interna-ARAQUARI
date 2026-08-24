@@ -2225,15 +2225,15 @@ const PatrimonioB4: React.FC = () => {
           if (missionToEdit?.id) {
             await SupabaseService.updateDailyMission(missionToEdit.id, {
               ...missionData,
-              editado_por_nome: profile?.name || profile?.war_name || user?.email || 'Administrador B4',
-              editado_por_id: user?.id || undefined,
+              editado_por_nome: profile?.nome_completo || profile?.nome_guerra || profile?.email || 'Administrador B4',
+              editado_por_id: profile?.id || undefined,
               editado_em: new Date().toISOString(),
             });
             toast.success('Missão atualizada com sucesso!');
           } else {
             await SupabaseService.addDailyMission({
               ...missionData,
-              created_by: user?.email || 'Administrador B4'
+              created_by: profile?.email || 'Administrador B4'
             });
             toast.success('Missão criada com sucesso!');
           }
