@@ -177,6 +177,43 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
         }
       }
 
+      // 5. Buscar da tabela `checklist_items`
+      let queryChecklist = supabase
+        .from('checklist_items')
+        .select('*');
+
+      if (compIds.length > 0) {
+        queryChecklist = queryChecklist.or(`viatura_id.eq.${viatura.id},compartimento_id.in.(${compIds.join(',')})`);
+      } else {
+        queryChecklist = queryChecklist.eq('viatura_id', viatura.id);
+      }
+
+      const { data: dataChecklist } = await queryChecklist;
+      if (dataChecklist) {
+        dataChecklist.forEach((ci: any) => {
+          if (!todosItens.some(i => i.id === ci.id)) {
+            todosItens.push({
+              id: ci.id,
+              nome: ci.item_name || ci.nome || ci.name || 'Item de Checklist',
+              tipo: ci.category ? `🔧 ${ci.category}` : 'Equipamento',
+              quantidade: Number(ci.quantidade || ci.quantity) || 1,
+              status: ci.is_active === false ? 'down' : 'active',
+              compartimento_id: ci.compartimento_id || undefined,
+              local_id: ci.viatura_id || undefined,
+              rawItem: {
+                id: ci.id,
+                name: ci.item_name || ci.nome || ci.name,
+                type: ci.category || 'Equipamento',
+                status: ci.is_active === false ? 'down' : 'active',
+                details: ci.description || '',
+                quantidade: ci.quantidade || ci.quantity || 1,
+                compartimento_id: ci.compartimento_id,
+              } as Vehicle,
+            });
+          }
+        });
+      }
+
       setItens(todosItens);
     } catch (err: any) {
       console.error('Erro ao carregar visualização da viatura:', err);
