@@ -125,48 +125,65 @@ export const ModalEditarItemB4: React.FC<ModalEditarItemB4Props> = ({
       const finalLocalId = tipoDestino === 'ambiente' ? localId || null : null;
       const finalCompartimentoId = tipoDestino === 'viatura' ? compartimentoId || null : null;
 
-      // Buscar nome do local para manter string location sincronizada
-      let locationName: string | undefined = undefined;
-      if (tipoDestino === 'ambiente' && finalLocalId) {
-        const loc = locais.find(l => l.id === finalLocalId);
-        if (loc) locationName = loc.nome;
-      } else if (tipoDestino === 'viatura' && viaturaId) {
-        const v = viaturas.find(v => v.id === viaturaId);
-        if (v) locationName = v.name;
-      }
+      const isChecklistItem = (item as any)._source === 'checklist';
 
-      const updates: Partial<Vehicle> & { quantidade?: number } = {
-        name: nome.trim(),
-        details: details.trim(),
-        status,
-        quantidade: novaQuantidadeCalculada,
-        local_id: finalLocalId as any,
-        compartimento_id: finalCompartimentoId as any,
-        ...(locationName ? { location: locationName } : {}),
-      };
-
-      // 1. Atualizar tabela fleet
-      const { error: errFleet } = await supabase
-        .from('fleet')
-        .update(updates)
-        .eq('id', item.id);
-
-      if (errFleet) throw errFleet;
-
-      // 2. Atualizar tabela equipamentos se existir registro idêntico pelo nome/id
-      try {
-        await supabase
-          .from('equipamentos')
+      if (isChecklistItem) {
+        // ── Atualizar tabela checklist_items ──────────────────────────
+        const { error } = await supabase
+          .from('checklist_items')
           .update({
-            nome: nome.trim(),
+            item_name: nome.trim(),
+            description: details.trim() || null,
             quantidade: novaQuantidadeCalculada,
-            local_id: finalLocalId,
             compartimento_id: finalCompartimentoId,
-            viatura_id: tipoDestino === 'viatura' ? viaturaId || null : null,
+            viatura_id: tipoDestino === 'viatura' ? viaturaId || null : (item as any).viatura_id || null,
           })
-          .eq('nome', item.name);
-      } catch (e) {
-        console.warn('Atualização complementar em equipamentos ignorada:', e);
+          .eq('id', item.id);
+
+        if (error) throw error;
+      } else {
+        // ── Atualizar tabela fleet (padrão) ───────────────────────────
+        let locationName: string | undefined = undefined;
+        if (tipoDestino === 'ambiente' && finalLocalId) {
+          const loc = locais.find(l => l.id === finalLocalId);
+          if (loc) locationName = loc.nome;
+        } else if (tipoDestino === 'viatura' && viaturaId) {
+          const v = viaturas.find(v => v.id === viaturaId);
+          if (v) locationName = v.name;
+        }
+
+        const updates: Partial<Vehicle> & { quantidade?: number } = {
+          name: nome.trim(),
+          details: details.trim(),
+          status,
+          quantidade: novaQuantidadeCalculada,
+          local_id: finalLocalId as any,
+          compartimento_id: finalCompartimentoId as any,
+          ...(locationName ? { location: locationName } : {}),
+        };
+
+        const { error: errFleet } = await supabase
+          .from('fleet')
+          .update(updates)
+          .eq('id', item.id);
+
+        if (errFleet) throw errFleet;
+
+        // Atualização complementar em equipamentos
+        try {
+          await supabase
+            .from('equipamentos')
+            .update({
+              nome: nome.trim(),
+              quantidade: novaQuantidadeCalculada,
+              local_id: finalLocalId,
+              compartimento_id: finalCompartimentoId,
+              viatura_id: tipoDestino === 'viatura' ? viaturaId || null : null,
+            })
+            .eq('nome', item.name);
+        } catch (e) {
+          console.warn('Atualização complementar em equipamentos ignorada:', e);
+        }
       }
 
       toast.success('Item atualizado com sucesso!');
