@@ -54,9 +54,9 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
       if (initialData) {
         setTitle(initialData.title || '');
         setDescription(initialData.description || '');
-        setMissionDate(initialData.mission_date || SupabaseService.getTodayDate());
+        setMissionDate(initialData.mission_date ? initialData.mission_date.split('T')[0] : SupabaseService.getTodayDate());
         setStartTime(initialData.start_time || '');
-        setEndDate(initialData.end_date || '');
+        setEndDate(initialData.end_date ? initialData.end_date.split('T')[0] : '');
         setEndTime(initialData.end_time || '');
         setResponsibleId(initialData.responsible_id || '');
         setResponsibleName(initialData.responsible_name || '');

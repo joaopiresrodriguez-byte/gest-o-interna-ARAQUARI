@@ -929,7 +929,7 @@ const PatrimonioB4: React.FC = () => {
                           )}
 
                           <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 mt-1 flex-wrap">
-                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> {new Date(mission.mission_date).toLocaleDateString('pt-BR')}</span>
+                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> {mission.mission_date ? new Date(mission.mission_date + (mission.mission_date.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('pt-BR') : ''}</span>
                             {mission.start_time && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> {mission.start_time}</span>}
                             {mission.responsible_name && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">person</span> {mission.responsible_name}</span>}
                             {mission.completed_by && (
