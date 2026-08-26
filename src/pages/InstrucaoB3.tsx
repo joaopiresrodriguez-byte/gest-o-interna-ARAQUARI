@@ -233,8 +233,8 @@ const InstrucaoB3: React.FC = () => {
   };
 
   const handleSaveMateria = async () => {
-    if (!nome || !tema || !cargaHoraria) {
-      toast.error("Nome, Tema e Carga Horária são obrigatórios.");
+    if (!nome || !cargaHoraria) {
+      toast.error("Nome e Carga Horária são obrigatórios.");
       return;
     }
 
@@ -248,7 +248,6 @@ const InstrucaoB3: React.FC = () => {
       // 1. Save Materia Info
       const newMateria: MateriaInstrucao = {
         name: nome,
-        tema: tema.trim(),
         credit_hours: parseInt(cargaHoraria),
         category: categoria,
         level: nivel,
@@ -394,6 +393,7 @@ const InstrucaoB3: React.FC = () => {
         end_time: trainingEndTime.trim() || undefined,
         location: trainingLocation.trim() || undefined,
         instructor: trainingInstructor,
+        tema: tema.trim() || undefined,
         status: 'Scheduled'
       };
 
@@ -405,6 +405,7 @@ const InstrucaoB3: React.FC = () => {
       setTrainingLocation("");
       setTrainingInstructor("");
       setSelectedMateriaId("");
+      setTema("");
       loadData();
     } catch (error) {
       console.error('Error scheduling training:', error);
@@ -483,14 +484,7 @@ const InstrucaoB3: React.FC = () => {
                         placeholder="Ex: APH Básico"
                       />
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Tema da Instrução *</label>
-                      <input
-                        value={tema} onChange={e => setTema(e.target.value)}
-                        className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] placeholder:text-[#C4BEB7] focus:border-[#C62828] focus:ring-0 transition-all outline-none"
-                        placeholder="Ex: Primeiros Socorros em Trauma"
-                      />
-                    </div>
+
                     <div className="flex flex-col gap-2">
                       <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Carga Horária (h) *</label>
                       <input
@@ -710,6 +704,16 @@ const InstrucaoB3: React.FC = () => {
                       onChange={e => setTrainingLocation(e.target.value)}
                       className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm focus:border-[#2E7D32] outline-none"
                       placeholder="Ex: 7º BBM - Rua José Júlio da Silva, Araquari/SC"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Tema da Instrução</label>
+                    <input
+                      type="text"
+                      value={tema}
+                      onChange={e => setTema(e.target.value)}
+                      className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-sm focus:border-[#2E7D32] outline-none"
+                      placeholder="Ex: Primeiros Socorros em Trauma"
                     />
                   </div>
                   <div className="flex flex-col gap-2 md:col-span-2">

@@ -293,6 +293,7 @@ export interface Training {
     end_time?: string;
     location?: string;
     instructor: string;
+    tema?: string;
     status: string;
     materia?: MateriaInstrucao;
 }
