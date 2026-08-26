@@ -5,7 +5,7 @@ import { PAGINATION } from '../config/constants';
 import { triggerSync, deleteFromSheets } from './syncScheduler';
 
 // Field selectors for optimized queries
-const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cnh_expiry_date, cpf, emergency_phone, emergency_contact_name, cve_active, cve_issue_date, cve_expiry_date, toxicological_date, toxicological_expiry_date, graduation, last_cadastro_review, matricula, cidade_residencia, data_inclusao, data_ultima_promocao';
+const PERSONNEL_FIELDS = 'id, name, war_name, rank, role, status, type, address, email, birth_date, phone, blood_type, cnh, weapon_permit, image, created_at, education_level, cnh_category, cnh_number, cnh_expiry_date, cpf, emergency_phone, emergency_contact_name, cve_active, cve_issue_date, cve_expiry_date, toxicological_date, toxicological_expiry_date, graduation, last_cadastro_review, matricula, cidade_residencia, data_inclusao, data_ultima_promocao, bc_graduacao_ordem';
 const DOCUMENT_FIELDS = 'id, file_name, document_type, file_url, size_kb, uploaded_by, upload_date, notes, personnel_id';
 const VACATION_FIELDS = 'id, personnel_id, full_name, start_date, end_date, day_count, leave_type, status, notes';
 

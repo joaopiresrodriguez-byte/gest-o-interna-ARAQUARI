@@ -786,9 +786,25 @@ const PessoalB1: React.FC = () => {
     return val.trim().replace(/(\d+)[°º]\s*Sgt/i, '$1º Sgt');
   };
 
-  // Militares Regulares (sem bc_graduacao_ordem)
+  // Helper para identificar se o registro é Bombeiro Comunitário ou extrair seu grau (1 a 10)
+  const getBcDegreeOrder = (p: Personnel): number => {
+    if (typeof p.bc_graduacao_ordem === 'number' && p.bc_graduacao_ordem > 0) {
+      return p.bc_graduacao_ordem;
+    }
+    const text = (p.graduation || p.rank || '').toString();
+    const match = text.match(/(\d+)[°º]?\s*Grau/i);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+    if (p.type === 'BC' || text.toUpperCase().includes('BC') || text.toUpperCase().includes('COMUNITÁRIO')) {
+      return 1;
+    }
+    return 0; // 0 indica militar regular
+  };
+
+  // Militares Regulares (sem grau de BC)
   const regularPersonnel = personnelList
-    .filter(p => !p.bc_graduacao_ordem)
+    .filter(p => getBcDegreeOrder(p) === 0)
     .filter(p => {
       const matchesSearch = !search ||
         p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -819,9 +835,9 @@ const PessoalB1: React.FC = () => {
       return (a.name || '').localeCompare(b.name || '', 'pt-BR');
     });
 
-  // Bombeiros Comunitários (com bc_graduacao_ordem preenchido), ordenados do 10º ao 1º grau (decrescente)
+  // Bombeiros Comunitários (com grau de BC), ordenados do 10º ao 1º grau (decrescente)
   const bcPersonnel = personnelList
-    .filter(p => !!p.bc_graduacao_ordem)
+    .filter(p => getBcDegreeOrder(p) > 0)
     .filter(p => {
       const matchesSearch = !search ||
         p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -835,8 +851,8 @@ const PessoalB1: React.FC = () => {
       return matchesSearch && matchesGrad && matchesStatus && matchesType;
     })
     .sort((a, b) => {
-      const ordA = typeof a.bc_graduacao_ordem === 'number' ? a.bc_graduacao_ordem : 0;
-      const ordB = typeof b.bc_graduacao_ordem === 'number' ? b.bc_graduacao_ordem : 0;
+      const ordA = getBcDegreeOrder(a);
+      const ordB = getBcDegreeOrder(b);
       if (ordA !== ordB) return ordB - ordA; // Ordem decrescente (10º ao 1º grau)
       return (a.name || '').localeCompare(b.name || '', 'pt-BR');
     });
