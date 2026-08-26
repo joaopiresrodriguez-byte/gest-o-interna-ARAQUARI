@@ -62,9 +62,9 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
     });
 
     return (
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-5">
+        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4">
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-stone-100 pb-3.5">
+            <div className="flex items-center gap-3 border-b border-stone-100 pb-3">
                 <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 border border-orange-200/60 flex items-center justify-center shrink-0">
                     <span className="material-symbols-outlined text-xl">beach_access</span>
                 </div>
@@ -74,31 +74,31 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
                 </div>
             </div>
 
-            {/* Grid 3 colunas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+            {/* Grid 3 colunas em telas grandes, 1 coluna em telas normais de painel */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
                 {/* SEÇÃO A — PRÓXIMO MÊS */}
-                <div className="bg-stone-50/70 border border-stone-200/80 rounded-xl p-3.5 flex flex-col justify-start h-full">
+                <div className="bg-stone-50/70 border border-stone-200/80 rounded-xl p-3 flex flex-col justify-start h-full min-w-0">
                     <div>
-                        <div className="flex items-center justify-between mb-3 border-b border-stone-200/60 pb-2">
-                            <span className="font-black text-xs uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                                <span className="material-symbols-outlined text-base">event_upcoming</span>
+                        <div className="flex items-center justify-between mb-2.5 border-b border-stone-200/60 pb-2">
+                            <span className="font-black text-[11px] uppercase tracking-wide text-blue-700 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">event_upcoming</span>
                                 Próximo Mês
                             </span>
-                            <span className="text-[10px] font-black bg-blue-100/80 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
+                            <span className="text-[10px] font-black bg-blue-100/80 text-blue-800 px-1.5 py-0.5 rounded-full border border-blue-200 shrink-0">
                                 {proximoMes.length}
                             </span>
                         </div>
 
                         {proximoMes.length === 0 ? (
-                            <p className="text-[11px] text-stone-400 py-6 text-center italic">Nenhum afastamento previsto.</p>
+                            <p className="text-[10px] text-stone-400 py-4 text-center italic">Nenhum afastamento previsto.</p>
                         ) : (
                             <div className="space-y-2">
                                 {proximoMes.map((v, idx) => (
-                                    <div key={v.id || idx} className="bg-white p-2.5 rounded-lg border border-stone-200 text-xs shadow-2xs space-y-1">
-                                        <p className="font-bold text-stone-800 truncate">{getMilitarName(v)}</p>
-                                        <div className="flex items-center justify-between text-[10px] text-stone-500 pt-1 border-t border-stone-100">
-                                            <span className="font-extrabold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{getLeaveLabel(v.leave_type)}</span>
-                                            <span className="font-medium text-stone-600">Início: {formatLocalDate(v.start_date)}</span>
+                                    <div key={v.id || idx} className="bg-white p-2 rounded-lg border border-stone-200 text-xs shadow-2xs space-y-1 overflow-hidden">
+                                        <p className="font-bold text-stone-800 truncate text-[11px]">{getMilitarName(v)}</p>
+                                        <div className="flex flex-wrap items-center justify-between text-[9px] text-stone-500 pt-1 border-t border-stone-100 gap-1">
+                                            <span className="font-extrabold text-blue-700 bg-blue-50 px-1 py-0.5 rounded border border-blue-100 shrink-0">{getLeaveLabel(v.leave_type)}</span>
+                                            <span className="font-medium text-stone-600 truncate">Início: {formatLocalDate(v.start_date)}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -108,32 +108,32 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
                 </div>
 
                 {/* SEÇÃO B — EM AFASTAMENTO */}
-                <div className="bg-amber-50/40 border border-amber-200/80 rounded-xl p-3.5 flex flex-col justify-start h-full">
+                <div className="bg-amber-50/40 border border-amber-200/80 rounded-xl p-3 flex flex-col justify-start h-full min-w-0">
                     <div>
-                        <div className="flex items-center justify-between mb-3 border-b border-amber-200/60 pb-2">
-                            <span className="font-black text-xs uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                                <span className="material-symbols-outlined text-base">beach_access</span>
+                        <div className="flex items-center justify-between mb-2.5 border-b border-amber-200/60 pb-2">
+                            <span className="font-black text-[11px] uppercase tracking-wide text-amber-800 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">beach_access</span>
                                 Em Afastamento
                             </span>
-                            <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-200">
+                            <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded-full border border-amber-200 shrink-0">
                                 {emAfastamento.length}
                             </span>
                         </div>
 
                         {emAfastamento.length === 0 ? (
-                            <p className="text-[11px] text-stone-400 py-6 text-center italic">Nenhum militar em afastamento.</p>
+                            <p className="text-[10px] text-stone-400 py-4 text-center italic">Nenhum militar em afastamento.</p>
                         ) : (
                             <div className="space-y-2">
                                 {emAfastamento.map((v, idx) => (
-                                    <div key={v.id || idx} className="bg-white p-2.5 rounded-lg border border-amber-200/80 text-xs shadow-2xs space-y-1">
-                                        <p className="font-bold text-stone-800 truncate">{getMilitarName(v)}</p>
-                                        <div className="flex items-center justify-between text-[10px]">
-                                            <span className="font-extrabold text-amber-800 bg-amber-100/60 px-1.5 py-0.5 rounded border border-amber-200">{getLeaveLabel(v.leave_type)}</span>
-                                            <span className="font-bold text-stone-700">{v.day_count ? `${v.day_count} dias` : ''}</span>
+                                    <div key={v.id || idx} className="bg-white p-2 rounded-lg border border-amber-200/80 text-xs shadow-2xs space-y-1 overflow-hidden">
+                                        <p className="font-bold text-stone-800 truncate text-[11px]">{getMilitarName(v)}</p>
+                                        <div className="flex items-center justify-between text-[9px] gap-1">
+                                            <span className="font-extrabold text-amber-800 bg-amber-100/60 px-1 py-0.5 rounded border border-amber-200 shrink-0 truncate max-w-[90px]">{getLeaveLabel(v.leave_type)}</span>
+                                            <span className="font-bold text-stone-700 shrink-0">{v.day_count ? `${v.day_count} dias` : ''}</span>
                                         </div>
-                                        <div className="flex items-center justify-between text-[10px] text-stone-500 pt-1 border-t border-stone-100 font-medium">
-                                            <span>Início: {formatLocalDate(v.start_date)}</span>
-                                            <span className="font-bold text-amber-900">Retorno: {formatLocalDate(v.end_date)}</span>
+                                        <div className="flex flex-wrap items-center justify-between text-[9px] text-stone-500 pt-1 border-t border-stone-100 font-medium gap-1">
+                                            <span className="truncate">Início: {formatLocalDate(v.start_date)}</span>
+                                            <span className="font-bold text-amber-900 truncate">Ret: {formatLocalDate(v.end_date)}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -143,28 +143,28 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
                 </div>
 
                 {/* SEÇÃO C — RETORNARAM ESTE MÊS */}
-                <div className="bg-emerald-50/30 border border-emerald-200/80 rounded-xl p-3.5 flex flex-col justify-start h-full">
+                <div className="bg-emerald-50/30 border border-emerald-200/80 rounded-xl p-3 flex flex-col justify-start h-full min-w-0">
                     <div>
-                        <div className="flex items-center justify-between mb-3 border-b border-emerald-200/60 pb-2">
-                            <span className="font-black text-xs uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
-                                <span className="material-symbols-outlined text-base">assignment_return</span>
+                        <div className="flex items-center justify-between mb-2.5 border-b border-emerald-200/60 pb-2">
+                            <span className="font-black text-[11px] uppercase tracking-wide text-emerald-800 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">assignment_return</span>
                                 Retornaram Este Mês
                             </span>
-                            <span className="text-[10px] font-black bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <span className="text-[10px] font-black bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
                                 {retornaramEsteMes.length}
                             </span>
                         </div>
 
                         {retornaramEsteMes.length === 0 ? (
-                            <p className="text-[11px] text-stone-400 py-6 text-center italic">Nenhum retorno neste mês.</p>
+                            <p className="text-[10px] text-stone-400 py-4 text-center italic">Nenhum retorno neste mês.</p>
                         ) : (
                             <div className="space-y-2">
                                 {retornaramEsteMes.map((v, idx) => (
-                                    <div key={v.id || idx} className="bg-white p-2.5 rounded-lg border border-emerald-200/80 text-xs shadow-2xs space-y-1">
-                                        <p className="font-bold text-stone-800 truncate">{getMilitarName(v)}</p>
-                                        <div className="flex items-center justify-between text-[10px] text-stone-500 pt-1 border-t border-stone-100">
-                                            <span className="font-extrabold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{getLeaveLabel(v.leave_type)}</span>
-                                            <span className="font-semibold text-emerald-900">Retornou em: {formatLocalDate(v.end_date)}</span>
+                                    <div key={v.id || idx} className="bg-white p-2 rounded-lg border border-emerald-200/80 text-xs shadow-2xs space-y-1 overflow-hidden">
+                                        <p className="font-bold text-stone-800 truncate text-[11px]">{getMilitarName(v)}</p>
+                                        <div className="flex flex-wrap items-center justify-between text-[9px] text-stone-500 pt-1 border-t border-stone-100 gap-1">
+                                            <span className="font-extrabold text-emerald-800 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100 shrink-0 truncate max-w-[80px]">{getLeaveLabel(v.leave_type)}</span>
+                                            <span className="font-semibold text-emerald-900 truncate">Retornou: {formatLocalDate(v.end_date)}</span>
                                         </div>
                                     </div>
                                 ))}

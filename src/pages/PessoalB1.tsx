@@ -1732,7 +1732,7 @@ const PessoalB1: React.FC = () => {
                   )}
 
                   {/* Linha 3: Grid de painéis secundários */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
                     <PainelAfastamentos vacations={vacations} personnelList={personnelList} />
                     <RankingAcesso personnelList={personnelList} />
                     <PainelDinossauros personnelList={personnelList} />
