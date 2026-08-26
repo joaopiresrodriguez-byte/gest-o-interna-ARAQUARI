@@ -530,14 +530,9 @@ const Operacional: React.FC = () => {
       setReceipts(recs);
       setEscalaHoje(escalaData);
 
-      // Filtrar missões do mês corrente
+      // Carregar todas as missões sem restringir por filtro rígido de data
       const allMissions = (missionsData.data || []) as DailyMission[];
-      const missoesDoMes = allMissions.filter(m => {
-        if (!m.mission_date) return true;
-        return m.mission_date.startsWith(currentMonthPrefix);
-      });
-
-      setMissions(missoesDoMes);
+      setMissions(allMissions);
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
     } catch (error) {
       console.error("Error loading operational data:", error);
@@ -730,9 +725,9 @@ const Operacional: React.FC = () => {
                     <span className="material-symbols-outlined text-white text-2xl">shield_person</span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-200 block">Guarnição Escalada Hoje</span>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-200 block">Guarnição Escalada</span>
                     <h2 className="text-lg font-black tracking-tight">
-                      {escalaHoje?.equipe ? `Equipe / ${escalaHoje.equipe}` : 'Nenhuma Guarnição Escalada Hoje'}
+                      {escalaHoje?.equipe ? `Equipe / ${escalaHoje.equipe}` : 'Nenhuma Guarnição Escalada'}
                     </h2>
                   </div>
                 </div>
@@ -884,7 +879,7 @@ const Operacional: React.FC = () => {
               {unifiedMissions.length === 0 && (
                 <div className="text-center py-16">
                   <span className="material-symbols-outlined text-5xl text-gray-200 mb-3">event_busy</span>
-                  <p className="text-sm text-gray-400 font-bold">Nenhuma missão ou instrução para este dia.</p>
+                  <p className="text-sm text-gray-400 font-bold">Nenhuma missão ou instrução cadastrada para o mês corrente.</p>
                   {isEditor && <p className="text-xs text-gray-300 mt-1">Clique em &quot;Nova Missão&quot; para criar.</p>}
                 </div>
               )}
