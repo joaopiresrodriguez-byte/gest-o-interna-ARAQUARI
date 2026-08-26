@@ -13,6 +13,7 @@ import {
 import { supabase } from '../services/supabase';
 import { DefesaCivilTicker } from '../components/DefesaCivilTicker';
 import { BirthdayCard } from '../components/BirthdayCard';
+import { CardClimaAraquari } from '../components/CardClimaAraquari';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import { formatLocalDate } from '../utils/dateUtils';
@@ -722,6 +723,9 @@ const DashboardAvisos: React.FC = () => {
           {/* Column 2: Sidebar */}
           <div className="space-y-6">
 
+            {/* Card de Clima de Araquari - SC */}
+            <CardClimaAraquari />
+
             {/* Birthday Card */}
             <BirthdayCard selectedDate={selectedDate} />
 
@@ -933,7 +937,9 @@ const DashboardAvisos: React.FC = () => {
                     })}
                   </div>
                 ) : (
-                  <p className="text-xs text-rustic-brown/40 italic pl-1">Nenhuma troca registrada para hoje.</p>
+                  <p className="text-xs text-rustic-brown/40 italic pl-1 py-1">
+                    Não há trocas de serviço registradas para hoje.
+                  </p>
                 )}
               </div>
 

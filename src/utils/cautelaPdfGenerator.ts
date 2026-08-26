@@ -177,14 +177,18 @@ export const imprimirDocumentoCautela = (cautela: Cautela) => {
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1>Corpo de Bombeiros Militar de Santa Catarina</h1>
-        <h2>7º Batallhão de Bombeiros Militar — Araquari</h2>
-        <p>Sistema Gestão Interna | Módulo Operacional & B4</p>
+      <div class="header" style="text-align: left; border-bottom: 2px solid #b91c1c; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg/200px-Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg.png" style="height: 65px;" alt="Brasão CBMSC" />
+        <div>
+          <div style="font-size: 11px; font-weight: 800; color: #1e293b; text-transform: uppercase;">ESTADO DE SANTA CATARINA</div>
+          <div style="font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase;">CORPO DE BOMBEIROS MILITAR DE SANTA CATARINA</div>
+          <div style="font-size: 10px; font-weight: 700; color: #334155;">4ª RBM — 16º BBM — 2ª CBM — 2º PBM</div>
+          <div style="font-size: 10px; font-weight: 700; color: #475569;">2º GRUPO DE BOMBEIROS MILITAR (Araquari)</div>
+        </div>
       </div>
 
       <div class="doc-title">
-        Termo de Cautela e Empréstimo
+        TERMO DE CAUTELA
         <br/>
         <div class="badge-numero">${cautela.numero_cautela}</div>
       </div>
@@ -205,8 +209,12 @@ export const imprimirDocumentoCautela = (cautela: Cautela) => {
         <div class="box">
           <div class="box-title">2. Responsáveis pelo Empréstimo</div>
           <div class="field">
-            <div class="label">Solicitante Responsável</div>
+            <div class="label">Nome do solicitante responsável</div>
             <div class="value">${cautela.solicitante}</div>
+          </div>
+          <div class="field">
+            <div class="label">Matrícula</div>
+            <div class="value">${cautela.matricula_solicitante || '—'}</div>
           </div>
           <div class="field">
             <div class="label">Retirado por</div>

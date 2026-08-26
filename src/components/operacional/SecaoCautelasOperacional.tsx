@@ -25,6 +25,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
   const [dataRetirada, setDataRetirada] = useState<string>(new Date().toISOString().slice(0, 16));
   const [dataPrevista, setDataPrevista] = useState<string>('');
   const [solicitante, setSolicitante] = useState<string>('');
+  const [matriculaSolicitante, setMatriculaSolicitante] = useState<string>('');
   const [retiradoPor, setRetiradoPor] = useState<string>('');
   const [observacoesRetirada, setObservacoesRetirada] = useState<string>('');
   const [salvandoRetirada, setSalvandoRetirada] = useState<boolean>(false);
@@ -145,6 +146,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
         tipo_item: selectedItem.type,
         item_nome: selectedItem.name,
         solicitante: solicitante.trim(),
+        matricula_solicitante: matriculaSolicitante.trim() || null,
         retirado_por: retiradoPor.trim(),
         data_retirada: dataRetirada ? new Date(dataRetirada).toISOString() : new Date().toISOString(),
         data_prevista_devolucao: dataPrevista ? new Date(dataPrevista).toISOString() : null,
@@ -171,6 +173,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
     setDataRetirada(new Date().toISOString().slice(0, 16));
     setDataPrevista('');
     setSolicitante('');
+    setMatriculaSolicitante('');
     setRetiradoPor('');
     setObservacoesRetirada('');
   };
@@ -651,7 +654,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
-                    Solicitante Responsável *
+                    Nome do Solicitante Responsável *
                   </label>
                   <input
                     type="text"
@@ -659,6 +662,18 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                     placeholder="Ex: Sgt Silva"
                     value={solicitante}
                     onChange={e => setSolicitante(e.target.value)}
+                    className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
+                    Matrícula do Solicitante
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 932234-5"
+                    value={matriculaSolicitante}
+                    onChange={e => setMatriculaSolicitante(e.target.value)}
                     className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-primary"
                   />
                 </div>

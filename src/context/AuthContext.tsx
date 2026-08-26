@@ -82,6 +82,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
             if (currentUser) {
                 await fetchProfile(currentUser.id);
+                // Registrar log de acesso do usuário no banco de dados
+                try {
+                    await supabase.from('user_access_logs').insert({
+                        user_id: currentUser.id,
+                        user_email: currentUser.email || 'desconhecido@cbm.sc.gov.br',
+                        accessed_at: new Date().toISOString(),
+                    });
+                } catch (e) {
+                    console.warn('Erro ao registrar log de acesso:', e);
+                }
             } else {
                 setProfile(null);
                 setProfileError(null);

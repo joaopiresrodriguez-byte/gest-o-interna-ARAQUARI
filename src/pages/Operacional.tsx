@@ -474,12 +474,12 @@ const CardMissao: React.FC<{
   );
 };
 
-type MainTab = 'resumo' | 'missoes' | 'conferencia' | 'cautelas' | 'recebimentos';
+type MainTab = 'missoes' | 'conferencia' | 'cautelas' | 'recebimentos';
 
 // ============ MAIN COMPONENT ============
 
 const Operacional: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<MainTab>('resumo');
+  const [activeTab, setActiveTab] = useState<MainTab>('missoes');
   const { user, profile } = useAuth();
   const isEditor = profile?.p_operacional === 'editor';
 
@@ -508,25 +508,44 @@ const Operacional: React.FC = () => {
   // Notification modal
   const [notifModal, setNotifModal] = useState<{ open: boolean; data: any; type: 'receipt' | 'conference' }>({ open: false, data: null, type: 'receipt' });
 
+  // Guarnição Ativa do Dia e Escala State
+  const [escalaHoje, setEscalaHoje] = useState<any>(null);
+
   // ============ DATA LOADING ============
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [recs, missionsData, trainingsData] = await Promise.all([
+      const todayStr = new Date().toISOString().split('T')[0];
+      const currentMonthPrefix = todayStr.substring(0, 7); // YYYY-MM
+
+      const [recs, missionsData, trainingsData, escalaData] = await Promise.all([
         SupabaseService.getProductsReceipts(),
-        SupabaseService.getDailyMissions({ data: missionForm.mission_date }),
+        // Buscar todas as missões diárias
+        supabase.from('daily_missions').select('*').order('created_at', { ascending: false }),
         SupabaseService.getTrainings(),
+        SupabaseService.getEscalaByDate(todayStr)
       ]);
+
       setReceipts(recs);
-      setMissions(missionsData);
+      setEscalaHoje(escalaData);
+
+      // Filtrar missões do mês corrente que não estejam concluídas
+      const allMissions = (missionsData.data || []) as DailyMission[];
+      const missoesDoMesPendentes = allMissions.filter(m => {
+        const isCurrentMonth = m.mission_date ? m.mission_date.startsWith(currentMonthPrefix) : true;
+        const isNotConcluida = m.status !== 'concluida';
+        return isCurrentMonth && isNotConcluida;
+      });
+
+      setMissions(missoesDoMesPendentes);
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
     } catch (error) {
       console.error("Error loading operational data:", error);
     } finally {
       setLoading(false);
     }
-  }, [missionForm.mission_date]);
+  }, []);
 
   useEffect(() => { loadAllData(); }, [loadAllData]);
 
@@ -649,7 +668,6 @@ const Operacional: React.FC = () => {
   // ============ TAB CONFIG ============
 
   const TABS: { key: MainTab; label: string; icon: string; badge?: number }[] = [
-    { key: 'resumo', label: 'Resumo', icon: 'dashboard' },
     { key: 'missoes', label: 'Missões do Dia', icon: 'target', badge: dashboardStats.activeMissions },
     { key: 'conferencia', label: 'Conferência', icon: 'checklist' },
     { key: 'cautelas', label: 'Cautelas', icon: 'assignment_return' },
@@ -701,125 +719,32 @@ const Operacional: React.FC = () => {
 
       <div className="p-8 max-w-7xl mx-auto w-full flex-1">
 
-        {/* ========== TAB: RESUMO ========== */}
-        {activeTab === 'resumo' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl border border-rustic-border p-5 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-blue-600">target</span>
-                  </div>
-                  <span className="text-2xl font-black text-[#181111]">{dashboardStats.totalMissions}</span>
-                </div>
-                <p className="text-xs font-bold text-gray-400 uppercase">Missões Hoje</p>
-              </div>
-              <div className="bg-white rounded-xl border border-rustic-border p-5 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-green-600">check_circle</span>
-                  </div>
-                  <span className="text-2xl font-black text-[#181111]">{dashboardStats.completedMissions}</span>
-                </div>
-                <p className="text-xs font-bold text-gray-400 uppercase">Concluídas</p>
-              </div>
-              <div className="bg-white rounded-xl border border-rustic-border p-5 shadow-sm">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-teal-600">receipt_long</span>
-                  </div>
-                  <span className="text-2xl font-black text-[#181111]">{receipts.length}</span>
-                </div>
-                <p className="text-xs font-bold text-gray-400 uppercase">Recebimentos</p>
-              </div>
-            </div>
-
-            {/* Guarnição */}
-            <section className="bg-white rounded-xl shadow-sm border border-rustic-border overflow-hidden">
-              <div className="bg-gradient-to-r from-red-700 to-red-900 p-4 text-white flex items-center justify-between">
-                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                  <span className="material-symbols-outlined">groups</span> Guarnição do Dia
-                </h3>
-                <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded">{new Date().toLocaleDateString('pt-BR')}</span>
-              </div>
-              <div className="p-4">
-                <GarrisonDisplay />
-              </div>
-            </section>
-
-            {/* Active Missions + Trainings Quick View */}
-            {(missions.filter(m => m.status !== 'concluida' && m.status !== 'cancelada').length > 0 || todayTrainings.length > 0) && (
-              <section className="bg-white rounded-xl shadow-sm border border-rustic-border overflow-hidden">
-                <div className="p-4 border-b border-rustic-border flex items-center justify-between">
-                  <h3 className="text-sm font-black text-[#181111] uppercase tracking-wider flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[18px]">target</span>
-                    Missões Ativas
-                    {todayTrainings.length > 0 && (
-                      <span className="bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full">
-                        +{todayTrainings.length} instrução
-                      </span>
-                    )}
-                  </h3>
-                  <button onClick={() => setActiveTab('missoes')} className="text-xs font-bold text-primary hover:underline">Ver todas →</button>
-                </div>
-                <div className="p-4 space-y-2">
-                  {missions.filter(m => m.status !== 'concluida' && m.status !== 'cancelada').slice(0, 4).map(m => (
-                    <div key={m.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className={`w-2 h-2 rounded-full ${PRIORITY_CONFIG[m.priority || 'media'].dot}`}></div>
-                      <span className="text-sm font-bold text-[#181111] flex-1">{m.title}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${STATUS_CONFIG[m.status].color}`}>
-                        {STATUS_CONFIG[m.status].label}
-                      </span>
-                    </div>
-                  ))}
-                  {todayTrainings.map(t => {
-                    const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
-                    return (
-                      <div key={t.id} className={`flex items-center gap-3 p-3 rounded-lg border ${isCanceled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-blue-50 border-blue-100'}`}>
-                        <span className={`material-symbols-outlined text-[18px] ${isCanceled ? 'text-gray-400' : 'text-blue-500'}`}>school</span>
-                        <span className={`text-sm font-bold flex-1 ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>
-                          {(t.materia as any)?.name || 'Instrução'}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isCanceled ? 'bg-gray-200 text-gray-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {isCanceled ? 'Cancelada' : t.time || 'Agendada'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {/* Recent Receipts Quick View */}
-            {dashboardStats.recentReceipts.length > 0 && (
-              <section className="bg-white rounded-xl shadow-sm border border-rustic-border overflow-hidden">
-                <div className="p-4 border-b border-rustic-border flex items-center justify-between">
-                  <h3 className="text-sm font-black text-[#181111] uppercase tracking-wider flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[18px]">local_shipping</span>
-                    Últimos Recebimentos
-                  </h3>
-                  <button onClick={() => setActiveTab('recebimentos')} className="text-xs font-bold text-primary hover:underline">Ver todos →</button>
-                </div>
-                <div className="p-4 space-y-2">
-                  {dashboardStats.recentReceipts.map(rec => (
-                    <div key={rec.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <img src={rec.photo_url} className="w-10 h-10 rounded object-cover border border-gray-200" alt="Produto" loading="lazy" />
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-[#181111]">NF: {rec.fiscal_note_number}</span>
-                        <span className="text-[10px] text-gray-400 ml-2">{rec.receipt_date ? new Date(rec.receipt_date).toLocaleDateString('pt-BR') : ''}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-
         {/* ========== TAB: MISSÕES DO DIA ========== */}
         {activeTab === 'missoes' && (
           <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Banner da Guarnição Ativa do Dia */}
+            <div className="bg-gradient-to-r from-red-800 to-red-950 rounded-2xl p-4 text-white shadow-md flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+                  <span className="material-symbols-outlined text-white text-2xl">shield_person</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-200 block">Guarnição Escalada Hoje</span>
+                  <h2 className="text-lg font-black tracking-tight">
+                    {escalaHoje?.equipe ? `Equipe / ${escalaHoje.equipe}` : 'Nenhuma Guarnição Escalada Hoje'}
+                  </h2>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-white/15 rounded-lg text-xs font-bold border border-white/20">
+                  Mês Corrente (Pendentes)
+                </span>
+                <span className="px-3 py-1 bg-amber-500/20 text-amber-200 border border-amber-400/30 rounded-lg text-xs font-black">
+                  {missions.length} missão(ões)
+                </span>
+              </div>
+            </div>
+
             {/* Controls */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2">

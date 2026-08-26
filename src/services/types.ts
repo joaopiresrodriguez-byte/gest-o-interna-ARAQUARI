@@ -38,6 +38,7 @@ export interface Cautela {
     tipo_item: 'equipamento' | 'viatura' | 'material' | string;
     item_nome: string;
     solicitante: string;
+    matricula_solicitante?: string | null;
     retirado_por: string;
     devolvido_por?: string | null;
     data_retirada: string;
@@ -239,6 +240,7 @@ export interface GuReport {
 export interface MateriaInstrucao {
     id?: string;
     name: string;
+    tema?: string;
     credit_hours: number;
     category?: string;
     level?: 'basico' | 'intermediario' | 'avancado';

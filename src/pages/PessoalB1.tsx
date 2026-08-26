@@ -252,55 +252,104 @@ const PessoalB1: React.FC = () => {
   const [docPersonId, setDocPersonId] = useState<number | ''>('');
   const [docNotes, setDocNotes] = useState('');
 
-  const loadData = useCallback(async () => {
+  // Cache para o Dashboard B1
+  const [b1Cache, setB1Cache] = useState<{ timestamp: number; data: any } | null>(null);
+
+  const loadData = useCallback(async (forceRefresh = false) => {
+    // Verificar cache de 5 minutos (300.000 ms)
+    if (!forceRefresh && b1Cache && Date.now() - b1Cache.timestamp < 5 * 60 * 1000) {
+      const c = b1Cache.data;
+      setPersonnelList(c.pList);
+      setVacations(c.vList);
+      setDocuments(c.dList);
+      setAlerts(c.alerts);
+      setCourses(c.courseList);
+      setEpiDeliveries(c.epiList);
+      setNotifications(c.notifList);
+      setEscalas(c.escalas);
+      if (c.anchorDate) setScaleAnchorDate(c.anchorDate);
+      return;
+    }
+
     setLoading(true);
     try {
-      const [pList, vList, dList] = await Promise.all([
+      // 1. Executar TODAS as queries independentes em paralelo com Promise.all
+      const [
+        pList,
+        vList,
+        dList,
+        courseList,
+        epiList,
+        notifList,
+        escalasRes,
+        configs
+      ] = await Promise.all([
         PersonnelService.getPersonnel(),
         PersonnelService.getVacations(),
         PersonnelService.getDocumentsB1(),
-      ]);
-      setPersonnelList(pList);
-      setVacations(vList);
-      setDocuments(dList);
-
-      // Generate alerts with swap counts
-      const swapCounts = new Map<number, number>();
-      const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-      for (const p of pList) {
-        if (p.id) {
-          const count = await PersonnelService.getSwapCountThisMonth(p.id, currentMonth);
-          if (count > 0) swapCounts.set(p.id, count);
-        }
-      }
-      setAlerts(PersonnelService.generateAlerts(pList, vList, swapCounts));
-
-      // Load new module data in parallel
-      const [courseList, epiList, notifList, escalasData] = await Promise.all([
         PersonnelService.getCourses(),
         PersonnelService.getEpiDeliveries(),
         PersonnelService.getNotifications(),
-        supabase.from('escalas').select('*').order('data', { ascending: true })
+        supabase.from('escalas').select('*').order('data', { ascending: true }),
+        PersonnelService.getScaleConfigs(),
       ]);
+
+      setPersonnelList(pList);
+      setVacations(vList);
+      setDocuments(dList);
       setCourses(courseList);
       setEpiDeliveries(epiList);
       setNotifications(notifList);
-      setEscalas((escalasData.data || []) as Escala[]);
 
-      // Load scale rotation config
-      const configs = await PersonnelService.getScaleConfigs();
+      const escalasData = (escalasRes.data || []) as Escala[];
+      setEscalas(escalasData);
+
+      let anchorDate = new Date().toISOString().split('T')[0];
       if (configs && configs.length > 0) {
-        const active = configs[0];
-        setScaleAnchorDate(active.anchorDate);
-      } else {
-        setScaleAnchorDate(new Date().toISOString().split('T')[0]);
+        anchorDate = configs[0].anchorDate;
       }
+      setScaleAnchorDate(anchorDate);
+
+      // 2. Buscar trocas em lote/paralelo para os alertas
+      const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+      const swapCounts = new Map<number, number>();
+      
+      const swapPromises = pList
+        .filter(p => p.id)
+        .map(async p => {
+          const count = await PersonnelService.getSwapCountThisMonth(p.id!, currentMonth);
+          return { id: p.id!, count };
+        });
+
+      const swapResults = await Promise.all(swapPromises);
+      swapResults.forEach(r => {
+        if (r.count > 0) swapCounts.set(r.id, r.count);
+      });
+
+      const generatedAlerts = PersonnelService.generateAlerts(pList, vList, swapCounts);
+      setAlerts(generatedAlerts);
+
+      // Salvar em cache
+      setB1Cache({
+        timestamp: Date.now(),
+        data: {
+          pList,
+          vList,
+          dList,
+          courseList,
+          epiList,
+          notifList,
+          escalas: escalasData,
+          anchorDate,
+          alerts: generatedAlerts,
+        }
+      });
     } catch (err: any) {
       toast.error('Erro ao carregar dados: ' + (err.message || 'Desconhecido'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [b1Cache]);
 
   const loadDisciplinary = async () => {
     try { setDisciplinaryRecords(await PersonnelService.getDisciplinaryRecords()); } catch { /* ignore */ }
@@ -737,7 +786,9 @@ const PessoalB1: React.FC = () => {
     return val.trim().replace(/(\d+)[°º]\s*Sgt/i, '$1º Sgt');
   };
 
-  const filteredPersonnel = personnelList
+  // Militares Regulares (sem bc_graduacao_ordem)
+  const regularPersonnel = personnelList
+    .filter(p => !p.bc_graduacao_ordem)
     .filter(p => {
       const matchesSearch = !search ||
         p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -751,24 +802,42 @@ const PessoalB1: React.FC = () => {
       return matchesSearch && matchesGrad && matchesStatus && matchesType;
     })
     .sort((a, b) => {
-      // 1º Critério: Graduação/Posto (da mais alta para a mais baixa)
       const gradA = normalizeGraduation(a.graduation || a.rank);
       const gradB = normalizeGraduation(b.graduation || b.rank);
       const rankA = RANK_ORDEM[gradA] ?? 999;
       const rankB = RANK_ORDEM[gradB] ?? 999;
       if (rankA !== rankB) return rankA - rankB;
 
-      // 2º Critério de Desempate: Data da última promoção (mais antigo promovido há mais tempo)
       const dateA = a.data_ultima_promocao ? new Date(a.data_ultima_promocao + 'T00:00:00').getTime() : Infinity;
       const dateB = b.data_ultima_promocao ? new Date(b.data_ultima_promocao + 'T00:00:00').getTime() : Infinity;
       if (dateA !== dateB) return dateA - dateB;
 
-      // 3º Critério de Desempate: Data de inclusão na corporação
       const incA = a.data_inclusao ? new Date(a.data_inclusao + 'T00:00:00').getTime() : Infinity;
       const incB = b.data_inclusao ? new Date(b.data_inclusao + 'T00:00:00').getTime() : Infinity;
       if (incA !== incB) return incA - incB;
 
-      // 4º Critério: Alfabético
+      return (a.name || '').localeCompare(b.name || '', 'pt-BR');
+    });
+
+  // Bombeiros Comunitários (com bc_graduacao_ordem preenchido), ordenados do 10º ao 1º grau (decrescente)
+  const bcPersonnel = personnelList
+    .filter(p => !!p.bc_graduacao_ordem)
+    .filter(p => {
+      const matchesSearch = !search ||
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.war_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.graduation || '').toLowerCase().includes(search.toLowerCase());
+
+      const matchesGrad = !filterGraduation || (p.graduation || p.rank) === filterGraduation;
+      const matchesStatus = !filterStatus || p.status === filterStatus;
+      const matchesType = !filterType || p.type === filterType;
+
+      return matchesSearch && matchesGrad && matchesStatus && matchesType;
+    })
+    .sort((a, b) => {
+      const ordA = typeof a.bc_graduacao_ordem === 'number' ? a.bc_graduacao_ordem : 0;
+      const ordB = typeof b.bc_graduacao_ordem === 'number' ? b.bc_graduacao_ordem : 0;
+      if (ordA !== ordB) return ordB - ordA; // Ordem decrescente (10º ao 1º grau)
       return (a.name || '').localeCompare(b.name || '', 'pt-BR');
     });
 
@@ -826,8 +895,17 @@ const PessoalB1: React.FC = () => {
       <div className="flex-1 overflow-y-auto px-6 pb-8">
         <div className="max-w-[1400px] mx-auto">
           {loading && (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+            <div className="space-y-6 animate-pulse py-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="bg-stone-200/70 h-28 rounded-2xl"></div>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-stone-200/70 h-64 rounded-2xl"></div>
+                <div className="bg-stone-200/70 h-64 rounded-2xl"></div>
+              </div>
+              <div className="bg-stone-200/70 h-48 rounded-2xl"></div>
             </div>
           )}
 
@@ -890,57 +968,112 @@ const PessoalB1: React.FC = () => {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Efetivo</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">E-mail</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
-                      <tbody className="divide-y">{filteredPersonnel.map(p => {
-                        const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-teal-100 text-teal-700' };
-                        return (
-                          <tr key={p.id} className="hover:bg-stone-50/50 cursor-pointer" onClick={() => handleViewProfile(p)}>
-                            <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
-                            <td className="px-4 py-3 text-center">
-                              {(() => {
-                                const grad = p.graduation || p.rank || '—';
-                                const pos = RANK_ORDEM[grad];
-                                const isOficial = typeof pos === 'number' && pos <= RANK_ORDEM['Cap'];
-                                const isSub = grad === 'Sub Ten' || grad === 'Asp Of';
-                                const bgColor = isOficial ? 'bg-blue-100 text-blue-800' : isSub ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-stone-700';
-                                return (
-                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${bgColor}`}>
-                                    {grad}
-                                  </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
-                            <td className="px-4 py-3 text-center text-[10px] text-gray-500">{p.email || '—'}</td>
-                            <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={isDateExpired(p.cve_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cve_expiry_date)}</span> : '—'}</td>
-                            <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={isDateExpired(p.cnh_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cnh_expiry_date)}</span> : '—'}</td>
-                             <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
-                              <div className="flex gap-1 justify-center items-center">
-                                <ActionButton
-                                  variant="alteration"
-                                  size="sm"
-                                  onClick={() => abrirEdicaoMilitar(p)}
-                                  title="Alterar dados rápidos do Efetivo"
-                                />
-                                <ActionButton
-                                  variant="edit"
-                                  size="sm"
-                                  onClick={() => handleEdit(p)}
-                                  title="Editar perfil completo"
-                                />
-                                <ActionButton
-                                  variant="delete"
-                                  size="sm"
-                                  onClick={() => handleDeletePersonnel(p.id!)}
-                                  title="Excluir Efetivo"
-                                />
+                      <tbody className="divide-y">
+                        {/* Militares Regulares */}
+                        {regularPersonnel.map(p => {
+                          const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-teal-100 text-teal-700' };
+                          return (
+                            <tr key={p.id} className="hover:bg-stone-50/50 cursor-pointer" onClick={() => handleViewProfile(p)}>
+                              <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
+                              <td className="px-4 py-3 text-center">
+                                {(() => {
+                                  const grad = p.graduation || p.rank || '—';
+                                  const pos = RANK_ORDEM[grad];
+                                  const isOficial = typeof pos === 'number' && pos <= RANK_ORDEM['Cap'];
+                                  const isSub = grad === 'Sub Ten' || grad === 'Asp Of';
+                                  const bgColor = isOficial ? 'bg-blue-100 text-blue-800' : isSub ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-stone-700';
+                                  return (
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${bgColor}`}>
+                                      {grad}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
+                              <td className="px-4 py-3 text-center text-[10px] text-gray-500">{p.email || '—'}</td>
+                              <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={isDateExpired(p.cve_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cve_expiry_date)}</span> : '—'}</td>
+                              <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={isDateExpired(p.cnh_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cnh_expiry_date)}</span> : '—'}</td>
+                              <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                                <div className="flex gap-1 justify-center items-center">
+                                  <ActionButton
+                                    variant="alteration"
+                                    size="sm"
+                                    onClick={() => abrirEdicaoMilitar(p)}
+                                    title="Alterar dados rápidos do Efetivo"
+                                  />
+                                  <ActionButton
+                                    variant="edit"
+                                    size="sm"
+                                    onClick={() => handleEdit(p)}
+                                    title="Editar perfil completo"
+                                  />
+                                  <ActionButton
+                                    variant="delete"
+                                    size="sm"
+                                    onClick={() => handleDeletePersonnel(p.id!)}
+                                    title="Excluir Efetivo"
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+
+                        {/* Divisor Visual para Bombeiros Comunitários */}
+                        {bcPersonnel.length > 0 && (
+                          <tr className="bg-orange-50/70 border-y-2 border-orange-200">
+                            <td colSpan={7} className="px-4 py-2.5">
+                              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-orange-900">
+                                <span className="material-symbols-outlined text-base">volunteer_activism</span>
+                                Bombeiros Comunitários ({bcPersonnel.length})
                               </div>
                             </td>
-
                           </tr>
-                        );
-                      })}</tbody>
+                        )}
+
+                        {/* Bombeiros Comunitários */}
+                        {bcPersonnel.map(p => {
+                          const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-teal-100 text-teal-700' };
+                          return (
+                            <tr key={p.id} className="hover:bg-orange-50/30 cursor-pointer bg-stone-50/30" onClick={() => handleViewProfile(p)}>
+                              <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center"><span className="material-symbols-outlined text-[16px]">person</span></div><div><span className="font-bold block">{p.name}</span>{p.war_name && <span className="text-[10px] text-gray-400">({p.war_name})</span>}</div></div></td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-900 border border-orange-200">
+                                  {p.graduation || p.rank || 'BC'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span></td>
+                              <td className="px-4 py-3 text-center text-[10px] text-gray-500">{p.email || '—'}</td>
+                              <td className="px-4 py-3 text-center text-[10px]">{p.cve_expiry_date ? <span className={isDateExpired(p.cve_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cve_expiry_date)}</span> : '—'}</td>
+                              <td className="px-4 py-3 text-center text-[10px]">{p.cnh_expiry_date ? <span className={isDateExpired(p.cnh_expiry_date) ? 'text-red-600 font-black' : ''}>{formatLocalDate(p.cnh_expiry_date)}</span> : '—'}</td>
+                              <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                                <div className="flex gap-1 justify-center items-center">
+                                  <ActionButton
+                                    variant="alteration"
+                                    size="sm"
+                                    onClick={() => abrirEdicaoMilitar(p)}
+                                    title="Alterar dados rápidos do Efetivo"
+                                  />
+                                  <ActionButton
+                                    variant="edit"
+                                    size="sm"
+                                    onClick={() => handleEdit(p)}
+                                    title="Editar perfil completo"
+                                  />
+                                  <ActionButton
+                                    variant="delete"
+                                    size="sm"
+                                    onClick={() => handleDeletePersonnel(p.id!)}
+                                    title="Excluir Efetivo"
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
                     </table>
-                    {filteredPersonnel.length === 0 && <p className="text-center py-12 text-gray-300">Nenhum efetivo encontrado.</p>}
+                    {(regularPersonnel.length === 0 && bcPersonnel.length === 0) && <p className="text-center py-12 text-gray-300">Nenhum efetivo encontrado.</p>}
                   </div>
                 </div>
               )}
@@ -1307,7 +1440,10 @@ const PessoalB1: React.FC = () => {
                         <div className="space-y-4">
                           <div>
                             <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Militar</label>
-                            <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border border-rustic-border text-sm bg-white"><option value="">Selecionar militar...</option>{personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}</select>
+                            <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border border-rustic-border text-sm bg-white">
+                              <option value="">Selecionar militar...</option>
+                              {personnelList.filter(p => !p.bc_graduacao_ordem).map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}
+                            </select>
                           </div>
                           <div>
                             <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Tipo de Afastamento</label>
@@ -1331,8 +1467,14 @@ const PessoalB1: React.FC = () => {
                         </div>
                       </div>
                       <div className="xl:col-span-2 bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-                        <h3 className="font-black text-lg mb-4 text-gray-800">Períodos Registrados ({vacations.length})</h3>
-                        <div className="space-y-2">{vacations.map(v => {
+                        <h3 className="font-black text-lg mb-4 text-gray-800">Períodos Registrados ({vacations.filter(v => {
+                          const p = personnelList.find(px => px.id === v.personnel_id);
+                          return !p?.bc_graduacao_ordem;
+                        }).length})</h3>
+                        <div className="space-y-2">{vacations.filter(v => {
+                          const p = personnelList.find(px => px.id === v.personnel_id);
+                          return !p?.bc_graduacao_ordem;
+                        }).map(v => {
                           const leaveLabel = LEAVE_TYPES.find(lt => lt.value === v.leave_type)?.label || v.leave_type || 'Férias';
                           const isDiscount = v.leave_type === 'desconto_ferias';
                           return (
@@ -1405,6 +1547,7 @@ const PessoalB1: React.FC = () => {
                       {/* Personnel Balance Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {personnelList
+                          .filter(p => !p.bc_graduacao_ordem)
                           .filter(p => p.name.toLowerCase().includes(balanceSearchQuery.toLowerCase()) || (p.war_name && p.war_name.toLowerCase().includes(balanceSearchQuery.toLowerCase())))
                           .map(p => {
                             const stats = getVacationStats(p.id!, selectedBalanceYear);

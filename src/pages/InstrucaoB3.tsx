@@ -60,6 +60,7 @@ const InstrucaoB3: React.FC = () => {
 
   // Form State - Materia
   const [nome, setNome] = useState("");
+  const [tema, setTema] = useState("");
   const [cargaHoraria, setCargaHoraria] = useState("");
   const [categoria, setCategoria] = useState("Geral");
   const [nivel, setNivel] = useState<'basico' | 'intermediario' | 'avancado'>('basico');
@@ -232,8 +233,8 @@ const InstrucaoB3: React.FC = () => {
   };
 
   const handleSaveMateria = async () => {
-    if (!nome || !cargaHoraria) {
-      toast.error("Nome e Carga Horária são obrigatórios.");
+    if (!nome || !tema || !cargaHoraria) {
+      toast.error("Nome, Tema e Carga Horária são obrigatórios.");
       return;
     }
 
@@ -247,6 +248,7 @@ const InstrucaoB3: React.FC = () => {
       // 1. Save Materia Info
       const newMateria: MateriaInstrucao = {
         name: nome,
+        tema: tema.trim(),
         credit_hours: parseInt(cargaHoraria),
         category: categoria,
         level: nivel,
@@ -479,6 +481,14 @@ const InstrucaoB3: React.FC = () => {
                         value={nome} onChange={e => setNome(e.target.value)}
                         className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] placeholder:text-[#C4BEB7] focus:border-[#C62828] focus:ring-0 transition-all outline-none"
                         placeholder="Ex: APH Básico"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold uppercase tracking-wider text-[#8C8379]">Tema da Instrução *</label>
+                      <input
+                        value={tema} onChange={e => setTema(e.target.value)}
+                        className="h-12 rounded-xl border-2 border-[#E5E1DA] bg-white px-4 text-[#2D2926] placeholder:text-[#C4BEB7] focus:border-[#C62828] focus:ring-0 transition-all outline-none"
+                        placeholder="Ex: Primeiros Socorros em Trauma"
                       />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -750,8 +760,12 @@ const InstrucaoB3: React.FC = () => {
                             }`}>
                             {m.level}
                           </span>
-                          <h4 className="text-xl font-black text-[#2D2926] mt-1 group-hover:text-[#C62828] transition-colors">{m.name}</h4>
-                          <span className="text-xs font-bold text-[#8C8379] italic">{m.category}</span>
+                          <h4 className="text-xl font-black text-[#2D2926] mt-1 group-hover:text-[#C62828] transition-colors">
+                            {m.tema || m.name}
+                          </h4>
+                          <span className="text-xs font-bold text-[#8C8379] italic">
+                            {m.tema ? `${m.name} • ` : ''}{m.category}
+                          </span>
                         </div>
                         <div className="flex gap-4 items-center">
                           {profile?.p_instrucao === 'editor' && (
@@ -823,7 +837,9 @@ const InstrucaoB3: React.FC = () => {
                         <span className="text-2xl font-black leading-none">{t.date.split('-')[2]}</span>
                       </div>
                       <div className="flex flex-1 flex-col truncate">
-                        <h5 className="text-base font-black truncate">{t.materia?.name || "Treinamento"}</h5>
+                        <h5 className="text-base font-black truncate">
+                          {t.materia?.tema || t.materia?.name || "Treinamento"}
+                        </h5>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm opacity-70">
                           <span className="flex items-center gap-1 whitespace-nowrap">
                             <span className="material-symbols-outlined text-[16px]">schedule</span>

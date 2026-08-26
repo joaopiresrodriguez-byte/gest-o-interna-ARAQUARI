@@ -75,9 +75,9 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
             </div>
 
             {/* Grid 3 colunas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
                 {/* SEÇÃO A — PRÓXIMO MÊS */}
-                <div className="bg-stone-50/70 border border-stone-200/80 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="bg-stone-50/70 border border-stone-200/80 rounded-xl p-3.5 flex flex-col justify-start h-full">
                     <div>
                         <div className="flex items-center justify-between mb-3 border-b border-stone-200/60 pb-2">
                             <span className="font-black text-xs uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
@@ -108,7 +108,7 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
                 </div>
 
                 {/* SEÇÃO B — EM AFASTAMENTO */}
-                <div className="bg-amber-50/40 border border-amber-200/80 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="bg-amber-50/40 border border-amber-200/80 rounded-xl p-3.5 flex flex-col justify-start h-full">
                     <div>
                         <div className="flex items-center justify-between mb-3 border-b border-amber-200/60 pb-2">
                             <span className="font-black text-xs uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
@@ -143,7 +143,7 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
                 </div>
 
                 {/* SEÇÃO C — RETORNARAM ESTE MÊS */}
-                <div className="bg-emerald-50/30 border border-emerald-200/80 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="bg-emerald-50/30 border border-emerald-200/80 rounded-xl p-3.5 flex flex-col justify-start h-full">
                     <div>
                         <div className="flex items-center justify-between mb-3 border-b border-emerald-200/60 pb-2">
                             <span className="font-black text-xs uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
