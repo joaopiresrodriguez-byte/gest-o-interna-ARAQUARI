@@ -641,8 +641,9 @@ const Operacional: React.FC = () => {
   }, [missions, missionFilter]);
 
   const todayTrainings = useMemo(() => {
-    return trainings.filter(t => t.date === missionForm.mission_date);
-  }, [trainings, missionForm.mission_date]);
+    const currentMonthPrefix = new Date().toISOString().substring(0, 7);
+    return trainings.filter(t => t.date && t.date.startsWith(currentMonthPrefix));
+  }, [trainings]);
 
   const unifiedMissions = useMemo(() => {
     const missionItems = filteredMissions.map(m => ({ type: 'mission' as const, data: m }));
@@ -748,12 +749,10 @@ const Operacional: React.FC = () => {
             {/* Controls */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={missionForm.mission_date}
-                  onChange={e => setMissionForm(prev => ({ ...prev, mission_date: e.target.value }))}
-                  className="h-10 px-3 rounded-xl border border-rustic-border bg-white text-sm font-bold focus:ring-2 focus:ring-primary/20"
-                />
+                <div className="h-10 px-3.5 rounded-xl border border-rustic-border bg-white text-xs font-black uppercase text-rustic-brown flex items-center gap-2 shadow-sm">
+                  <span className="material-symbols-outlined text-primary text-base">calendar_month</span>
+                  <span>Mês Vigente • {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}</span>
+                </div>
                 <select
                   value={missionFilter}
                   onChange={e => setMissionFilter(e.target.value)}
