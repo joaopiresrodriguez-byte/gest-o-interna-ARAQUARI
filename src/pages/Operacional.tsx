@@ -530,15 +530,14 @@ const Operacional: React.FC = () => {
       setReceipts(recs);
       setEscalaHoje(escalaData);
 
-      // Filtrar missões do mês corrente que não estejam concluídas
+      // Filtrar missões do mês corrente
       const allMissions = (missionsData.data || []) as DailyMission[];
-      const missoesDoMesPendentes = allMissions.filter(m => {
-        const isCurrentMonth = m.mission_date ? m.mission_date.startsWith(currentMonthPrefix) : true;
-        const isNotConcluida = m.status !== 'concluida';
-        return isCurrentMonth && isNotConcluida;
+      const missoesDoMes = allMissions.filter(m => {
+        if (!m.mission_date) return true;
+        return m.mission_date.startsWith(currentMonthPrefix);
       });
 
-      setMissions(missoesDoMesPendentes);
+      setMissions(missoesDoMes);
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
     } catch (error) {
       console.error("Error loading operational data:", error);
@@ -723,26 +722,33 @@ const Operacional: React.FC = () => {
         {/* ========== TAB: MISSÕES DO DIA ========== */}
         {activeTab === 'missoes' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Banner da Guarnição Ativa do Dia */}
-            <div className="bg-gradient-to-r from-red-800 to-red-950 rounded-2xl p-4 text-white shadow-md flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
-                  <span className="material-symbols-outlined text-white text-2xl">shield_person</span>
+            {/* Banner da Guarnição Ativa do Dia com Detalhes */}
+            <div className="bg-gradient-to-r from-red-800 to-red-950 rounded-2xl p-5 text-white shadow-md space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+                    <span className="material-symbols-outlined text-white text-2xl">shield_person</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-200 block">Guarnição Escalada Hoje</span>
+                    <h2 className="text-lg font-black tracking-tight">
+                      {escalaHoje?.equipe ? `Equipe / ${escalaHoje.equipe}` : 'Nenhuma Guarnição Escalada Hoje'}
+                    </h2>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-200 block">Guarnição Escalada Hoje</span>
-                  <h2 className="text-lg font-black tracking-tight">
-                    {escalaHoje?.equipe ? `Equipe / ${escalaHoje.equipe}` : 'Nenhuma Guarnição Escalada Hoje'}
-                  </h2>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-white/15 rounded-lg text-xs font-bold border border-white/20">
+                    Todas as Missões do Mês
+                  </span>
+                  <span className="px-3 py-1 bg-amber-500/20 text-amber-200 border border-amber-400/30 rounded-lg text-xs font-black">
+                    {missions.length} missão(ões)
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 bg-white/15 rounded-lg text-xs font-bold border border-white/20">
-                  Mês Corrente (Pendentes)
-                </span>
-                <span className="px-3 py-1 bg-amber-500/20 text-amber-200 border border-amber-400/30 rounded-lg text-xs font-black">
-                  {missions.length} missão(ões)
-                </span>
+
+              {/* Detalhes dos Militares da Guarnição */}
+              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                <GarrisonDisplay />
               </div>
             </div>
 
