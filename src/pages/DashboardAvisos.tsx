@@ -90,6 +90,8 @@ const DashboardAvisos: React.FC = () => {
 
   const targetDate = getYesterdayDate(selectedDate);
 
+  const [escalaAlteracoes, setEscalaAlteracoes] = useState<any[]>([]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -101,7 +103,8 @@ const DashboardAvisos: React.FC = () => {
         personnelData,
         trainingsData,
         vacationsData,
-        swapsData
+        swapsData,
+        alteracoesRes
       ] = await Promise.all([
         SupabaseService.getDailyMissions({ data: selectedDate }),
         SupabaseService.getDailyMissions({ data: targetDate }),
@@ -110,7 +113,8 @@ const DashboardAvisos: React.FC = () => {
         SupabaseService.getPersonnel(),
         SupabaseService.getTrainings(),
         SupabaseService.getVacations(),
-        SupabaseService.getServiceSwaps()
+        SupabaseService.getServiceSwaps(),
+        supabase.from('escala_alteracoes').select('*')
       ]);
 
       // Try to load pending notices (might not exist)
@@ -126,15 +130,14 @@ const DashboardAvisos: React.FC = () => {
 
       setMissions(missionsData);
       setPreviousMissions(prevMissionsData.filter(m => m.status === 'concluida'));
-      // Only display vehicles (Viatura type), regardless of status
       setFleet(fleetData.filter(v => v.type === 'Viatura'));
-      // Include both scheduled and canceled trainings to maintain history
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
       setReports(reportsData);
       setPersonnel(personnelData);
       setPendingNotices(noticesData);
       setVacations(vacationsData || []);
       setServiceSwaps(swapsData || []);
+      setEscalaAlteracoes(alteracoesRes.data || []);
     } catch (error) {
       console.error("Failed to load data", error);
       toast.error('Erro ao carregar dados do painel.');
@@ -167,10 +170,44 @@ const DashboardAvisos: React.FC = () => {
       .filter(Boolean);
   }, [escala, personnel]);
 
-  // Find service swaps on the selected date
+  // Find service swaps & scale alterations for the selected date
   const swapsForToday = useMemo(() => {
-    return serviceSwaps.filter(s => s.original_date === selectedDate || s.new_date === selectedDate);
-  }, [serviceSwaps, selectedDate]);
+    // 1. ServiceSwaps tradicionais onde original_date, new_date, date_a_gives_to_b ou date_b_gives_to_a é igual a selectedDate
+    const directSwaps = serviceSwaps.filter(s =>
+      s.original_date === selectedDate ||
+      s.new_date === selectedDate ||
+      s.date_a_gives_to_b === selectedDate ||
+      s.date_b_gives_to_a === selectedDate
+    );
+
+    // 2. Alterações da tabela escala_alteracoes que caíram nesta data
+    const scaleAltSwaps: ServiceSwap[] = escalaAlteracoes
+      .filter(alt => alt.dia_original_a === selectedDate || alt.dia_original_b === selectedDate || alt.data_vigencia === selectedDate)
+      .map((alt, idx) => ({
+        id: `alt-${alt.id || idx}`,
+        personnel_id: alt.militar_a_id,
+        swap_with_personnel_id: alt.militar_b_id,
+        original_date: alt.dia_original_a || selectedDate,
+        new_date: alt.dia_original_b || alt.data_vigencia || selectedDate,
+        reason: alt.detalhes || 'Alteração de Escala Publicada',
+        swap_date: alt.criado_em ? alt.criado_em.split('T')[0] : selectedDate,
+        month_ref: selectedDate.substring(0, 7),
+        approval_status: 'Aprovado' as const,
+      }));
+
+    // Mesclar ignorando duplicados por ID de militares + datas
+    const combined = [...directSwaps];
+    scaleAltSwaps.forEach(altSwap => {
+      const exists = combined.some(s =>
+        Number(s.personnel_id) === Number(altSwap.personnel_id) &&
+        Number(s.swap_with_personnel_id) === Number(altSwap.swap_with_personnel_id) &&
+        (s.original_date === altSwap.original_date || s.new_date === altSwap.new_date)
+      );
+      if (!exists) combined.push(altSwap);
+    });
+
+    return combined;
+  }, [serviceSwaps, escalaAlteracoes, selectedDate]);
 
   // Find vacations and leaves active on the selectedDate
   const vacationsOnDate = useMemo(() => {
@@ -428,6 +465,36 @@ const DashboardAvisos: React.FC = () => {
 
           {/* Column 1: Aviso do Dia + Missões */}
           <div className="xl:col-span-2 space-y-6">
+
+            {/* CREATE NEW AVISO (Para o Próximo Plantão) */}
+            {isEditor && (
+              <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-6">
+                <h2 className="font-bold text-[#2c1810] mb-2 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-primary">edit_note</span>
+                  Deixar Aviso para o Próximo Plantão
+                </h2>
+                <p className="text-[10px] text-rustic-brown/60 mb-3">Este aviso será exibido para o Chefe de Socorro que assumir.</p>
+                <textarea
+                  value={guReportText}
+                  onChange={(e) => setGuReportText(e.target.value)}
+                  className="w-full h-24 rounded-lg border border-rustic-border bg-background-light p-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none mb-2"
+                  placeholder="Ex: Viatura ABT com problema no freio. Aguardando peça..."
+                  maxLength={1000}
+                ></textarea>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-rustic-brown/40">
+                    {guReportText.length}/1000 • {formatDateBR(selectedDate)}
+                  </span>
+                  <button
+                    onClick={handleSaveReport}
+                    disabled={!guReportText.trim()}
+                    className="px-5 py-2 bg-primary text-white rounded-lg font-bold text-sm hover:bg-red-700 shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Salvar Aviso
+                  </button>
+                </div>
+              </section>
+            )}
 
             {/* AVISO DO DIA (Yesterday's Report) */}
             <section className="bg-yellow-50 rounded-xl border border-yellow-200 shadow-sm p-6 relative overflow-hidden">
@@ -1063,63 +1130,35 @@ const DashboardAvisos: React.FC = () => {
               </button>
             </section>
 
-            {/* CREATE NEW AVISO (Para o Próximo Plantão) */}
-            {isEditor && (
+            {/* HISTÓRICO DE AVISOS */}
+            {reports.length > 0 && (
               <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-6">
-                <h2 className="font-bold text-[#2c1810] mb-2 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-primary">edit_note</span>
-                  Deixar Aviso para o Próximo Plantão
+                <h2 className="font-bold text-[#2c1810] mb-3 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-primary">history</span>
+                  Histórico de Avisos
                 </h2>
-                <p className="text-[10px] text-rustic-brown/60 mb-3">Este aviso será exibido para o Chefe de Socorro que assumir.</p>
-                <textarea
-                  value={guReportText}
-                  onChange={(e) => setGuReportText(e.target.value)}
-                  className="w-full h-28 rounded-lg border border-rustic-border bg-background-light p-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none mb-2"
-                  placeholder="Ex: Viatura ABT com problema no freio. Aguardando peça..."
-                  maxLength={1000}
-                ></textarea>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-rustic-brown/40">
-                    {guReportText.length}/1000 • {formatDateBR(selectedDate)}
-                  </span>
-                  <button
-                    onClick={handleSaveReport}
-                    disabled={!guReportText.trim()}
-                    className="px-5 py-2 bg-primary text-white rounded-lg font-bold text-sm hover:bg-red-700 shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Salvar Aviso
-                  </button>
-                </div>
-
-                {/* History */}
-                {reports.length > 0 && (
-                  <div className="mt-5 border-t border-rustic-border pt-4">
-                    <h3 className="text-xs font-bold text-rustic-brown mb-2 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">history</span>
-                      Histórico de Avisos
-                    </h3>
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                      {reports.map((rep) => (
-                        <div key={rep.id} className="text-xs p-3 bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-start gap-3 group">
-                          <div className="flex-1 min-w-0">
-                            <span className="font-bold block text-primary text-[11px]">{formatDateBR(rep.report_date)}</span>
-                            <p className="text-rustic-brown/80 line-clamp-2 mt-0.5">{rep.description}</p>
-                            {rep.created_at && (
-                              <span className="text-[9px] text-gray-400 mt-1 block">{timeAgo(rep.created_at)}</span>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => handleDeleteReport(rep.id!)}
-                            className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                            title="Excluir aviso"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">delete</span>
-                          </button>
-                        </div>
-                      ))}
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {reports.map((rep) => (
+                    <div key={rep.id} className="text-xs p-3 bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-start gap-3 group">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold block text-primary text-[11px]">{formatDateBR(rep.report_date)}</span>
+                        <p className="text-rustic-brown/80 line-clamp-3 mt-0.5">{rep.description}</p>
+                        {rep.created_at && (
+                          <span className="text-[9px] text-gray-400 mt-1 block">{timeAgo(rep.created_at)}</span>
+                        )}
+                      </div>
+                      {isEditor && (
+                        <button
+                          onClick={() => handleDeleteReport(rep.id!)}
+                          className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                          title="Excluir aviso"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      )}
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </section>
             )}
 
