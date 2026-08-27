@@ -177,20 +177,17 @@ export const imprimirDocumentoCautela = (cautela: Cautela) => {
       </style>
     </head>
     <body>
-      <div class="header" style="text-align: left; border-bottom: 2px solid #b91c1c; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg/200px-Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg.png" style="height: 65px;" alt="Brasão CBMSC" />
-        <div>
-          <div style="font-size: 11px; font-weight: 800; color: #1e293b; text-transform: uppercase;">ESTADO DE SANTA CATARINA</div>
-          <div style="font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase;">CORPO DE BOMBEIROS MILITAR DE SANTA CATARINA</div>
-          <div style="font-size: 10px; font-weight: 700; color: #334155;">4ª RBM — 16º BBM — 2ª CBM — 2º PBM</div>
-          <div style="font-size: 10px; font-weight: 700; color: #475569;">2º GRUPO DE BOMBEIROS MILITAR (Araquari)</div>
-        </div>
+      <div class="header" style="text-align: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 15px;">
+        <img src="/brasao_cbmsc.png" style="height: 85px; margin: 0 auto 8px auto; display: block;" alt="Brasão do Estado de Santa Catarina" onError="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg/200px-Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg.png';" />
+        <div style="font-size: 11px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">ESTADO DE SANTA CATARINA</div>
+        <div style="font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px;">CORPO DE BOMBEIROS MILITAR DE SANTA CATARINA</div>
+        <div style="font-size: 10px; font-weight: 700; color: #334155; margin-top: 1px;">4ª RBM — 16º BBM — 2ª CBM</div>
+        <div style="font-size: 10px; font-weight: 700; color: #475569; margin-top: 1px;">2º PELOTÃO DE BOMBEIROS MILITAR (Araquari)</div>
       </div>
 
-      <div class="doc-title">
-        TERMO DE CAUTELA
-        <br/>
-        <div class="badge-numero">${cautela.numero_cautela}</div>
+      <div class="doc-title" style="text-align: center; margin: 15px 0;">
+        <div style="font-size: 16px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px;">TERMO DE CAUTELA</div>
+        <div class="badge-numero" style="margin-top: 6px;">Nº ${cautela.numero_cautela}</div>
       </div>
 
       <div class="grid-section">
@@ -209,16 +206,20 @@ export const imprimirDocumentoCautela = (cautela: Cautela) => {
         <div class="box">
           <div class="box-title">2. Responsáveis pelo Empréstimo</div>
           <div class="field">
-            <div class="label">Nome do solicitante responsável</div>
+            <div class="label">Nome do Solicitante Responsável</div>
             <div class="value">${cautela.solicitante}</div>
           </div>
           <div class="field">
-            <div class="label">Matrícula</div>
+            <div class="label">MTCL ou CPF</div>
             <div class="value">${cautela.matricula_solicitante || '—'}</div>
           </div>
-          <div class="field">
-            <div class="label">Retirado por</div>
+          <div class="field" style="margin-top: 8px; border-top: 1px dashed #e2e8f0; padding-top: 6px;">
+            <div class="label">Quem está Retirando</div>
             <div class="value">${cautela.retirado_por}</div>
+          </div>
+          <div class="field">
+            <div class="label">MTCL ou CPF</div>
+            <div class="value">${cautela.mtcl_cpf_retirada || '—'}</div>
           </div>
         </div>
 

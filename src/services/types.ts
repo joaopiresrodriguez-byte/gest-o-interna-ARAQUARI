@@ -40,6 +40,7 @@ export interface Cautela {
     solicitante: string;
     matricula_solicitante?: string | null;
     retirado_por: string;
+    mtcl_cpf_retirada?: string | null;
     devolvido_por?: string | null;
     data_retirada: string;
     data_prevista_devolucao?: string | null;

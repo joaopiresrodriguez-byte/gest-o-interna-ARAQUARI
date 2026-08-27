@@ -27,6 +27,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
   const [solicitante, setSolicitante] = useState<string>('');
   const [matriculaSolicitante, setMatriculaSolicitante] = useState<string>('');
   const [retiradoPor, setRetiradoPor] = useState<string>('');
+  const [mtclCpfRetirada, setMtclCpfRetirada] = useState<string>('');
   const [observacoesRetirada, setObservacoesRetirada] = useState<string>('');
   const [salvandoRetirada, setSalvandoRetirada] = useState<boolean>(false);
 
@@ -148,6 +149,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
         solicitante: solicitante.trim(),
         matricula_solicitante: matriculaSolicitante.trim() || null,
         retirado_por: retiradoPor.trim(),
+        mtcl_cpf_retirada: mtclCpfRetirada.trim() || null,
         data_retirada: dataRetirada ? new Date(dataRetirada).toISOString() : new Date().toISOString(),
         data_prevista_devolucao: dataPrevista ? new Date(dataPrevista).toISOString() : null,
         observacoes: observacoesRetirada.trim() || null,
@@ -175,6 +177,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
     setSolicitante('');
     setMatriculaSolicitante('');
     setRetiradoPor('');
+    setMtclCpfRetirada('');
     setObservacoesRetirada('');
   };
 
@@ -667,11 +670,11 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                 </div>
                 <div>
                   <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
-                    Matrícula do Solicitante
+                    MTCL ou CPF do Solicitante
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex: 932234-5"
+                    placeholder="Ex: 932234-5 ou CPF"
                     value={matriculaSolicitante}
                     onChange={e => setMatriculaSolicitante(e.target.value)}
                     className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-primary"
@@ -687,6 +690,18 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                     placeholder="Ex: Cb Oliveira"
                     value={retiradoPor}
                     onChange={e => setRetiradoPor(e.target.value)}
+                    className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
+                    MTCL ou CPF (Quem está Retirando)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 923841-2 ou CPF (opcional para civil)"
+                    value={mtclCpfRetirada}
+                    onChange={e => setMtclCpfRetirada(e.target.value)}
                     className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-primary"
                   />
                 </div>

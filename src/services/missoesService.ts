@@ -119,14 +119,15 @@ export async function atualizarMissao(
 
   if (error) throw error;
 
-  // Se a missão NÃO foi concluída (parcialmente_concluida ou nao_realizada)
-  if (dados.status === 'nao_realizada' || dados.status === 'parcialmente_concluida') {
+  // Se a missão NÃO foi concluída (qualquer status diferente de 'concluida': parcialmente_concluida, nao_realizada, cancelada, etc.)
+  if (dados.status !== 'concluida') {
     const tituloMissao = missaoAtual?.title || 'Missão Diária';
     const statusLabel = STATUS_MISSAO[dados.status]?.label || dados.status;
-    const responsavel = missaoAtual?.responsible_name || 'Não atribuído';
+    const responsavel = missaoAtual?.responsible_name || 'Guarnição de Serviço';
     const dataMissao = missaoAtual?.mission_date || new Date().toLocaleDateString('pt-BR');
+    const horarioAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    // Criar aviso no sistema (pending_notices)
+    // 1. Criar aviso no sistema (pending_notices)
     try {
       await supabase.from('pending_notices').insert({
         title: `[ALERTA MISSÃO] ${statusLabel}: ${tituloMissao}`,
@@ -139,23 +140,42 @@ export async function atualizarMissao(
       console.warn("Não foi possível salvar em pending_notices:", e);
     }
 
-    // Criar/Notificar para o e-mail do comando 16_22cmt@cbm.sc.gov.br
-    const emailSubject = encodeURIComponent(`[ALERTA MISSÃO DIÁRIA] ${statusLabel} - ${tituloMissao}`);
-    const emailBody = encodeURIComponent(
-      `Prezado Comando,\n\n` +
-      `Informamos que a Missão Diária abaixo foi registrada com pendência no sistema de Gestão Interna Araquari:\n\n` +
-      `📌 Missão: ${tituloMissao}\n` +
-      `📅 Data: ${dataMissao}\n` +
-      `👤 Responsável: ${responsavel}\n` +
-      `📊 Status Final: ${statusLabel}\n` +
-      `👮 Registrado Por: ${nomeMilitar}\n` +
-      `📝 Observação: ${dados.observacoes || 'Sem observações'}\n\n` +
-      `Atenciosamente,\n` +
-      `Sistema de Gestão Interna CBMSC Araquari`
-    );
+    // 2. Disparo Automático via WhatsApp para o Comandante (5547988899591)
+    try {
+      const msgWa = encodeURIComponent(
+        `⚠️ MISSÃO ENCERRADA SEM CONCLUSÃO\n` +
+        `Data: ${dataMissao}\n` +
+        `Missão: ${tituloMissao}\n` +
+        `Guarnição: ${responsavel}\n` +
+        `Resultado registrado: ${statusLabel}\n` +
+        `Registrado por: ${nomeMilitar}\n` +
+        `Horário: ${horarioAtual}`
+      );
+      window.open(`https://wa.me/5547988899591?text=${msgWa}`, '_blank');
+    } catch (e) {
+      console.error("Falha no disparo de WhatsApp para o Comandante:", e);
+    }
 
-    // Abre mailto para 16_22cmt@cbm.sc.gov.br
-    window.open(`mailto:16_22cmt@cbm.sc.gov.br?subject=${emailSubject}&body=${emailBody}`, '_blank');
+    // 3. Criar/Notificar para o e-mail do comando 16_22cmt@cbm.sc.gov.br
+    try {
+      const emailSubject = encodeURIComponent(`[ALERTA MISSÃO DIÁRIA] ${statusLabel} - ${tituloMissao}`);
+      const emailBody = encodeURIComponent(
+        `Prezado Comando,\n\n` +
+        `Informamos que a Missão Diária abaixo foi registrada com pendência no sistema de Gestão Interna Araquari:\n\n` +
+        `📌 Missão: ${tituloMissao}\n` +
+        `📅 Data: ${dataMissao}\n` +
+        `👤 Responsável: ${responsavel}\n` +
+        `📊 Status Final: ${statusLabel}\n` +
+        `👮 Registrado Por: ${nomeMilitar}\n` +
+        `📝 Observação: ${dados.observacoes || 'Sem observações'}\n\n` +
+        `Atenciosamente,\n` +
+        `Sistema de Gestão Interna CBMSC Araquari`
+      );
+
+      window.open(`mailto:16_22cmt@cbm.sc.gov.br?subject=${emailSubject}&body=${emailBody}`, '_blank');
+    } catch (e) {
+      console.error("Falha ao abrir mailto do comando:", e);
+    }
   }
 
   return true;

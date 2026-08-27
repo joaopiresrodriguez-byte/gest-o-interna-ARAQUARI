@@ -50,7 +50,9 @@ export const CautelaService = {
     tipo_item: string;
     item_nome: string;
     solicitante: string;
+    matricula_solicitante?: string | null;
     retirado_por: string;
+    mtcl_cpf_retirada?: string | null;
     data_retirada: string;
     data_prevista_devolucao?: string | null;
     observacoes?: string | null;
@@ -63,7 +65,9 @@ export const CautelaService = {
       tipo_item: payload.tipo_item || 'equipamento',
       item_nome: payload.item_nome,
       solicitante: payload.solicitante,
+      matricula_solicitante: payload.matricula_solicitante || null,
       retirado_por: payload.retirado_por,
+      mtcl_cpf_retirada: payload.mtcl_cpf_retirada || null,
       data_retirada: payload.data_retirada || new Date().toISOString(),
       data_prevista_devolucao: payload.data_prevista_devolucao || null,
       observacoes: payload.observacoes || null,

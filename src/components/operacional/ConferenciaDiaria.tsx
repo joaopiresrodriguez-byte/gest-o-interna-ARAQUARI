@@ -448,6 +448,12 @@ const ConferenciaDiaria: React.FC = () => {
     }
   }, [confGuarnicao?.observacao]);
 
+  // Estados de Efetivo Escalado (Militares vs BCs)
+  const [efetivoMilitares, setEfetivoMilitares] = useState<any[]>([]);
+  const [efetivoBCs, setEfetivoBCs] = useState<any[]>([]);
+  const [statusEfetivoMap, setStatusEfetivoMap] = useState<Record<string, { status: 'presente' | 'ausente' | 'alteracao'; obs: string }>>({});
+  const [modalNotifEfetivo, setModalNotifEfetivo] = useState<{ aberto: boolean; efetivo: any | null; obs: string }>({ aberto: false, efetivo: null, obs: '' });
+
   function toggle(id: string) {
     setAbertos(prev => ({ ...prev, [id]: !prev[id] }));
   }
@@ -466,10 +472,32 @@ const ConferenciaDiaria: React.FC = () => {
   }
 
   useEffect(() => {
-    Promise.all([buscarDados(), buscarConferenciaDia()])
-      .then(([d, mapa]) => {
+    const hojeStr = new Date().toISOString().split('T')[0];
+    const mesRef = hojeStr.substring(0, 7);
+
+    Promise.all([
+      buscarDados(),
+      buscarConferenciaDia(),
+      supabase.from('escalas').select('*').eq('data', hojeStr).maybeSingle(),
+      supabase.from('personnel').select('*'),
+      supabase.from('bc_selecionados').select('*').eq('dia', hojeStr)
+    ])
+      .then(([d, mapa, escalaRes, personnelRes, bcSelRes]) => {
         setDados(d);
         setConferenciaMap(mapa);
+
+        const allPersonnel = (personnelRes.data || []) as any[];
+        
+        // 1. Separar Militares da Escala do dia
+        const idsMilitares: number[] = escalaRes.data?.militares || [];
+        const mils = allPersonnel.filter(p => idsMilitares.includes(p.id) || (p.type === 'Militar' && idsMilitares.includes(Number(p.id))));
+        setEfetivoMilitares(mils.length > 0 ? mils : allPersonnel.filter(p => p.type === 'Militar').slice(0, 4));
+
+        // 2. Separar Bombeiros Comunitários (BCs) escalados no dia
+        const idsBCs = (bcSelRes.data || []).map((b: any) => Number(b.bombeiro_id));
+        const bcs = allPersonnel.filter(p => idsBCs.includes(p.id) || (p.type === 'BC' && idsBCs.includes(Number(p.id))));
+        setEfetivoBCs(bcs.length > 0 ? bcs : allPersonnel.filter(p => p.type === 'BC' || p.role?.includes('BC')).slice(0, 4));
+
         setLoading(false);
       })
       .catch(e => {
@@ -617,179 +645,201 @@ const ConferenciaDiaria: React.FC = () => {
         </div>
       </div>
 
-      {/* BLOCO DEDICADO: CONFERÊNCIA DA GUARNIÇÃO DE SERVIÇO */}
-      {(() => {
-        const isOk = confGuarnicao?.status === 'ok';
-        const isOcorrencia = confGuarnicao?.status && confGuarnicao.status !== 'ok';
-
-        return (
-          <div
-            style={{
-              border: isOk ? '2px solid #bbf7d0' : isOcorrencia ? '2px solid #fca5a5' : '1px solid #e2e8f0',
-              borderRadius: '12px',
-              marginBottom: '16px',
-              background: isOk ? '#f0fdf4' : isOcorrencia ? '#fef2f2' : 'white',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                padding: '16px 20px',
-                borderLeft: '5px solid #dc2626',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '12px',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '18px' }}>👨‍🚒</span>
-                  <h4 style={{ margin: 0, fontWeight: '800', fontSize: '15px', color: '#1e293b' }}>
-                    Conferência da Guarnição de Serviço
-                  </h4>
-                </div>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
-                  Validação do efetivo escalado, ausências, trocas ou alterações de serviço.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button
-                  onClick={async () => {
-                    setObsGuarnicao('');
-                    await salvarConferencia({
-                      fleet_item_id: 'guarnicao_servico',
-                      equipamento_id: 'guarnicao_servico',
-                      status: 'ok',
-                      observacao: '',
-                      item_nome: 'Guarnição de Serviço',
-                      local_nome: 'Prontidão Operacional',
-                    });
-                    recarregarConferencia();
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    border: isOk ? '2px solid #166534' : '1px solid #cbd5e1',
-                    background: isOk ? '#dcfce7' : 'white',
-                    color: isOk ? '#166534' : '#64748b',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <span>✅</span> OK / Sem Alteração
-                </button>
-
-                <button
-                  onClick={async () => {
-                    await salvarConferencia({
-                      fleet_item_id: 'guarnicao_servico',
-                      equipamento_id: 'guarnicao_servico',
-                      status: 'avariado',
-                      observacao: obsGuarnicao,
-                      item_nome: 'Guarnição de Serviço',
-                      local_nome: 'Prontidão Operacional',
-                    });
-                    recarregarConferencia();
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    border: isOcorrencia ? '2px solid #991b1b' : '1px solid #cbd5e1',
-                    background: isOcorrencia ? '#fee2e2' : 'white',
-                    color: isOcorrencia ? '#991b1b' : '#64748b',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <span>⚠️</span> Alteração na Guarnição
-                </button>
-              </div>
+      {/* BLOCO DEDICADO: CARDS DE CONFERÊNCIA INDIVIDUAL POR EFETIVO (MILITARES E BCs) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6 shadow-md text-white">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-800 flex items-center justify-center text-red-500">
+              <span className="material-symbols-outlined text-2xl">shield_person</span>
             </div>
-
-            {/* CAMPO DE TEXTO PARA DESCREVER A ALTERAÇÃO QUANDO 'ALTERAÇÃO NA GUARNIÇÃO' É SELECIONADO */}
-            {isOcorrencia && (
-              <div style={{ padding: '14px 20px', borderTop: '1px dashed #fca5a5', background: '#fff5f5' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#991b1b', marginBottom: '6px' }}>
-                  Descreva a Alteração na Guarnição * (Ex: Troca de plantão, atestado, falta, atraso ou substituição)
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    value={obsGuarnicao}
-                    onChange={e => setObsGuarnicao(e.target.value)}
-                    placeholder="Escreva a alteração da guarnição aqui..."
-                    style={{
-                      flex: 1,
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: !obsGuarnicao.trim() ? '2px solid #ef4444' : '1px solid #cbd5e1',
-                      fontSize: '13px',
-                      background: 'white',
-                      outline: 'none',
-                    }}
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!obsGuarnicao.trim()) {
-                        toast.error('A descrição da alteração é obrigatória.');
-                        return;
-                      }
-                      await salvarConferencia({
-                        fleet_item_id: 'guarnicao_servico',
-                        equipamento_id: 'guarnicao_servico',
-                        status: 'avariado',
-                        observacao: obsGuarnicao,
-                        item_nome: 'Guarnição de Serviço',
-                        local_nome: 'Prontidão Operacional',
-                      });
-                      toast.success('Alteração da guarnição salva com sucesso!');
-                      recarregarConferencia();
-                    }}
-                    style={{
-                      padding: '10px 18px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: '#dc2626',
-                      color: 'white',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Salvar Alteração
-                  </button>
-                </div>
-                {!obsGuarnicao.trim() && (
-                  <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: '600', marginTop: '4px', display: 'block' }}>
-                    ⚠️ A descrição é obrigatória ao selecionar Alteração.
-                  </span>
-                )}
-              </div>
-            )}
-
-            {confGuarnicao?.conferido_por_nome && (
-              <div style={{ padding: '8px 20px', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #e2e8f0', fontSize: '11px', color: '#64748b' }}>
-                🔏 Conferido por <strong>{confGuarnicao.conferido_por_nome}</strong> às{' '}
-                {new Date(confGuarnicao.conferido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                {confGuarnicao.observacao && <span> — Obs: {confGuarnicao.observacao}</span>}
-              </div>
-            )}
+            <div>
+              <h4 className="text-base font-black text-white">Conferência da Guarnição de Serviço</h4>
+              <p className="text-xs text-slate-400">Marque a presença ou alteração individual de cada efetivo escalado no plantão.</p>
+            </div>
           </div>
-        );
-      })()}
+        </div>
+
+        {/* GRUPO 1 — MILITARES */}
+        <div className="space-y-3 mb-6">
+          <div className="flex items-center gap-2 text-xs font-black text-red-400 uppercase tracking-wider">
+            <span className="material-symbols-outlined text-sm">local_fire_department</span>
+            <span>GRUPO 1 — MILITARES ({efetivoMilitares.length})</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {efetivoMilitares.map((efetivo) => {
+              const chave = `efetivo-${efetivo.id}`;
+              const state = statusEfetivoMap[chave] || { status: 'presente', obs: '' };
+
+              return (
+                <div
+                  key={efetivo.id}
+                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                    state.status === 'presente'
+                      ? 'bg-emerald-950/30 border-emerald-800/60'
+                      : state.status === 'ausente'
+                      ? 'bg-red-950/30 border-red-800/60'
+                      : 'bg-amber-950/30 border-amber-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div
+                      className="w-10 h-10 rounded-full bg-cover bg-center border border-slate-700 shrink-0"
+                      style={{ backgroundImage: `url(${efetivo.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-black text-red-400 uppercase block">{efetivo.rank || 'Militar'}</span>
+                      <h5 className="text-xs font-bold text-white truncate">{efetivo.war_name || efetivo.name}</h5>
+                      <p className="text-[10px] text-slate-400 font-mono truncate">Matrícula: {efetivo.matricula || '—'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      onClick={() => {
+                        setStatusEfetivoMap(prev => ({ ...prev, [chave]: { status: 'presente', obs: '' } }));
+                      }}
+                      className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        state.status === 'presente'
+                          ? 'bg-emerald-600 text-white border-emerald-500'
+                          : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      Presente
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStatusEfetivoMap(prev => ({ ...prev, [chave]: { status: 'ausente', obs: '' } }));
+                      }}
+                      className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        state.status === 'ausente'
+                          ? 'bg-red-600 text-white border-red-500'
+                          : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      Ausente
+                    </button>
+                    <button
+                      onClick={() => {
+                        const obs = prompt(`Descreva a alteração para ${efetivo.war_name || efetivo.name}:`) || '';
+                        setStatusEfetivoMap(prev => ({ ...prev, [chave]: { status: 'alteracao', obs } }));
+                        if (obs.trim()) {
+                          setModalNotifEfetivo({ aberto: true, efetivo, obs });
+                        }
+                      }}
+                      className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        state.status === 'alteracao'
+                          ? 'bg-amber-600 text-white border-amber-500'
+                          : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      Alteração
+                    </button>
+                  </div>
+
+                  {state.obs && (
+                    <div className="mt-2 text-[10px] text-amber-300 bg-amber-950/60 p-1.5 rounded border border-amber-800/50">
+                      💬 {state.obs}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* DIVISOR VISUAL */}
+        <div className="border-t border-slate-800 my-4" />
+
+        {/* GRUPO 2 — BOMBEIROS COMUNITÁRIOS */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-xs font-black text-cyan-400 uppercase tracking-wider">
+            <span className="material-symbols-outlined text-sm">groups</span>
+            <span>GRUPO 2 — BOMBEIROS COMUNITÁRIOS ({efetivoBCs.length})</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {efetivoBCs.map((efetivo) => {
+              const chave = `efetivo-${efetivo.id}`;
+              const state = statusEfetivoMap[chave] || { status: 'presente', obs: '' };
+
+              return (
+                <div
+                  key={efetivo.id}
+                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                    state.status === 'presente'
+                      ? 'bg-emerald-950/30 border-emerald-800/60'
+                      : state.status === 'ausente'
+                      ? 'bg-red-950/30 border-red-800/60'
+                      : 'bg-amber-950/30 border-amber-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div
+                      className="w-10 h-10 rounded-full bg-cover bg-center border border-slate-700 shrink-0"
+                      style={{ backgroundImage: `url(${efetivo.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'})` }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-black text-cyan-400 uppercase block">{efetivo.rank || 'BC'}</span>
+                      <h5 className="text-xs font-bold text-white truncate">{efetivo.name}</h5>
+                      <p className="text-[10px] text-slate-400 font-mono truncate">Matrícula: {efetivo.matricula || '—'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      onClick={() => {
+                        setStatusEfetivoMap(prev => ({ ...prev, [chave]: { status: 'presente', obs: '' } }));
+                      }}
+                      className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        state.status === 'presente'
+                          ? 'bg-emerald-600 text-white border-emerald-500'
+                          : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      Presente
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStatusEfetivoMap(prev => ({ ...prev, [chave]: { status: 'ausente', obs: '' } }));
+                      }}
+                      className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        state.status === 'ausente'
+                          ? 'bg-red-600 text-white border-red-500'
+                          : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      Ausente
+                    </button>
+                    <button
+                      onClick={() => {
+                        const obs = prompt(`Descreva a alteração para ${efetivo.name}:`) || '';
+                        setStatusEfetivoMap(prev => ({ ...prev, [chave]: { status: 'alteracao', obs } }));
+                        if (obs.trim()) {
+                          setModalNotifEfetivo({ aberto: true, efetivo, obs });
+                        }
+                      }}
+                      className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        state.status === 'alteracao'
+                          ? 'bg-amber-600 text-white border-amber-500'
+                          : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      Alteração
+                    </button>
+                  </div>
+
+                  {state.obs && (
+                    <div className="mt-2 text-[10px] text-amber-300 bg-amber-950/60 p-1.5 rounded border border-amber-800/50">
+                      💬 {state.obs}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* Viaturas */}
       {dados.viaturas.map(v => {
@@ -1011,7 +1061,99 @@ const ConferenciaDiaria: React.FC = () => {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
 
+      {/* MODAL DE NOTIFICAÇÃO VIA WHATSAPP PARA ALTERAÇÃO NO EFETIVO */}
+      {modalNotifEfetivo.aberto && modalNotifEfetivo.efetivo && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-800/80 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white">
+            <div className="text-center">
+              <span className="material-symbols-outlined text-4xl text-amber-500 mb-1">warning</span>
+              <h3 className="text-lg font-black text-white">Notificar Alteração na Guarnição</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Efetivo: <strong className="text-amber-400">{modalNotifEfetivo.efetivo.rank || 'Efetivo'} {modalNotifEfetivo.efetivo.war_name || modalNotifEfetivo.efetivo.name}</strong>
+              </p>
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 mt-2 text-xs text-slate-300 text-left">
+                💬 <strong>Alteração:</strong> {modalNotifEfetivo.obs}
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              {/* Botão 1 — Comandante */}
+              <button
+                onClick={() => {
+                  const dataFmt = new Date().toLocaleDateString('pt-BR');
+                  const msg = encodeURIComponent(
+                    `⚠️ ALTERAÇÃO NA CONFERÊNCIA DA GUARNIÇÃO — ${dataFmt}\n\n` +
+                    `Efetivo: ${modalNotifEfetivo.efetivo.name} (${modalNotifEfetivo.efetivo.rank || 'Efetivo'})\n` +
+                    `Alteração registrada: ${modalNotifEfetivo.obs}\n` +
+                    `Registrado por: ${nomeConferente || 'Usuário do Sistema'}`
+                  );
+                  window.open(`https://wa.me/5547988899591?text=${msg}`, '_blank');
+                }}
+                className="w-full flex items-center gap-3 p-3 bg-red-950/60 hover:bg-red-900/80 border border-red-800/80 rounded-xl transition-all text-left"
+              >
+                <span className="w-9 h-9 rounded-full bg-red-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  👨‍✈️
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-white">Botão 1 — Enviar para Comandante</p>
+                  <p className="text-[10px] text-red-300">Número: (47) 98889-9591</p>
+                </div>
+              </button>
+
+              {/* Botão 2 — Coordenador BC */}
+              <button
+                onClick={() => {
+                  const dataFmt = new Date().toLocaleDateString('pt-BR');
+                  const msg = encodeURIComponent(
+                    `⚠️ ALTERAÇÃO NA CONFERÊNCIA DA GUARNIÇÃO — ${dataFmt}\n\n` +
+                    `Efetivo: ${modalNotifEfetivo.efetivo.name} (${modalNotifEfetivo.efetivo.rank || 'Efetivo'})\n` +
+                    `Alteração registrada: ${modalNotifEfetivo.obs}\n` +
+                    `Registrado por: ${nomeConferente || 'Usuário do Sistema'}`
+                  );
+                  window.open(`https://wa.me/5547996121663?text=${msg}`, '_blank');
+                }}
+                className="w-full flex items-center gap-3 p-3 bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-800/80 rounded-xl transition-all text-left"
+              >
+                <span className="w-9 h-9 rounded-full bg-cyan-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  🤝
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-white">Botão 2 — Enviar para Coordenador BC</p>
+                  <p className="text-[10px] text-cyan-300">Número: (47) 99612-1663</p>
+                </div>
+              </button>
+
+              {/* Enviar para Ambos */}
+              <button
+                onClick={() => {
+                  const dataFmt = new Date().toLocaleDateString('pt-BR');
+                  const msg = encodeURIComponent(
+                    `⚠️ ALTERAÇÃO NA CONFERÊNCIA DA GUARNIÇÃO — ${dataFmt}\n\n` +
+                    `Efetivo: ${modalNotifEfetivo.efetivo.name} (${modalNotifEfetivo.efetivo.rank || 'Efetivo'})\n` +
+                    `Alteração registrada: ${modalNotifEfetivo.obs}\n` +
+                    `Registrado por: ${nomeConferente || 'Usuário do Sistema'}`
+                  );
+                  window.open(`https://wa.me/5547988899591?text=${msg}`, '_blank');
+                  setTimeout(() => {
+                    window.open(`https://wa.me/5547996121663?text=${msg}`, '_blank');
+                  }, 800);
+                }}
+                className="w-full flex items-center justify-center gap-2 p-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all text-xs font-bold text-white shadow-sm"
+              >
+                📲 Enviar para Ambos (Comandante + Coordenador)
+              </button>
+            </div>
+
+            <button
+              onClick={() => setModalNotifEfetivo({ aberto: false, efetivo: null, obs: '' })}
+              className="w-full py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+            >
+              Fechar sem enviar WhatsApp
+            </button>
           </div>
         </div>
       )}

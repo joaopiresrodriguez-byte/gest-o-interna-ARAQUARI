@@ -170,19 +170,16 @@ const DashboardAvisos: React.FC = () => {
       .filter(Boolean);
   }, [escala, personnel]);
 
-  // Find service swaps & scale alterations for the selected date
+  // Find service swaps & scale alterations for the selected date (exibindo apenas no dia que o TITULAR está SAINDO)
   const swapsForToday = useMemo(() => {
-    // 1. ServiceSwaps tradicionais onde original_date, new_date, date_a_gives_to_b ou date_b_gives_to_a é igual a selectedDate
+    // 1. ServiceSwaps onde a data de saída do militar TITULAR (original_date ou date_a_gives_to_b) é igual a selectedDate
     const directSwaps = serviceSwaps.filter(s =>
-      s.original_date === selectedDate ||
-      s.new_date === selectedDate ||
-      s.date_a_gives_to_b === selectedDate ||
-      s.date_b_gives_to_a === selectedDate
+      s.original_date === selectedDate || s.date_a_gives_to_b === selectedDate
     );
 
-    // 2. Alterações da tabela escala_alteracoes que caíram nesta data
+    // 2. Alterações da tabela escala_alteracoes cujo dia de saída do titular A é igual a selectedDate
     const scaleAltSwaps: ServiceSwap[] = escalaAlteracoes
-      .filter(alt => alt.dia_original_a === selectedDate || alt.dia_original_b === selectedDate || alt.data_vigencia === selectedDate)
+      .filter(alt => alt.dia_original_a === selectedDate)
       .map((alt, idx) => ({
         id: `alt-${alt.id || idx}`,
         personnel_id: alt.militar_a_id,
@@ -201,7 +198,7 @@ const DashboardAvisos: React.FC = () => {
       const exists = combined.some(s =>
         Number(s.personnel_id) === Number(altSwap.personnel_id) &&
         Number(s.swap_with_personnel_id) === Number(altSwap.swap_with_personnel_id) &&
-        (s.original_date === altSwap.original_date || s.new_date === altSwap.new_date)
+        s.original_date === altSwap.original_date
       );
       if (!exists) combined.push(altSwap);
     });
@@ -974,28 +971,28 @@ const DashboardAvisos: React.FC = () => {
                             <span className="material-symbols-outlined text-sm font-black">arrow_downward</span>
                           </div>
 
-                          {/* Assumindo (Cover) */}
+                          {/* Assumindo (Substituto - Azul) */}
                           <div className="space-y-0.5">
-                            <div className="flex items-center gap-1 text-[9px] font-black text-green-600 uppercase tracking-wider">
-                              <span className="material-symbols-outlined text-[12px]">login</span>
+                            <div className="flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase tracking-wider">
+                              <span className="material-symbols-outlined text-[12px] text-blue-600">login</span>
                               <span>Assumindo</span>
                             </div>
                             {coverDetails ? (
                               <div className="pl-4 space-y-0.5">
-                                <p className="font-bold text-xs text-[#2c1810]">{coverDetails.name}</p>
-                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] text-rustic-brown/60">
-                                  <span>Mat: <span className="font-bold text-rustic-brown">{coverDetails.matricula}</span></span>
+                                <p className="font-bold text-xs text-blue-900">{coverDetails.name}</p>
+                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] text-blue-800/80">
+                                  <span>Mat: <span className="font-bold text-blue-900">{coverDetails.matricula}</span></span>
                                   <span>•</span>
-                                  <span>CNH: <span className="font-bold text-rustic-brown">{coverDetails.cnhCategory}</span></span>
+                                  <span>CNH: <span className="font-bold text-blue-900">{coverDetails.cnhCategory}</span></span>
                                   <span>•</span>
-                                  <span className={`font-bold ${coverDetails.cveActive ? 'text-green-600' : 'text-stone-500'}`}>
+                                  <span className={`font-bold ${coverDetails.cveActive ? 'text-blue-700' : 'text-stone-500'}`}>
                                     {coverDetails.cveActive ? 'CVE Ativo' : 'CVE Inativo'}
                                   </span>
                                 </div>
                               </div>
                             ) : (
                               <div className="pl-4">
-                                <p className="font-bold text-xs text-rustic-brown/60">Folga / Serviço</p>
+                                <p className="font-bold text-xs text-blue-800/60">Folga / Serviço</p>
                               </div>
                             )}
                           </div>
