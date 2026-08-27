@@ -587,10 +587,10 @@ const ConferenciaDiaria: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
           <h3 style={{ fontWeight: 'bold', fontSize: '16px', color: '#1e293b', margin: 0 }}>
-            🚒 Conferência Diária — Viaturas e Locais
+            🚒 Conferência Diária — Viaturas, Locais e Guarnição
           </h3>
           <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
-            {dados.viaturas.length} viaturas · {dados.locais.length} locais · {dados.itens.length} itens
+            Guarnição · {dados.viaturas.length} viaturas · {dados.locais.length} locais · {dados.itens.length} itens
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -608,6 +608,188 @@ const ConferenciaDiaria: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* BLOCO DEDICADO: CONFERÊNCIA DA GUARNIÇÃO DE SERVIÇO */}
+      {(() => {
+        const confGuarnicao = conferenciaMap['guarnicao_servico'];
+        const isOk = confGuarnicao?.status === 'ok';
+        const isOcorrencia = confGuarnicao?.status && confGuarnicao.status !== 'ok';
+        const [obsGuarnicao, setObsGuarnicao] = useState(confGuarnicao?.observacao || '');
+
+        useEffect(() => {
+          if (confGuarnicao?.observacao !== undefined) {
+            setObsGuarnicao(confGuarnicao.observacao || '');
+          }
+        }, [confGuarnicao?.observacao]);
+
+        return (
+          <div
+            style={{
+              border: isOk ? '2px solid #bbf7d0' : isOcorrencia ? '2px solid #fca5a5' : '1px solid #e2e8f0',
+              borderRadius: '12px',
+              marginBottom: '16px',
+              background: isOk ? '#f0fdf4' : isOcorrencia ? '#fef2f2' : 'white',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                padding: '16px 20px',
+                borderLeft: '5px solid #dc2626',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '18px' }}>👨‍🚒</span>
+                  <h4 style={{ margin: 0, fontWeight: '800', fontSize: '15px', color: '#1e293b' }}>
+                    Conferência da Guarnição de Serviço
+                  </h4>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
+                  Validação do efetivo escalado, ausências, trocas ou alterações de serviço.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  onClick={async () => {
+                    setObsGuarnicao('');
+                    await salvarConferencia({
+                      fleet_item_id: 'guarnicao_servico',
+                      equipamento_id: 'guarnicao_servico',
+                      status: 'ok',
+                      observacao: '',
+                      item_nome: 'Guarnição de Serviço',
+                      local_nome: 'Prontidão Operacional',
+                    });
+                    recarregarConferencia();
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: isOk ? '2px solid #166534' : '1px solid #cbd5e1',
+                    background: isOk ? '#dcfce7' : 'white',
+                    color: isOk ? '#166534' : '#64748b',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span>✅</span> OK / Sem Alteração
+                </button>
+
+                <button
+                  onClick={async () => {
+                    await salvarConferencia({
+                      fleet_item_id: 'guarnicao_servico',
+                      equipamento_id: 'guarnicao_servico',
+                      status: 'avariado',
+                      observacao: obsGuarnicao,
+                      item_nome: 'Guarnição de Serviço',
+                      local_nome: 'Prontidão Operacional',
+                    });
+                    recarregarConferencia();
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: isOcorrencia ? '2px solid #991b1b' : '1px solid #cbd5e1',
+                    background: isOcorrencia ? '#fee2e2' : 'white',
+                    color: isOcorrencia ? '#991b1b' : '#64748b',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span>⚠️</span> Alteração na Guarnição
+                </button>
+              </div>
+            </div>
+
+            {/* CAMPO DE TEXTO PARA DESCREVER A ALTERAÇÃO QUANDO 'ALTERAÇÃO NA GUARNIÇÃO' É SELECIONADO */}
+            {isOcorrencia && (
+              <div style={{ padding: '14px 20px', borderTop: '1px dashed #fca5a5', background: '#fff5f5' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#991b1b', marginBottom: '6px' }}>
+                  Descreva a Alteração na Guarnição * (Ex: Troca de plantão, atestado, falta, atraso ou substituição)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    value={obsGuarnicao}
+                    onChange={e => setObsGuarnicao(e.target.value)}
+                    placeholder="Escreva a alteração da guarnição aqui..."
+                    style={{
+                      flex: 1,
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: !obsGuarnicao.trim() ? '2px solid #ef4444' : '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      background: 'white',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!obsGuarnicao.trim()) {
+                        toast.error('A descrição da alteração é obrigatória.');
+                        return;
+                      }
+                      await salvarConferencia({
+                        fleet_item_id: 'guarnicao_servico',
+                        equipamento_id: 'guarnicao_servico',
+                        status: 'avariado',
+                        observacao: obsGuarnicao,
+                        item_nome: 'Guarnição de Serviço',
+                        local_nome: 'Prontidão Operacional',
+                      });
+                      toast.success('Alteração da guarnição salva com sucesso!');
+                      recarregarConferencia();
+                    }}
+                    style={{
+                      padding: '10px 18px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#dc2626',
+                      color: 'white',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Salvar Alteração
+                  </button>
+                </div>
+                {!obsGuarnicao.trim() && (
+                  <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: '600', marginTop: '4px', display: 'block' }}>
+                    ⚠️ A descrição é obrigatória ao selecionar Alteração.
+                  </span>
+                )}
+              </div>
+            )}
+
+            {confGuarnicao?.conferido_por_nome && (
+              <div style={{ padding: '8px 20px', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #e2e8f0', fontSize: '11px', color: '#64748b' }}>
+                🔏 Conferido por <strong>{confGuarnicao.conferido_por_nome}</strong> às{' '}
+                {new Date(confGuarnicao.conferido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                {confGuarnicao.observacao && <span> — Obs: {confGuarnicao.observacao}</span>}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Viaturas */}
       {dados.viaturas.map(v => {
