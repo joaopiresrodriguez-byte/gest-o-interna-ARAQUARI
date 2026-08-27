@@ -13,6 +13,9 @@ ALTER TABLE public.cautelas
 ALTER TABLE public.materias_instrucao
   ADD COLUMN IF NOT EXISTS tema TEXT;
 
+ALTER TABLE public.training_schedule
+  ADD COLUMN IF NOT EXISTS tema TEXT;
+
 -- 3. Tabela de Logs de Acesso ao Sistema
 CREATE TABLE IF NOT EXISTS public.user_access_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
