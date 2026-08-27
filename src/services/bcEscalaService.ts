@@ -672,18 +672,16 @@ export const bcEscalaService = {
     horasPadraoDia: number,
     excecoes: Record<string, number>
   ) => {
-    // 1. Atualizar horas padrão no ciclo
-    await supabase
+    // 1. Garantir que o ciclo exista
+    const cicloObj = await bcEscalaService.obterOuCriarCiclo(mesRef);
+
+    // 2. Atualizar horas padrão no ciclo
+    const { error: errCiclo } = await supabase
       .from('bc_ciclos')
       .update({ horas_padrao_dia: horasPadraoDia })
-      .eq('mes_referencia', mesRef);
+      .eq('id', cicloObj.id);
 
-    // 2. Buscar ciclo ID
-    const { data: ciclo } = await supabase
-      .from('bc_ciclos')
-      .select('id')
-      .eq('mes_referencia', mesRef)
-      .maybeSingle();
+    if (errCiclo) throw errCiclo;
 
     // 3. Limpar exceções anteriores do mês
     await supabase
@@ -693,7 +691,7 @@ export const bcEscalaService = {
 
     // 4. Inserir novas exceções
     const records = Object.entries(excecoes).map(([dia, horas]) => ({
-      ciclo_id: ciclo?.id || null,
+      ciclo_id: cicloObj.id,
       mes_referencia: mesRef,
       dia,
       horas_disponiveis: horas,
