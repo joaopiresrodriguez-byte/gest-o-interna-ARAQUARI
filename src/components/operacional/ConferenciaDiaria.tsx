@@ -439,6 +439,14 @@ const ConferenciaDiaria: React.FC = () => {
   const [salvandoEEnviando, setSalvandoEEnviando] = useState(false);
   const [falhaEnvio, setFalhaEnvio] = useState(false);
   const [mensagemFormatadaCache, setMensagemFormatadaCache] = useState('');
+  const [obsGuarnicao, setObsGuarnicao] = useState('');
+
+  const confGuarnicao = conferenciaMap['guarnicao_servico'];
+  useEffect(() => {
+    if (confGuarnicao?.observacao !== undefined) {
+      setObsGuarnicao(confGuarnicao.observacao || '');
+    }
+  }, [confGuarnicao?.observacao]);
 
   function toggle(id: string) {
     setAbertos(prev => ({ ...prev, [id]: !prev[id] }));
@@ -611,16 +619,8 @@ const ConferenciaDiaria: React.FC = () => {
 
       {/* BLOCO DEDICADO: CONFERÊNCIA DA GUARNIÇÃO DE SERVIÇO */}
       {(() => {
-        const confGuarnicao = conferenciaMap['guarnicao_servico'];
         const isOk = confGuarnicao?.status === 'ok';
         const isOcorrencia = confGuarnicao?.status && confGuarnicao.status !== 'ok';
-        const [obsGuarnicao, setObsGuarnicao] = useState(confGuarnicao?.observacao || '');
-
-        useEffect(() => {
-          if (confGuarnicao?.observacao !== undefined) {
-            setObsGuarnicao(confGuarnicao.observacao || '');
-          }
-        }, [confGuarnicao?.observacao]);
 
         return (
           <div
