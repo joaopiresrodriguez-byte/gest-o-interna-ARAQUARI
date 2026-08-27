@@ -645,11 +645,21 @@ export const bcEscalaService = {
    * MÉTODOS DE GESTÃO DE VAGAS / CAPACIDADE DIÁRIA
    */
   obterConfigVagas: async (mesRef: string): Promise<{ horasPadraoDia: number; excecoes: Record<string, number> }> => {
-    const { data: ciclo } = await supabase
-      .from('bc_ciclos')
-      .select('horas_padrao_dia')
-      .eq('mes_referencia', mesRef)
-      .maybeSingle();
+    let horasPadraoDia = 36;
+
+    try {
+      const { data: ciclo } = await supabase
+        .from('bc_ciclos')
+        .select('*')
+        .eq('mes_referencia', mesRef)
+        .maybeSingle();
+
+      if (ciclo && (ciclo as any).horas_padrao_dia !== undefined) {
+        horasPadraoDia = (ciclo as any).horas_padrao_dia || 36;
+      }
+    } catch (e) {
+      console.warn('Coluna horas_padrao_dia ainda não migrada na tabela bc_ciclos:', e);
+    }
 
     const { data: excecoes } = await supabase
       .from('bc_config_vagas')
@@ -662,7 +672,7 @@ export const bcEscalaService = {
     });
 
     return {
-      horasPadraoDia: ciclo?.horas_padrao_dia || 36,
+      horasPadraoDia,
       excecoes: mapExcecoes,
     };
   },
@@ -675,13 +685,22 @@ export const bcEscalaService = {
     // 1. Garantir que o ciclo exista
     const cicloObj = await bcEscalaService.obterOuCriarCiclo(mesRef);
 
-    // 2. Atualizar horas padrão no ciclo
-    const { error: errCiclo } = await supabase
-      .from('bc_ciclos')
-      .update({ horas_padrao_dia: horasPadraoDia })
-      .eq('id', cicloObj.id);
+    // 2. Atualizar horas padrão no ciclo (com tolerância se a coluna ainda não tiver sido criada no DB remoto)
+    try {
+      const { error: errCiclo } = await supabase
+        .from('bc_ciclos')
+        .update({ horas_padrao_dia: horasPadraoDia })
+        .eq('id', cicloObj.id);
 
-    if (errCiclo) throw errCiclo;
+      if (errCiclo && !errCiclo.message?.includes('horas_padrao_dia')) {
+        throw errCiclo;
+      }
+    } catch (e: any) {
+      if (!e?.message?.includes('horas_padrao_dia')) {
+        throw e;
+      }
+      console.warn('Alerta: Coluna horas_padrao_dia pendente de execução de migration no banco remoto Supabase.', e);
+    }
 
     // 3. Limpar exceções anteriores do mês
     await supabase
