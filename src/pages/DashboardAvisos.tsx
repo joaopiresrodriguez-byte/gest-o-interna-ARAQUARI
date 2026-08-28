@@ -170,16 +170,20 @@ const DashboardAvisos: React.FC = () => {
       .filter(Boolean);
   }, [escala, personnel]);
 
-  // Find service swaps & scale alterations for the selected date (exibindo apenas no dia que o TITULAR está SAINDO)
+  // Find service swaps & scale alterations for the selected date
   const swapsForToday = useMemo(() => {
-    // 1. ServiceSwaps onde a data de saída do militar TITULAR (original_date ou date_a_gives_to_b) é igual a selectedDate
+    // 1. ServiceSwaps que abrangem a data selecionada
     const directSwaps = serviceSwaps.filter(s =>
-      s.original_date === selectedDate || s.date_a_gives_to_b === selectedDate
+      s.original_date === selectedDate ||
+      s.new_date === selectedDate ||
+      s.date_a_gives_to_b === selectedDate ||
+      s.date_b_gives_to_a === selectedDate ||
+      s.swap_date === selectedDate
     );
 
-    // 2. Alterações da tabela escala_alteracoes cujo dia de saída do titular A é igual a selectedDate
+    // 2. Alterações da tabela escala_alteracoes que caíram nesta data
     const scaleAltSwaps: ServiceSwap[] = escalaAlteracoes
-      .filter(alt => alt.dia_original_a === selectedDate)
+      .filter(alt => alt.dia_original_a === selectedDate || alt.dia_original_b === selectedDate || alt.data_vigencia === selectedDate)
       .map((alt, idx) => ({
         id: `alt-${alt.id || idx}`,
         personnel_id: alt.militar_a_id,
@@ -198,7 +202,7 @@ const DashboardAvisos: React.FC = () => {
       const exists = combined.some(s =>
         Number(s.personnel_id) === Number(altSwap.personnel_id) &&
         Number(s.swap_with_personnel_id) === Number(altSwap.swap_with_personnel_id) &&
-        s.original_date === altSwap.original_date
+        (s.original_date === altSwap.original_date || s.new_date === altSwap.new_date)
       );
       if (!exists) combined.push(altSwap);
     });
@@ -652,7 +656,7 @@ const DashboardAvisos: React.FC = () => {
                               </span>
                             </div>
 
-                            {mission.description && <p className="text-[11px] text-gray-500 mt-0.5">{mission.description}</p>}
+                            {mission.description && <p className="text-[11px] text-gray-600 mt-1 whitespace-pre-wrap leading-relaxed">{mission.description}</p>}
 
                             {/* Endereço / Links para Maps & Waze */}
                             {(mission.location_address || mission.is_pbm_araquari) && (

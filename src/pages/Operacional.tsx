@@ -257,7 +257,7 @@ const CardMissao: React.FC<{
           <div className="min-w-0 flex-1">
             <p className="font-bold text-[#181111] text-base truncate">{missao.title}</p>
             {missao.description && (
-              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{missao.description}</p>
+              <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap leading-relaxed">{missao.description}</p>
             )}
             {/* Endereço e Links de Mapa */}
             {(missao.location_address || missao.is_pbm_araquari) && (

@@ -893,7 +893,7 @@ const PatrimonioB4: React.FC = () => {
 
                           <div>
                             <h4 className="font-bold text-sm leading-tight mb-1">{mission.title}</h4>
-                            {mission.description && <p className="text-[11px] text-gray-500 line-clamp-2">{mission.description}</p>}
+                            {mission.description && <p className="text-[11px] text-gray-600 mt-1 whitespace-pre-wrap leading-relaxed">{mission.description}</p>}
                           </div>
 
                           {/* Endereço / Localização */}
