@@ -578,7 +578,7 @@ const DashboardAvisos: React.FC = () => {
                     {unifiedItems.map((item, idx) => {
                       if (item.type === 'training') {
                         const t = item.data as Training;
-                        const materiaName = (t.materia as any)?.name || t.materia_id || 'Instrução';
+                        const materiaName = t.tema || (t.materia as any)?.tema || (t.materia as any)?.name || t.materia_id || 'Instrução';
                         const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
                         return (
                           <div key={`training-${t.id || idx}`} className={`flex items-start gap-4 p-4 hover:bg-blue-50/40 transition-colors ${isCanceled ? 'bg-gray-50/50 border-l-2 border-gray-400 opacity-60' : 'bg-blue-50/20 border-l-2 border-blue-400'}`}>

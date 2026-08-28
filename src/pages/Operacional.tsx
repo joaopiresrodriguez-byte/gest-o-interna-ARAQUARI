@@ -816,7 +816,7 @@ const Operacional: React.FC = () => {
                 // Render training item
                 if (item.type === 'training') {
                   const t = item.data as Training;
-                  const materiaName = (t.materia as any)?.name || t.materia_id || 'Instrução';
+                  const materiaName = t.tema || (t.materia as any)?.tema || (t.materia as any)?.name || t.materia_id || 'Instrução';
                   const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
                   return (
                     <div key={`training-${t.id || idx}`} className={`rounded-xl border shadow-sm p-5 transition-all hover:shadow-md ${isCanceled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-blue-50 border-blue-200'}`}>
