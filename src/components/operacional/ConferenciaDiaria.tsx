@@ -487,16 +487,17 @@ const ConferenciaDiaria: React.FC = () => {
         setConferenciaMap(mapa);
 
         const allPersonnel = (personnelRes.data || []) as any[];
-        
-        // 1. Separar Militares da Escala do dia
-        const idsMilitares: number[] = escalaRes.data?.militares || [];
-        const mils = allPersonnel.filter(p => idsMilitares.includes(p.id) || (p.type === 'Militar' && idsMilitares.includes(Number(p.id))));
-        setEfetivoMilitares(mils.length > 0 ? mils : allPersonnel.filter(p => p.type === 'Militar').slice(0, 4));
 
-        // 2. Separar Bombeiros Comunitários (BCs) escalados no dia
+        // 1. Militares da Escala do dia (somente os IDs presentes na escala publicada no B1)
+        const idsMilitares: number[] = (escalaRes.data?.militares || []).map(Number);
+        const mils = allPersonnel.filter(p => idsMilitares.includes(Number(p.id)));
+        setEfetivoMilitares(mils);
+
+        // 2. Bombeiros Comunitários selecionados para o dia (bc_selecionados)
+        // Sem fallback: se nenhum BC foi escalado para hoje, o grupo fica vazio.
         const idsBCs = (bcSelRes.data || []).map((b: any) => Number(b.bombeiro_id));
-        const bcs = allPersonnel.filter(p => idsBCs.includes(p.id) || (p.type === 'BC' && idsBCs.includes(Number(p.id))));
-        setEfetivoBCs(bcs.length > 0 ? bcs : allPersonnel.filter(p => p.type === 'BC' || p.role?.includes('BC')).slice(0, 4));
+        const bcs = allPersonnel.filter(p => idsBCs.includes(Number(p.id)));
+        setEfetivoBCs(bcs);
 
         setLoading(false);
       })
@@ -666,6 +667,11 @@ const ConferenciaDiaria: React.FC = () => {
             <span>GRUPO 1 — MILITARES ({efetivoMilitares.length})</span>
           </div>
 
+          {efetivoMilitares.length === 0 ? (
+            <div className="text-xs text-slate-500 italic py-2 pl-1">
+              ⚠️ Nenhuma escala de militares publicada para hoje no módulo B1.
+            </div>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {efetivoMilitares.map((efetivo) => {
               const chave = `efetivo-${efetivo.id}`;
@@ -746,6 +752,7 @@ const ConferenciaDiaria: React.FC = () => {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* DIVISOR VISUAL */}
@@ -758,6 +765,11 @@ const ConferenciaDiaria: React.FC = () => {
             <span>GRUPO 2 — BOMBEIROS COMUNITÁRIOS ({efetivoBCs.length})</span>
           </div>
 
+          {efetivoBCs.length === 0 ? (
+            <div className="text-xs text-slate-500 italic py-2 pl-1">
+              ℹ️ Nenhum Bombeiro Comunitário escalado para hoje no Serviço Comunitário.
+            </div>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {efetivoBCs.map((efetivo) => {
               const chave = `efetivo-${efetivo.id}`;
@@ -838,6 +850,7 @@ const ConferenciaDiaria: React.FC = () => {
               );
             })}
           </div>
+          )}
         </div>
       </div>
 
