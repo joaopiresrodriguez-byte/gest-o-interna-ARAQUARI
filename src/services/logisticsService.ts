@@ -62,34 +62,55 @@ export const LogisticsService = {
      */
     getProductsReceipts: async (): Promise<ProductReceipt[]> => {
         try {
-            // Tenta primeiro com as colunas padronizadas em inglês
-            const { data, error } = await supabase
+            let data: any[] | null = null;
+            let error: any = null;
+
+            // Tentativa 1: Busca ordenando por created_at desc
+            const res1 = await supabase
                 .from('product_receipts')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(20);
+                .limit(50);
 
-            if (error) {
-                console.error('Error fetching receipts:', error);
-                throw error;
+            if (res1.error) {
+                // Tentativa 2: Busca simples sem ordenação caso created_at não exista
+                const res2 = await supabase
+                    .from('product_receipts')
+                    .select('*')
+                    .limit(50);
+                data = res2.data;
+                error = res2.error;
+            } else {
+                data = res1.data;
             }
 
-            if (!data) return [];
+            if (error) {
+                console.error('Error fetching product_receipts:', error);
+                return [];
+            }
 
-            // Normaliza cada objeto para garantir o preenchimento de photo_url, fiscal_note_number, receipt_date, notes
-            return (data as any[]).map((row: any) => ({
-                id: row.id,
-                photo_url: row.photo_url || row.foto_url || '',
-                fiscal_note_number: row.fiscal_note_number || row.numero_nota_fiscal || row.nf_number || row.nf || 'N/A',
-                receipt_date: row.receipt_date || row.data_recebimento || row.created_at || '',
-                notes: row.notes || row.observacoes || row.description || '',
-                product: row.product || row.produto || '',
-                quantity: row.quantity || row.quantidade || 0,
-                supplier: row.supplier || row.fornecedor || '',
-                created_at: row.created_at
-            }));
+            if (!data || !Array.isArray(data)) return [];
+
+            return data.map((row: any) => {
+                const photo = row.photo_url || row.foto_url || row.photo || row.imagem || row.url || '';
+                const nf = row.fiscal_note_number || row.numero_nota_fiscal || row.nf_number || row.nf || row.nota_fiscal || 'S/N';
+                const date = row.receipt_date || row.data_recebimento || row.created_at || row.date || '';
+                const obs = row.notes || row.observacoes || row.description || row.obs || '';
+
+                return {
+                    id: row.id || `rec-${Math.random()}`,
+                    photo_url: photo,
+                    fiscal_note_number: String(nf),
+                    receipt_date: date,
+                    notes: obs,
+                    product: row.product || row.produto || '',
+                    quantity: row.quantity || row.quantidade || 1,
+                    supplier: row.supplier || row.fornecedor || '',
+                    created_at: row.created_at || date
+                };
+            });
         } catch (error) {
-            console.error('Error fetching receipts:', error);
+            console.error('Unexpected error in getProductsReceipts:', error);
             return [];
         }
     },
@@ -99,7 +120,37 @@ export const LogisticsService = {
      */
     addProductReceipt: async (receipt: Omit<ProductReceipt, 'id'>): Promise<ProductReceipt> => {
         try {
-            return await receiptsBase.create(receipt);
+            // Tenta inserir com o padrão photo_url e fiscal_note_number
+            const { data, error } = await supabase
+                .from('product_receipts')
+                .insert({
+                    photo_url: receipt.photo_url,
+                    fiscal_note_number: receipt.fiscal_note_number,
+                    notes: receipt.notes,
+                    receipt_date: receipt.receipt_date || new Date().toISOString()
+                })
+                .select('*')
+                .single();
+
+            if (error) {
+                console.warn('First insert attempt failed, trying fallback columns:', error);
+                // Fallback caso a tabela no banco ainda use colunas legadas em pt-BR
+                const fallbackRes = await supabase
+                    .from('product_receipts')
+                    .insert({
+                        foto_url: receipt.photo_url,
+                        numero_nota_fiscal: receipt.fiscal_note_number,
+                        observacoes: receipt.notes,
+                        data_recebimento: receipt.receipt_date || new Date().toISOString()
+                    })
+                    .select('*')
+                    .single();
+
+                if (fallbackRes.error) throw fallbackRes.error;
+                return fallbackRes.data as unknown as ProductReceipt;
+            }
+
+            return data as unknown as ProductReceipt;
         } catch (error) {
             console.error('Error adding receipt:', error);
             throw error;
