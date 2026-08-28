@@ -62,21 +62,35 @@ export const LogisticsService = {
      */
     getProductsReceipts: async (): Promise<ProductReceipt[]> => {
         try {
+            // Tenta primeiro com as colunas padronizadas em inglês
             const { data, error } = await supabase
                 .from('product_receipts')
-                .select(RECEIPT_FIELDS)
+                .select('*')
                 .order('created_at', { ascending: false })
-                .limit(10);
+                .limit(20);
 
             if (error) {
                 console.error('Error fetching receipts:', error);
                 throw error;
             }
 
-            return (data as unknown as ProductReceipt[]) || [];
+            if (!data) return [];
+
+            // Normaliza cada objeto para garantir o preenchimento de photo_url, fiscal_note_number, receipt_date, notes
+            return (data as any[]).map((row: any) => ({
+                id: row.id,
+                photo_url: row.photo_url || row.foto_url || '',
+                fiscal_note_number: row.fiscal_note_number || row.numero_nota_fiscal || row.nf_number || row.nf || 'N/A',
+                receipt_date: row.receipt_date || row.data_recebimento || row.created_at || '',
+                notes: row.notes || row.observacoes || row.description || '',
+                product: row.product || row.produto || '',
+                quantity: row.quantity || row.quantidade || 0,
+                supplier: row.supplier || row.fornecedor || '',
+                created_at: row.created_at
+            }));
         } catch (error) {
             console.error('Error fetching receipts:', error);
-            throw error;
+            return [];
         }
     },
 
