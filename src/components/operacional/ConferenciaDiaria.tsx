@@ -50,21 +50,95 @@ interface DadosConferencia {
 }
 
 async function buscarDados(): Promise<DadosConferencia> {
-  const [r1, r2, r3, r4] = await Promise.all([
+  const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
     supabase.from('fleet').select('id, name, plate, status').eq('type', 'Viatura').order('name'),
     supabase.from('locais_equipamento').select('id, nome, tipo').eq('ativo', true).order('nome'),
     supabase.from('compartimentos_viatura').select('id, nome, posicao, viatura_id, ordem').eq('ativo', true).order('ordem', { ascending: true }),
-    supabase.from('fleet').select('id, name, type, status, details, local_id, compartimento_id').neq('type', 'Viatura').order('name'),
+    supabase.from('fleet').select('id, name, type, status, details, local_id, compartimento_id, quantidade').neq('type', 'Viatura').order('name'),
+    supabase.from('equipamentos').select('id, nome, tipo, status, numero_serie, viatura_id, compartimento_id, quantidade'),
+    supabase.from('materiais_consumo').select('id, nome, description, quantidade, quantity, unidade, compartimento_id'),
+    supabase.from('checklist_items').select('id, item_name, category, is_active, description, quantidade, viatura_id, compartimento_id').eq('is_active', true),
   ]);
+
+  const todosItens: ItemFleet[] = [];
+
+  // 1. Tabela fleet (não-viaturas)
+  if (r4.data) {
+    r4.data.forEach((f: any) => {
+      todosItens.push({
+        id: f.id,
+        name: f.name || 'Item sem nome',
+        type: f.type || 'Equipamento',
+        status: f.status || 'active',
+        details: f.details || '',
+        local_id: f.local_id || undefined,
+        compartimento_id: f.compartimento_id || undefined,
+        quantidade: Number(f.quantidade) || 1,
+      });
+    });
+  }
+
+  // 2. Tabela equipamentos
+  if (r5.data) {
+    r5.data.forEach((e: any) => {
+      if (!todosItens.some(i => i.id === e.id)) {
+        todosItens.push({
+          id: e.id,
+          name: e.nome || 'Equipamento',
+          type: e.tipo || 'Equipamento',
+          status: e.status === 'Ok' || e.status === 'ativo' ? 'active' : (e.status || 'active'),
+          details: e.numero_serie ? `Série: ${e.numero_serie}` : '',
+          local_id: e.viatura_id || undefined,
+          compartimento_id: e.compartimento_id || undefined,
+          quantidade: Number(e.quantidade) || 1,
+        });
+      }
+    });
+  }
+
+  // 3. Tabela materiais_consumo
+  if (r6.data) {
+    r6.data.forEach((c: any) => {
+      if (!todosItens.some(i => i.id === c.id)) {
+        todosItens.push({
+          id: c.id,
+          name: c.nome || c.description || 'Material de Consumo',
+          type: 'Material',
+          status: 'active',
+          unidade: c.unidade || undefined,
+          details: c.unidade ? `Unidade: ${c.unidade}` : '',
+          compartimento_id: c.compartimento_id || undefined,
+          quantidade: Number(c.quantidade || c.quantity) || 1,
+        });
+      }
+    });
+  }
+
+  // 4. Tabela checklist_items
+  if (r7.data) {
+    r7.data.forEach((ci: any) => {
+      if (!todosItens.some(i => i.id === ci.id)) {
+        todosItens.push({
+          id: ci.id,
+          name: ci.item_name || 'Item de Checklist',
+          type: ci.category || 'Equipamento',
+          status: ci.is_active === false ? 'down' : 'active',
+          details: ci.description || '',
+          local_id: ci.viatura_id || undefined,
+          compartimento_id: ci.compartimento_id || undefined,
+          quantidade: Number(ci.quantidade) || 1,
+        });
+      }
+    });
+  }
+
   return {
     viaturas: r1.data || [],
     locais: r2.data || [],
     compartimentos: r3.data || [],
-    itens: r4.data || [],
+    itens: todosItens,
   };
 }
-
-// Nível 1 — Viatura ou Local
 interface N1Props {
   id: string;
   titulo: string;
