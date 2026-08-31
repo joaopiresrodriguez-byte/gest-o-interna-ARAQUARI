@@ -182,22 +182,35 @@ const DashboardAvisos: React.FC = () => {
     );
 
     // 2. Alterações da tabela escala_alteracoes que caíram nesta data
-    const scaleAltSwaps: ServiceSwap[] = escalaAlteracoes
+    // Para troca mútua e individual:
+    //   dia_original_a = dia do militar_a (TITULAR do dia A)
+    //   dia_original_b = dia do militar_b (TITULAR do dia B) ou dia de destino na individual
+    // Quando selectedDate === dia_original_a → titular = militar_a, substituto = militar_b
+    // Quando selectedDate === dia_original_b → titular = militar_b, substituto = militar_a
+    const scaleAltSwaps: (ServiceSwap & { titular_id?: number; substituto_id?: number })[] = escalaAlteracoes
       .filter(alt => alt.dia_original_a === selectedDate || alt.dia_original_b === selectedDate || alt.data_vigencia === selectedDate)
-      .map((alt, idx) => ({
-        id: `alt-${alt.id || idx}`,
-        personnel_id: alt.militar_a_id,
-        swap_with_personnel_id: alt.militar_b_id,
-        original_date: alt.dia_original_a || selectedDate,
-        new_date: alt.dia_original_b || alt.data_vigencia || selectedDate,
-        reason: alt.detalhes || 'Alteração de Escala Publicada',
-        swap_date: alt.criado_em ? alt.criado_em.split('T')[0] : selectedDate,
-        month_ref: selectedDate.substring(0, 7),
-        approval_status: 'Aprovado' as const,
-      }));
+      .map((alt, idx) => {
+        const isDateA = alt.dia_original_a === selectedDate;
+        // Titular = quem é o dono do dia selecionado; Substituto = quem assume/entra
+        const titular_id = isDateA ? alt.militar_a_id : alt.militar_b_id;
+        const substituto_id = isDateA ? alt.militar_b_id : alt.militar_a_id;
+        return {
+          id: `alt-${alt.id || idx}`,
+          personnel_id: alt.militar_a_id,
+          swap_with_personnel_id: alt.militar_b_id,
+          original_date: alt.dia_original_a || selectedDate,
+          new_date: alt.dia_original_b || alt.data_vigencia || selectedDate,
+          reason: alt.detalhes || 'Alteração de Escala Publicada',
+          swap_date: alt.criado_em ? alt.criado_em.split('T')[0] : selectedDate,
+          month_ref: selectedDate.substring(0, 7),
+          approval_status: 'Aprovado' as const,
+          titular_id,
+          substituto_id,
+        };
+      });
 
     // Mesclar ignorando duplicados por ID de militares + datas
-    const combined = [...directSwaps];
+    const combined: (ServiceSwap & { titular_id?: number; substituto_id?: number })[] = [...directSwaps];
     scaleAltSwaps.forEach(altSwap => {
       const exists = combined.some(s =>
         Number(s.personnel_id) === Number(altSwap.personnel_id) &&
@@ -924,9 +937,11 @@ const DashboardAvisos: React.FC = () => {
                 </h3>
                 {swapsForToday.length > 0 ? (
                   <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
-                    {swapsForToday.map((s, idx) => {
-                      const reqDetails = getPersonnelDetails(s.personnel_id);
-                      const coverDetails = getPersonnelDetails(s.swap_with_personnel_id);
+                    {swapsForToday.map((s: ServiceSwap & { titular_id?: number; substituto_id?: number }, idx) => {
+                      // Usar titular_id/substituto_id quando disponíveis (escala_alteracoes)
+                      // caso contrário, fallback para personnel_id/swap_with_personnel_id (service_swaps legados)
+                      const titularDetails = getPersonnelDetails(s.titular_id ?? s.personnel_id);
+                      const substitutoDetails = getPersonnelDetails(s.substituto_id ?? s.swap_with_personnel_id);
                       const isApproved = s.approval_status === 'Aprovado';
                       const isPending = s.approval_status === 'Pendente';
                       
@@ -938,7 +953,7 @@ const DashboardAvisos: React.FC = () => {
                               isApproved ? 'bg-green-50 text-green-700 border-green-200' :
                               isPending ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'
                             }`}>
-                              {s.approval_status || 'Pendente'}
+                              {s.approval_status || 'Aprovado'}
                             </span>
                             <span className="text-[10px] text-rustic-brown/65 flex items-center gap-1 font-semibold">
                               <span className="material-symbols-outlined text-[12px]">calendar_today</span>
@@ -946,22 +961,22 @@ const DashboardAvisos: React.FC = () => {
                             </span>
                           </div>
 
-                          {/* Saindo (Requester) */}
+                          {/* Titular */}
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1 text-[9px] font-black text-red-600 uppercase tracking-wider">
                               <span className="material-symbols-outlined text-[12px]">logout</span>
-                              <span>Saindo</span>
+                              <span>Titular</span>
                             </div>
-                            {reqDetails ? (
+                            {titularDetails ? (
                               <div className="pl-4 space-y-0.5">
-                                <p className="font-bold text-xs text-[#2c1810]">{reqDetails.name}</p>
+                                <p className="font-bold text-xs text-[#2c1810]">{titularDetails.name}</p>
                                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] text-rustic-brown/60">
-                                  <span>Mat: <span className="font-bold text-rustic-brown">{reqDetails.matricula}</span></span>
+                                  <span>Mat: <span className="font-bold text-rustic-brown">{titularDetails.matricula}</span></span>
                                   <span>•</span>
-                                  <span>CNH: <span className="font-bold text-rustic-brown">{reqDetails.cnhCategory}</span></span>
+                                  <span>CNH: <span className="font-bold text-rustic-brown">{titularDetails.cnhCategory}</span></span>
                                   <span>•</span>
-                                  <span className={`font-bold ${reqDetails.cveActive ? 'text-green-600' : 'text-stone-500'}`}>
-                                    {reqDetails.cveActive ? 'CVE Ativo' : 'CVE Inativo'}
+                                  <span className={`font-bold ${titularDetails.cveActive ? 'text-green-600' : 'text-stone-500'}`}>
+                                    {titularDetails.cveActive ? 'CVE Ativo' : 'CVE Inativo'}
                                   </span>
                                 </div>
                               </div>
@@ -975,22 +990,22 @@ const DashboardAvisos: React.FC = () => {
                             <span className="material-symbols-outlined text-sm font-black">arrow_downward</span>
                           </div>
 
-                          {/* Assumindo (Substituto - Azul) */}
+                          {/* Substituto */}
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase tracking-wider">
                               <span className="material-symbols-outlined text-[12px] text-blue-600">login</span>
-                              <span>Assumindo</span>
+                              <span>Substituto</span>
                             </div>
-                            {coverDetails ? (
+                            {substitutoDetails ? (
                               <div className="pl-4 space-y-0.5">
-                                <p className="font-bold text-xs text-blue-900">{coverDetails.name}</p>
+                                <p className="font-bold text-xs text-blue-900">{substitutoDetails.name}</p>
                                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] text-blue-800/80">
-                                  <span>Mat: <span className="font-bold text-blue-900">{coverDetails.matricula}</span></span>
+                                  <span>Mat: <span className="font-bold text-blue-900">{substitutoDetails.matricula}</span></span>
                                   <span>•</span>
-                                  <span>CNH: <span className="font-bold text-blue-900">{coverDetails.cnhCategory}</span></span>
+                                  <span>CNH: <span className="font-bold text-blue-900">{substitutoDetails.cnhCategory}</span></span>
                                   <span>•</span>
-                                  <span className={`font-bold ${coverDetails.cveActive ? 'text-blue-700' : 'text-stone-500'}`}>
-                                    {coverDetails.cveActive ? 'CVE Ativo' : 'CVE Inativo'}
+                                  <span className={`font-bold ${substitutoDetails.cveActive ? 'text-blue-700' : 'text-stone-500'}`}>
+                                    {substitutoDetails.cveActive ? 'CVE Ativo' : 'CVE Inativo'}
                                   </span>
                                 </div>
                               </div>
