@@ -229,19 +229,36 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
   const isOk = conf?.status === 'ok';
   const isOcorrencia = conf?.status && conf.status !== 'ok';
 
-  const [observacao, setObservacao] = useState(conf?.observacao || '');
-  const [expandidoObs, setExpandidoObs] = useState(Boolean(isOcorrencia));
+  // Estado local para o formulário de ocorrência
+  const [tipoOcorrencia, setTipoOcorrencia] = useState<'avariado' | 'falta' | null>(conf?.tipo_ocorrencia || null);
+  const [subTipoAvaria, setSubTipoAvaria] = useState<'devera_consertar' | 'sem_conserto_baixar' | null>(conf?.sub_tipo_avaria || null);
+  const [qtdFalta, setQtdFalta] = useState<number>(conf?.quantidade_falta || 1);
+  const [repostoReserva, setRepostoReserva] = useState<boolean>(conf?.reposto_reserva || false);
+  const [observacao, setObservacao] = useState<string>(conf?.observacao_ocorrencia || conf?.observacao || '');
+  const [expandidoObs, setExpandidoObs] = useState<boolean>(Boolean(isOcorrencia));
+
+  const maxEstoque = Math.max(1, item.quantidade || 1);
 
   useEffect(() => {
-    if (conf?.observacao !== undefined) {
-      setObservacao(conf.observacao || '');
+    if (conf) {
+      if (conf.tipo_ocorrencia) setTipoOcorrencia(conf.tipo_ocorrencia);
+      if (conf.sub_tipo_avaria) setSubTipoAvaria(conf.sub_tipo_avaria);
+      if (conf.quantidade_falta) setQtdFalta(Math.min(conf.quantidade_falta, maxEstoque));
+      if (conf.reposto_reserva !== undefined) setRepostoReserva(Boolean(conf.reposto_reserva));
+      if (conf.observacao_ocorrencia || conf.observacao) {
+        setObservacao(conf.observacao_ocorrencia || conf.observacao || '');
+      }
     }
     if (isOcorrencia) {
       setExpandidoObs(true);
     }
-  }, [conf?.status, conf?.observacao]);
+  }, [conf?.status, conf?.tipo_ocorrencia, conf?.sub_tipo_avaria, conf?.quantidade_falta, conf?.reposto_reserva, conf?.observacao_ocorrencia, conf?.observacao]);
 
   async function marcarOk() {
+    setTipoOcorrencia(null);
+    setSubTipoAvaria(null);
+    setQtdFalta(1);
+    setRepostoReserva(false);
     setObservacao('');
     setExpandidoObs(false);
     await salvarConferencia({
@@ -249,6 +266,11 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
       equipamento_id: item.id,
       status: 'ok',
       observacao: '',
+      tipo_ocorrencia: undefined,
+      sub_tipo_avaria: undefined,
+      quantidade_falta: undefined,
+      reposto_reserva: false,
+      observacao_ocorrencia: undefined,
       item_nome: item.name,
       viatura_nome: viaturaCtx?.nome || undefined,
       compartimento_nome: compartimentoCtx?.nome || undefined,
@@ -257,50 +279,62 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
     onAtualizar();
   }
 
-  async function marcarOcorrencia() {
+  function abrirPainelOcorrencia() {
     setExpandidoObs(true);
-    await salvarConferencia({
-      fleet_item_id: item.id,
-      equipamento_id: item.id,
-      status: 'avariado',
-      observacao: observacao,
-      item_nome: item.name,
-      viatura_nome: viaturaCtx?.nome || undefined,
-      compartimento_nome: compartimentoCtx?.nome || undefined,
-      local_nome: localCtx?.nome || undefined,
-    });
-    onAtualizar();
+    if (!tipoOcorrencia) {
+      setTipoOcorrencia('avariado');
+    }
   }
 
-  async function salvarTextoObs() {
-    if (!observacao.trim()) {
-      toast.error(`A observação é obrigatória para o item ${item.name}`);
+  async function salvarDetalhesOcorrencia() {
+    if (!tipoOcorrencia) {
+      toast.error('Selecione se é Avariado ou Falta.');
       return;
     }
+
+    if (tipoOcorrencia === 'avariado') {
+      if (!subTipoAvaria) {
+        toast.error('Selecione "Deverá Consertar" ou "Sem Conserto, Deverá Baixar".');
+        return;
+      }
+      if (subTipoAvaria === 'sem_conserto_baixar' && !observacao.trim()) {
+        toast.error('A descrição do estado do item é obrigatória para Baixa.');
+        return;
+      }
+    }
+
+    const confStatus: StatusConferencia = tipoOcorrencia === 'falta' ? 'nao_encontrado' : 'avariado';
+
     await salvarConferencia({
       fleet_item_id: item.id,
       equipamento_id: item.id,
-      status: 'avariado',
-      observacao: observacao,
+      status: confStatus,
+      observacao: observacao.trim() || undefined,
+      tipo_ocorrencia: tipoOcorrencia,
+      sub_tipo_avaria: tipoOcorrencia === 'avariado' ? subTipoAvaria : undefined,
+      quantidade_falta: tipoOcorrencia === 'falta' ? qtdFalta : undefined,
+      reposto_reserva: tipoOcorrencia === 'falta' ? repostoReserva : false,
+      observacao_ocorrencia: observacao.trim() || undefined,
       item_nome: item.name,
       viatura_nome: viaturaCtx?.nome || undefined,
       compartimento_nome: compartimentoCtx?.nome || undefined,
       local_nome: localCtx?.nome || undefined,
     });
-    toast.success('Observação registrada com sucesso!');
+
+    toast.success('Ocorrência salva com sucesso!');
     onAtualizar();
   }
 
   const containerBg = isOk
     ? '#f0fdf4'
     : isOcorrencia
-    ? '#fef2f2'
+    ? conf?.reposto_reserva ? '#f0f9ff' : '#fef2f2'
     : 'white';
 
   const containerBorder = isOk
     ? '1px solid #bbf7d0'
     : isOcorrencia
-    ? '1px solid #fca5a5'
+    ? conf?.reposto_reserva ? '1px solid #7dd3fc' : '1px solid #fca5a5'
     : '1px solid #f1f5f9';
 
   return (
@@ -309,15 +343,34 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {/* NOME E TIPO */}
         <div style={{ flex: 1, minWidth: '160px' }}>
-          <span style={{ fontSize: '13px', color: '#1e293b', fontWeight: '600' }}>
-            {tipo === 'consumo' ? '📋' : '🔧'} {item.name}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', color: '#1e293b', fontWeight: '600' }}>
+              {tipo === 'consumo' ? '📋' : '🔧'} {item.name}
+            </span>
+            {/* Indicador visual distinto para Falta Reposta ou Falta Normal */}
+            {isOcorrencia && (
+              conf?.reposto_reserva ? (
+                <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: '9999px' }}>
+                  🔄 Falta — Reposto
+                </span>
+              ) : conf?.tipo_ocorrencia === 'falta' || conf?.status === 'nao_encontrado' ? (
+                <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '9999px' }}>
+                  ❌ Falta ({conf?.quantidade_falta || 1})
+                </span>
+              ) : (
+                <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', padding: '2px 8px', borderRadius: '9999px' }}>
+                  ⚠️ {conf?.sub_tipo_avaria === 'sem_conserto_baixar' ? 'Avariado (Baixa)' : 'Avariado (Conserto)'}
+                </span>
+              )
+            )}
+          </div>
+
           {item.numero_serie && (
             <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '6px' }}>Nº {item.numero_serie}</span>
           )}
-          {tipo === 'consumo' && item.quantidade && (
-            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '6px' }}>
-              {item.quantidade} {item.unidade || 'un'}
+          {item.quantidade && (
+            <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px', fontWeight: 'bold' }}>
+              Estoque: {item.quantidade} {item.unidade || 'un'}
             </span>
           )}
         </div>
@@ -347,13 +400,13 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
 
           {/* BOTÃO OCORRÊNCIA */}
           <button
-            onClick={marcarOcorrencia}
+            onClick={abrirPainelOcorrencia}
             style={{
               padding: '6px 14px',
               borderRadius: '6px',
               border: isOcorrencia ? '2px solid #991b1b' : '1px solid #cbd5e1',
-              background: isOcorrencia ? '#fee2e2' : 'white',
-              color: isOcorrencia ? '#991b1b' : '#64748b',
+              background: isOcorrencia ? (conf?.reposto_reserva ? '#e0f2fe' : '#fee2e2') : 'white',
+              color: isOcorrencia ? (conf?.reposto_reserva ? '#0369a1' : '#991b1b') : '#64748b',
               cursor: 'pointer',
               fontSize: '12px',
               fontWeight: isOcorrencia ? 'bold' : '500',
@@ -368,31 +421,196 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
         </div>
       </div>
 
-      {/* CAMPO EXPANSÍVEL DE OBSERVAÇÃO (OBRIGATÓRIO QUANDO OCORRÊNCIA) */}
+      {/* PAINEL DETALHADO DE OCORRÊNCIA */}
       {(expandidoObs || isOcorrencia) && (
-        <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #fca5a5' }}>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#991b1b', marginBottom: '4px' }}>
-            Observação da Ocorrência * (ausente, avariado, incompleto, etc.)
-          </label>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <input
-              value={observacao}
-              onChange={e => setObservacao(e.target.value)}
-              placeholder="Descreva o problema encontrado (obrigatório)..."
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                borderRadius: '6px',
-                border: !observacao.trim() && isOcorrencia ? '2px solid #ef4444' : '1px solid #cbd5e1',
-                fontSize: '12px',
-                background: '#fff',
-                outline: 'none',
-              }}
-            />
+        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* SELEÇÃO DO TIPO DE OCORRÊNCIA: AVARIADO OU FALTA */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
+              Selecione o Tipo de Ocorrência:
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setTipoOcorrencia('avariado')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: tipoOcorrencia === 'avariado' ? '2px solid #d97706' : '1px solid #cbd5e1',
+                  background: tipoOcorrencia === 'avariado' ? '#fef3c7' : '#fff',
+                  color: tipoOcorrencia === 'avariado' ? '#92400e' : '#475569',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                🛠️ 1 — AVARIADO
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoOcorrencia('falta')}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: tipoOcorrencia === 'falta' ? '2px solid #dc2626' : '1px solid #cbd5e1',
+                  background: tipoOcorrencia === 'falta' ? '#fee2e2' : '#fff',
+                  color: tipoOcorrencia === 'falta' ? '#991b1b' : '#475569',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                📦 2 — FALTA
+              </button>
+            </div>
+          </div>
+
+          {/* OPÇÃO 1 — AVARIADO */}
+          {tipoOcorrencia === 'avariado' && (
+            <div style={{ background: '#fffbe3', padding: '10px', borderRadius: '6px', border: '1px solid #fef08a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#854d0e' }}>
+                Situação da Avaria:
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setSubTipoAvaria('devera_consertar')}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: subTipoAvaria === 'devera_consertar' ? '2px solid #ca8a04' : '1px solid #fde047',
+                    background: subTipoAvaria === 'devera_consertar' ? '#fef08a' : '#fff',
+                    color: '#713f12',
+                    fontSize: '11px',
+                    fontWeight: subTipoAvaria === 'devera_consertar' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                  }}
+                >
+                  1a — Deverá Consertar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubTipoAvaria('sem_conserto_baixar')}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: subTipoAvaria === 'sem_conserto_baixar' ? '2px solid #b45309' : '1px solid #fde047',
+                    background: subTipoAvaria === 'sem_conserto_baixar' ? '#fef3c7' : '#fff',
+                    color: '#78350f',
+                    fontSize: '11px',
+                    fontWeight: subTipoAvaria === 'sem_conserto_baixar' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                  }}
+                >
+                  1b — Sem Conserto, Deverá Baixar
+                </button>
+              </div>
+
+              {subTipoAvaria === 'devera_consertar' && (
+                <div>
+                  <label style={{ fontSize: '11px', color: '#854d0e', fontWeight: '500' }}>
+                    Descrição da avaria (opcional):
+                  </label>
+                  <input
+                    value={observacao}
+                    onChange={e => setObservacao(e.target.value)}
+                    placeholder="Descreva o tipo de avaria..."
+                    style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #fde047', fontSize: '12px', marginTop: '4px', background: '#fff' }}
+                  />
+                </div>
+              )}
+
+              {subTipoAvaria === 'sem_conserto_baixar' && (
+                <div>
+                  <label style={{ fontSize: '11px', color: '#991b1b', fontWeight: 'bold' }}>
+                    Descrição obrigatória do estado do item para Baixa: *
+                  </label>
+                  <input
+                    value={observacao}
+                    onChange={e => setObservacao(e.target.value)}
+                    placeholder="Descreva detalhadamente o estado do item para solicitação de baixa..."
+                    style={{
+                      width: '100%',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      border: !observacao.trim() ? '2px solid #ef4444' : '1px solid #fca5a5',
+                      fontSize: '12px',
+                      marginTop: '4px',
+                      background: '#fff'
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* OPÇÃO 2 — FALTA */}
+          {tipoOcorrencia === 'falta' && (
+            <div style={{ background: '#fef2f2', padding: '10px', borderRadius: '6px', border: '1px solid #fecaca', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', itemsCenter: 'center', gap: '10px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#991b1b' }}>
+                  Quantidade Faltante:
+                </label>
+                <select
+                  value={qtdFalta}
+                  onChange={e => setQtdFalta(Number(e.target.value))}
+                  style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fca5a5', fontSize: '12px', fontWeight: 'bold', background: '#fff', color: '#991b1b' }}
+                >
+                  {Array.from({ length: maxEstoque }, (_, i) => i + 1).map(val => (
+                    <option key={val} value={val}>
+                      {val} {val === 1 ? 'unidade' : 'unidades'} (Máx: {maxEstoque})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* BLOCO 5 — REPOSIÇÃO POR RESERVA */}
+              <div style={{ marginTop: '4px', paddingTop: '6px', borderTop: '1px border-red-200' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 'bold', color: '#0369a1', cursor: 'pointer', background: '#f0f9ff', padding: '8px', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+                  <input
+                    type="checkbox"
+                    checked={repostoReserva}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setRepostoReserva(checked);
+                      if (checked) {
+                        const textoPadrao = 'Item reposto por material da reserva';
+                        if (!observacao.includes(textoPadrao)) {
+                          setObservacao(observacao ? `${textoPadrao}. ${observacao}` : textoPadrao);
+                        }
+                      }
+                    }}
+                    style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
+                  />
+                  <span>Reposto por material da reserva no mesmo dia</span>
+                </label>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#475569', fontWeight: '500' }}>
+                  Observações adicionais (opcional):
+                </label>
+                <input
+                  value={observacao}
+                  onChange={e => setObservacao(e.target.value)}
+                  placeholder="Informações adicionais sobre a falta ou reposição..."
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', marginTop: '4px', background: '#fff' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* BOTÃO REGISTRAR/SALVAR OCORRÊNCIA */}
+          <div style={{ display: 'flex', justify: 'flex-end', marginTop: '4px' }}>
             <button
-              onClick={salvarTextoObs}
+              type="button"
+              onClick={salvarDetalhesOcorrencia}
               style={{
-                padding: '8px 14px',
+                padding: '8px 16px',
                 borderRadius: '6px',
                 border: 'none',
                 background: '#dc2626',
@@ -402,14 +620,9 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
                 cursor: 'pointer',
               }}
             >
-              Salvar
+              Salvar Ocorrência
             </button>
           </div>
-          {!observacao.trim() && isOcorrencia && (
-            <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: '600', marginTop: '2px', display: 'block' }}>
-              ⚠️ Campo de observação é obrigatório para registrar ocorrência.
-            </span>
-          )}
         </div>
       )}
 

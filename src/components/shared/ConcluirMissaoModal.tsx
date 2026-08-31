@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DailyMission, Personnel } from '../../services/types';
 import { STATUS_MISSAO, StatusMissao, atualizarMissao } from '../../services/missoesService';
 import { SupabaseService } from '../../services/SupabaseService';
+import { getMilitaresRegularesOrdenados } from '../../utils/personnelUtils';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
 
@@ -28,13 +29,12 @@ export const ConcluirMissaoModal: React.FC<ConcluirMissaoModalProps> = ({
   useEffect(() => {
     if (isOpen && mission) {
       SupabaseService.getPersonnel()
-        .then(data => setPersonnelList(data || []))
+        .then(data => setPersonnelList(getMilitaresRegularesOrdenados(data || [])))
         .catch(err => console.error("Erro ao carregar lista de pessoal:", err));
 
       setStatus((mission.status as StatusMissao) || 'concluida');
       setObservacoes(mission.observacoes || '');
 
-      // Definir militar responsável / quem concluiu padrão com base no perfil logado
       const militarLogado = profile?.name || profile?.war_name || user?.email || '';
       setCompletedBy(mission.completed_by || militarLogado);
     }

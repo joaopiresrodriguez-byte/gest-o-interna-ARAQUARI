@@ -398,8 +398,8 @@ const PatrimonioB4: React.FC = () => {
   const [missionStatus, setMissionStatus] = useState<DailyMission['status']>('agendada');
   const [missionObs, setMissionObs] = useState("");
 
-  // Filters for Missions
-  const [missionFilterStatus, setMissionFilterStatus] = useState<string>("todos");
+  // Filters for Missions (Padrão: apenas agendada)
+  const [missionFilterStatus, setMissionFilterStatus] = useState<string>("agendada");
   const [missionFilterPriority, setMissionFilterPriority] = useState<string>("todos");
 
   // Modais Unificados de Missão
@@ -813,11 +813,11 @@ const PatrimonioB4: React.FC = () => {
                 <div className="space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-rustic-border shadow-sm">
                     <div className="flex gap-4 items-center flex-wrap">
-                      <select value={missionFilterStatus} onChange={e => setMissionFilterStatus(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border text-xs font-bold bg-white">
-                        <option value="todos">Todos Status</option>
-                        <option value="agendada">Agendadas</option>
-                        <option value="em_andamento">Em Andamento</option>
+                      <select value={missionFilterStatus} onChange={e => setMissionFilterStatus(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border text-xs font-bold bg-white focus:ring-2 focus:ring-primary">
+                        <option value="agendada">Apenas Agendadas (Padrão)</option>
                         <option value="concluida">Concluídas</option>
+                        <option value="todos">Todas (Agendadas, Concluídas, etc.)</option>
+                        <option value="em_andamento">Em Andamento</option>
                         <option value="parcialmente_concluida">Parcialmente Concluídas</option>
                         <option value="nao_realizada">Não Realizadas</option>
                         <option value="cancelada">Canceladas</option>
@@ -850,6 +850,11 @@ const PatrimonioB4: React.FC = () => {
                     {dailyMissions
                       .filter(m => (missionFilterStatus === 'todos' || m.status === missionFilterStatus))
                       .filter(m => (missionFilterPriority === 'todos' || m.priority === missionFilterPriority))
+                      .sort((a, b) => {
+                        const dateA = a.mission_date ? `${a.mission_date.split('T')[0]}T${a.start_time || '00:00'}` : '9999-99-99';
+                        const dateB = b.mission_date ? `${b.mission_date.split('T')[0]}T${b.start_time || '00:00'}` : '9999-99-99';
+                        return dateA.localeCompare(dateB);
+                      })
                       .map(mission => (
                         <div key={mission.id} className="bg-white border border-rustic-border rounded-xl p-4 hover:shadow-md transition-all flex flex-col gap-3">
                           <div className="flex justify-between items-start">
@@ -1088,142 +1093,114 @@ const PatrimonioB4: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="p-4 space-y-3">
-                      {/* Pílulas dos Locais e Viaturas com ITENS (> 0) */}
-                      <div className="flex flex-wrap gap-2">
-                        {/* 1. Locais com itens */}
-                        {locais.map(local => {
-                          const count = fleet.filter(item =>
-                            item.local_id === local.id ||
-                            (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
-                          ).length;
-                          if (count === 0) return null;
-                          return (
-                            <div key={local.id} className="flex items-center gap-1">
-                              <button
-                                onClick={() => setExtratoLocal(local)}
-                                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rustic-border bg-stone-50 hover:border-green-400 hover:bg-green-50 transition-all group"
-                              >
-                                <span className="material-symbols-outlined text-[16px] text-green-600 group-hover:text-green-700">
-                                  {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
-                                </span>
-                                <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800">{local.nome}</span>
-                                <span className="text-[10px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{count}</span>
-                                <span className="material-symbols-outlined text-[14px] text-gray-400 group-hover:text-green-600">receipt_long</span>
-                              </button>
-                              {profile?.p_logistica === 'editor' && (
-                                <ActionButton
-                                  variant="alteration"
-                                  size="sm"
-                                  onClick={() => abrirEdicaoLocal(local)}
-                                  title="Alterar/Editar Local"
-                                />
-                              )}
-                            </div>
-                          );
-                        })}
+                    <div className="p-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* COLUNA ESQUERDA — LOCAIS */}
+                        <div className="bg-stone-50/50 rounded-xl p-4 border border-rustic-border/60">
+                          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-rustic-border">
+                            <span className="material-symbols-outlined text-green-700 font-bold">location_city</span>
+                            <h3 className="font-bold text-sm text-rustic-brown uppercase tracking-wider">Locais</h3>
+                            <span className="text-[10px] font-black bg-green-100 text-green-800 px-2 py-0.5 rounded-full ml-auto">
+                              {locais.length}
+                            </span>
+                          </div>
 
-                        {/* 2. Viaturas com itens */}
-                        {fleet.filter(v => v.type === 'Viatura').map(vtr => {
-                          const compIds = allCompartimentos.filter(c => c.viatura_id === vtr.id).map(c => c.id);
-                          const count = fleet.filter(item =>
-                            (item.compartimento_id && compIds.includes(item.compartimento_id)) ||
-                            item.local_id === vtr.id ||
-                            item.location?.toLowerCase() === vtr.name.toLowerCase()
-                          ).length;
-
-                          if (count === 0) return null;
-
-                          const vtrLocalObj: LocalEquipamento = {
-                            id: vtr.id,
-                            nome: `${vtr.name}${vtr.plate ? ` (${vtr.plate})` : ''}`,
-                            tipo: 'viatura',
-                            ativo: true
-                          };
-
-                          return (
-                            <div key={`vtr-${vtr.id}`} className="flex items-center gap-1">
-                              <button
-                                onClick={() => setExtratoLocal(vtrLocalObj)}
-                                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-200 bg-blue-50/50 hover:border-blue-500 hover:bg-blue-100/50 transition-all group"
-                              >
-                                <span className="material-symbols-outlined text-[16px] text-blue-600 group-hover:text-blue-800">
-                                  local_shipping
-                                </span>
-                                <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950">{vtr.name}</span>
-                                <span className="text-[10px] font-black bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full">{count}</span>
-                                <span className="material-symbols-outlined text-[14px] text-blue-400 group-hover:text-blue-600">receipt_long</span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Locais e Viaturas sem ITENS (count === 0) agrupados em 'Ver mais' */}
-                      {(() => {
-                        const emptyLocaisList = locais.filter(local => {
-                          const count = fleet.filter(item =>
-                            item.local_id === local.id ||
-                            (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
-                          ).length;
-                          return count === 0;
-                        });
-
-                        const emptyVtrsList = fleet.filter(v => v.type === 'Viatura').filter(vtr => {
-                          const compIds = allCompartimentos.filter(c => c.viatura_id === vtr.id).map(c => c.id);
-                          const count = fleet.filter(item =>
-                            (item.compartimento_id && compIds.includes(item.compartimento_id)) ||
-                            item.local_id === vtr.id ||
-                            item.location?.toLowerCase() === vtr.name.toLowerCase()
-                          ).length;
-                          return count === 0;
-                        });
-
-                        const totalEmpty = emptyLocaisList.length + emptyVtrsList.length;
-                        if (totalEmpty === 0) return null;
-
-                        return (
-                          <div className="pt-2 border-t border-stone-100">
-                            <button
-                              onClick={() => setShowEmptyLocais(prev => !prev)}
-                              className="flex items-center gap-1.5 text-xs font-bold text-rustic-brown/60 hover:text-rustic-brown transition-colors py-1 px-2 rounded-lg bg-stone-100/70"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">
-                                {showEmptyLocais ? 'expand_less' : 'expand_more'}
-                              </span>
-                              Ver mais ({totalEmpty}) locais/viaturas sem itens cadastrados
-                            </button>
-
-                            {showEmptyLocais && (
-                              <div className="flex flex-wrap gap-2 mt-3 p-3 bg-stone-50 rounded-xl border border-dashed border-stone-200">
-                                {emptyLocaisList.map(local => (
-                                  <div key={`empty-${local.id}`} className="flex items-center gap-1 opacity-70 hover:opacity-100">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {locais.map(local => {
+                              const count = fleet.filter(item =>
+                                item.local_id === local.id ||
+                                (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
+                              ).length;
+                              return (
+                                <div key={local.id} className="flex items-center justify-between p-3 rounded-xl border border-rustic-border bg-white hover:border-green-400 hover:shadow-sm transition-all group">
+                                  <button
+                                    onClick={() => setExtratoLocal(local)}
+                                    className="flex items-center gap-2 text-left flex-1 min-w-0"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px] text-green-600 group-hover:text-green-700 shrink-0">
+                                      {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
+                                    </span>
+                                    <div className="truncate">
+                                      <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800 block truncate">{local.nome}</span>
+                                      <span className="text-[10px] text-gray-500 font-semibold">{count} item(ns)</span>
+                                    </div>
+                                  </button>
+                                  <div className="flex items-center gap-1 shrink-0 ml-1">
                                     <button
                                       onClick={() => setExtratoLocal(local)}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-[11px] font-medium text-rustic-brown"
+                                      className="p-1 text-gray-400 hover:text-green-700 transition-colors"
+                                      title="Ver extrato de itens"
                                     >
-                                      <span className="material-symbols-outlined text-[14px] text-stone-400">location_city</span>
-                                      {local.nome} (0)
+                                      <span className="material-symbols-outlined text-[16px]">receipt_long</span>
                                     </button>
+                                    {profile?.p_logistica === 'editor' && (
+                                      <ActionButton
+                                        variant="alteration"
+                                        size="sm"
+                                        onClick={() => abrirEdicaoLocal(local)}
+                                        title="Alterar/Editar Local"
+                                      />
+                                    )}
                                   </div>
-                                ))}
-
-                                {emptyVtrsList.map(vtr => (
-                                  <div key={`empty-vtr-${vtr.id}`} className="flex items-center gap-1 opacity-70 hover:opacity-100">
-                                    <button
-                                      onClick={() => setExtratoLocal({ id: vtr.id, nome: vtr.name, tipo: 'viatura', ativo: true })}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-[11px] font-medium text-blue-800"
-                                    >
-                                      <span className="material-symbols-outlined text-[14px] text-blue-400">local_shipping</span>
-                                      {vtr.name} (0)
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })()}
+                        </div>
+
+                        {/* COLUNA DIREITA — VIATURAS */}
+                        <div className="bg-blue-50/30 rounded-xl p-4 border border-blue-200/60">
+                          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-blue-200">
+                            <span className="material-symbols-outlined text-blue-700 font-bold">local_shipping</span>
+                            <h3 className="font-bold text-sm text-blue-950 uppercase tracking-wider">Viaturas</h3>
+                            <span className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full ml-auto">
+                              {fleet.filter(v => v.type === 'Viatura').length}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {fleet.filter(v => v.type === 'Viatura').map(vtr => {
+                              const compIds = allCompartimentos.filter(c => c.viatura_id === vtr.id).map(c => c.id);
+                              const count = fleet.filter(item =>
+                                (item.compartimento_id && compIds.includes(item.compartimento_id)) ||
+                                item.local_id === vtr.id ||
+                                item.location?.toLowerCase() === vtr.name.toLowerCase()
+                              ).length;
+
+                              const vtrLocalObj: LocalEquipamento = {
+                                id: vtr.id,
+                                nome: `${vtr.name}${vtr.plate ? ` (${vtr.plate})` : ''}`,
+                                tipo: 'viatura',
+                                ativo: true
+                              };
+
+                              return (
+                                <div key={`vtr-${vtr.id}`} className="flex items-center justify-between p-3 rounded-xl border border-blue-200 bg-white hover:border-blue-400 hover:shadow-sm transition-all group">
+                                  <button
+                                    onClick={() => setExtratoLocal(vtrLocalObj)}
+                                    className="flex items-center gap-2 text-left flex-1 min-w-0"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px] text-blue-600 group-hover:text-blue-800 shrink-0">
+                                      local_shipping
+                                    </span>
+                                    <div className="truncate">
+                                      <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950 block truncate">{vtr.name}</span>
+                                      <span className="text-[10px] text-blue-600 font-semibold">{count} item(ns)</span>
+                                    </div>
+                                  </button>
+                                  <button
+                                    onClick={() => setExtratoLocal(vtrLocalObj)}
+                                    className="p-1 text-blue-400 hover:text-blue-700 transition-colors shrink-0"
+                                    title="Ver extrato de itens"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

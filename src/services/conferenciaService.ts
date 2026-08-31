@@ -114,6 +114,12 @@ export async function salvarConferencia(
     fleet_item_id?: string;
     status: StatusConferencia;
     observacao?: string;
+    // Novos campos de Ocorrência Detalhada e Reposição Reserva
+    tipo_ocorrencia?: 'avariado' | 'falta' | string;
+    sub_tipo_avaria?: 'devera_consertar' | 'sem_conserto_baixar' | string;
+    quantidade_falta?: number;
+    reposto_reserva?: boolean;
+    observacao_ocorrencia?: string;
     // Contexto para histórico e notificação:
     item_nome?: string;
     viatura_nome?: string;
@@ -149,6 +155,11 @@ export async function salvarConferencia(
     id: itemId,
     status: dados.status,
     observacao: dados.observacao || '',
+    tipo_ocorrencia: dados.tipo_ocorrencia || null,
+    sub_tipo_avaria: dados.sub_tipo_avaria || null,
+    quantidade_falta: dados.quantidade_falta || null,
+    reposto_reserva: dados.reposto_reserva || false,
+    observacao_ocorrencia: dados.observacao_ocorrencia || null,
     conferido_por_nome: nomeUsuario,
     conferido_em: agora,
     data_conferencia: hoje,
@@ -170,6 +181,11 @@ export async function salvarConferencia(
         status: dados.status,
         status_item: dados.status === 'ok' ? 'ok' : 'ocorrencia',
         observacao: dados.observacao || null,
+        tipo_ocorrencia: dados.tipo_ocorrencia || null,
+        sub_tipo_avaria: dados.sub_tipo_avaria || null,
+        quantidade_falta: dados.quantidade_falta || null,
+        reposto_reserva: dados.reposto_reserva || false,
+        observacao_ocorrencia: dados.observacao_ocorrencia || null,
         conferido_por_id: user?.id || null,
         conferido_por_nome: nomeUsuario,
         conferido_em: agora,

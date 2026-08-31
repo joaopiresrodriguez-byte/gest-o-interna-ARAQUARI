@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DailyMission, Personnel } from '../../services/types';
 import { SupabaseService } from '../../services/SupabaseService';
+import { getMilitaresRegularesOrdenados } from '../../utils/personnelUtils';
 import { toast } from 'sonner';
 
 export interface DailyMissionModalProps {
@@ -48,7 +49,7 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       SupabaseService.getPersonnel()
-        .then(data => setPersonnelList(data || []))
+        .then(data => setPersonnelList(getMilitaresRegularesOrdenados(data || [])))
         .catch(err => console.error("Erro ao carregar lista de pessoal:", err));
 
       if (initialData) {
