@@ -9,6 +9,7 @@ import GerenciarCompartimentos from '../components/b4/GerenciarCompartimentos';
 import VisualizacaoViatura from '../components/b4/VisualizacaoViatura';
 import HistoricoConferencias from '../components/b4/HistoricoConferencias';
 import SecaoCautelasB4 from '../components/b4/SecaoCautelasB4';
+import BaixaPatrimonio from '../components/b4/BaixaPatrimonio';
 import { supabase } from '../services/supabase';
 
 import { useEdicao } from '../hooks/useEdicao';
@@ -227,7 +228,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
 const PatrimonioB4: React.FC = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'cautelas' | 'compras' | 'missoes' | 'conferencias' | 'relatorios'>('missoes');
+  const isGestorB4 = Boolean(profile?.is_manager || profile?.p_logistica === 'editor');
+  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'cautelas' | 'compras' | 'missoes' | 'conferencias' | 'relatorios' | 'baixa_patrimonio'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
   const [locais, setLocais] = useState<LocalEquipamento[]>([]);
@@ -793,16 +795,24 @@ const PatrimonioB4: React.FC = () => {
           {/* Tabs */}
           <div className="bg-surface rounded-xl shadow-sm border border-rustic-border overflow-hidden">
             <div className="border-b border-rustic-border bg-stone-50/50 px-6 pt-4 flex gap-8 overflow-x-auto">
-              {(['missoes', 'listagem', 'cautelas', 'cadastro', 'compras', 'conferencias', 'relatorios'] as const).map(tab => (
+              {(['missoes', 'listagem', 'cautelas', 'cadastro', 'compras', 'conferencias', 'baixa_patrimonio', 'relatorios'] as const)
+                .filter(tab => {
+                  // Abas 'compras', 'conferencias' e 'baixa_patrimonio' acessadas apenas por gestores
+                  if ((tab === 'compras' || tab === 'conferencias' || tab === 'baixa_patrimonio') && !isGestorB4) {
+                    return false;
+                  }
+                  return true;
+                })
+                .map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
                 >
                   <span className="material-symbols-outlined">
-                    {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cautelas' ? 'folder_shared' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'relatorios' ? 'analytics' : 'checklist'}
+                    {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cautelas' ? 'folder_shared' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'baixa_patrimonio' ? 'delete_forever' : tab === 'relatorios' ? 'analytics' : 'checklist'}
                   </span>
-                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'cautelas' ? 'Cautelas' : tab === 'conferencias' ? 'Conferências' : tab === 'relatorios' ? 'Relatórios' : tab}
+                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'cautelas' ? 'Cautelas' : tab === 'conferencias' ? 'Conferências' : tab === 'baixa_patrimonio' ? 'Baixa Patrimônio' : tab === 'relatorios' ? 'Relatórios' : tab}
                 </button>
               ))}
             </div>
@@ -1900,6 +1910,10 @@ const PatrimonioB4: React.FC = () => {
 
               {activeTab === 'cautelas' && (
                 <SecaoCautelasB4 />
+              )}
+
+              {activeTab === 'baixa_patrimonio' && (
+                <BaixaPatrimonio />
               )}
 
             </div>

@@ -171,8 +171,47 @@ export const HistoricoConferencias: React.FC = () => {
     }
   };
 
-  // Separação em Pendências em Aberto vs Lista Completa
   const pendenciasEmAberto = registros.filter(r => !r.resolvido);
+
+  const calcularPermanencia = (dataConf: string) => {
+    if (!dataConf) return { dias: 0, nivel: 'normal', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', label: 'Recente' };
+    const confDate = new Date(dataConf + (dataConf.includes('T') ? '' : 'T12:00:00'));
+    const hojeDate = new Date();
+    const diffMs = hojeDate.getTime() - confDate.getTime();
+    const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (dias >= 180) {
+      return {
+        dias,
+        nivel: 'preto',
+        badgeClass: 'bg-black text-white border-black shadow-md',
+        label: `🚨 ALERTA PRETO (+6 Meses - ${dias} dias)`
+      };
+    }
+    if (dias >= 90) {
+      return {
+        dias,
+        nivel: 'vermelho',
+        badgeClass: 'bg-red-600 text-white border-red-700 shadow-sm',
+        label: `🔴 ALERTA VERMELHO (+3 Meses - ${dias} dias)`
+      };
+    }
+    if (dias >= 30) {
+      return {
+        dias,
+        nivel: 'laranja',
+        badgeClass: 'bg-orange-500 text-white border-orange-600',
+        label: `🟠 ALERTA LARANJA (+1 Mês - ${dias} dias)`
+      };
+    }
+
+    return {
+      dias,
+      nivel: 'normal',
+      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
+      label: `${dias} dia(s)`
+    };
+  };
 
   const inputStyle: React.CSSProperties = {
     padding: '6px 10px',
@@ -195,7 +234,6 @@ export const HistoricoConferencias: React.FC = () => {
   return (
     <div style={{ fontFamily: 'sans-serif', maxWidth: '950px', margin: '0 auto' }} className="space-y-6">
       
-      {/* ⚠️ SEÇÃO 1: PENDÊNCIAS EM ABERTO */}
       <div style={{
         background: '#fff',
         border: '1px solid #e2e8f0',
@@ -239,13 +277,15 @@ export const HistoricoConferencias: React.FC = () => {
                 ? `${item.viatura_nome}${item.compartimento_nome ? ` › ${item.compartimento_nome}` : ''}`
                 : item.local_nome || 'Local não informado';
 
+              const perm = calcularPermanencia(item.data_conferencia);
+
               return (
                 <div
                   key={item.id}
                   style={{
-                    background: cfg.fundo,
-                    border: `1px solid ${cfg.borda}`,
-                    borderLeft: `5px solid ${cfg.borda}`,
+                    background: perm.nivel === 'preto' ? '#18181b' : perm.nivel === 'vermelho' ? '#fef2f2' : perm.nivel === 'laranja' ? '#fff7ed' : cfg.fundo,
+                    border: perm.nivel === 'preto' ? '2px solid #000' : perm.nivel === 'vermelho' ? '2px solid #dc2626' : perm.nivel === 'laranja' ? '2px solid #ea580c' : `1px solid ${cfg.borda}`,
+                    borderLeft: perm.nivel === 'preto' ? '8px solid #000' : perm.nivel === 'vermelho' ? '8px solid #dc2626' : perm.nivel === 'laranja' ? '8px solid #ea580c' : `5px solid ${cfg.borda}`,
                     borderRadius: '12px',
                     padding: '14px 16px',
                     display: 'flex',
@@ -254,38 +294,41 @@ export const HistoricoConferencias: React.FC = () => {
                     alignItems: 'center',
                     gap: '12px',
                     flexWrap: 'wrap',
+                    color: perm.nivel === 'preto' ? '#fff' : '#1e293b',
                   }}
                 >
                   <div style={{ flex: 1, minWidth: '240px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '12px', fontWeight: 'bold', color: cfg.cor, background: '#fff', padding: '2px 8px', borderRadius: '4px', border: `1px solid ${cfg.borda}` }}>
                         {cfg.label}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
-                        📅 {formataData(item.data_conferencia)}
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase ${perm.badgeClass}`}>
+                        {perm.label}
+                      </span>
+                      <span style={{ fontSize: '12px', color: perm.nivel === 'preto' ? '#a1a1aa' : '#64748b', fontWeight: '600' }}>
+                        📅 Abertura: {formataData(item.data_conferencia)}
                       </span>
                     </div>
 
-                    <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b', margin: '4px 0' }}>
+                    <h4 style={{ fontSize: '15px', fontWeight: 'bold', color: perm.nivel === 'preto' ? '#fff' : '#1e293b', margin: '4px 0' }}>
                       {item.item_nome}
                     </h4>
 
-                    <div style={{ fontSize: '12px', color: '#475569' }}>
+                    <div style={{ fontSize: '12px', color: perm.nivel === 'preto' ? '#e4e4e7' : '#475569' }}>
                       📍 <strong>Local:</strong> {local}
                     </div>
 
                     {item.observacao && (
-                      <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', marginTop: '2px' }}>
+                      <div style={{ fontSize: '12px', color: perm.nivel === 'preto' ? '#d4d4d8' : '#64748b', fontStyle: 'italic', marginTop: '2px' }}>
                         💬 {item.observacao}
                       </div>
                     )}
 
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    <div style={{ fontSize: '11px', color: perm.nivel === 'preto' ? '#a1a1aa' : '#64748b', marginTop: '4px' }}>
                       👤 Registrado por <strong>{item.conferido_por_nome || 'Militar'}</strong> às {formataHora(item.conferido_em)}
                     </div>
                   </div>
 
-                  {/* AÇÃO DO GESTOR */}
                   <div>
                     {isGestor ? (
                       <button
@@ -295,23 +338,23 @@ export const HistoricoConferencias: React.FC = () => {
                           padding: '8px 16px',
                           borderRadius: '8px',
                           border: 'none',
-                          background: '#166534',
+                          background: perm.nivel === 'preto' ? '#22c55e' : '#166534',
                           color: '#ffffff',
                           fontSize: '12px',
                           fontWeight: 'bold',
                           cursor: 'pointer',
-                          boxShadow: '0 2px 4px rgba(22, 101, 52, 0.2)',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '6px',
                           opacity: resolvendoId === item.id ? 0.6 : 1,
                         }}
                       >
-                        {resolvendoId === item.id ? '⏳ Resolvendo...' : '✅ Marcar como Regularizado / Em Uso'}
+                        {resolvendoId === item.id ? '⏳ Resolvendo...' : '✅ Marcar como Regularizado'}
                       </button>
                     ) : (
                       <span style={{ fontSize: '11px', color: '#991b1b', fontStyle: 'italic', background: '#fff', padding: '4px 8px', borderRadius: '6px', border: '1px solid #fee2e2' }}>
-                        Aguardando Gestor do B4
+                        Aguardando Gestor
                       </span>
                     )}
                   </div>
@@ -322,7 +365,6 @@ export const HistoricoConferencias: React.FC = () => {
         )}
       </div>
 
-      {/* 📋 SEÇÃO 2: HISTÓRICO COMPLETO B4 */}
       <div style={{
         background: '#fff',
         border: '1px solid #e2e8f0',
@@ -333,16 +375,15 @@ export const HistoricoConferencias: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>
-              📋 Histórico de Pendências (B4)
+              📋 Histórico Geral de Pendências (Filtro B4)
             </h3>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
-              Itens avariados ou não encontrados registrados durante as conferências diárias
+              Utilize o filtro de busca abaixo para visualizar o histórico completo de pendências anteriores e resolvidas.
             </p>
           </div>
           <button onClick={carregar} style={btnStyle}>🔄 Atualizar</button>
         </div>
 
-        {/* Filtros */}
         <div style={{
           display: 'flex',
           gap: '12px',
@@ -385,18 +426,16 @@ export const HistoricoConferencias: React.FC = () => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignSelf: 'flex-end' }}>
             <label style={{ fontSize: '11px', color: 'transparent' }}>-</label>
-            <button onClick={carregar} style={btnStyle}>🔍 Filtrar</button>
+            <button onClick={carregar} style={btnStyle}>🔍 Aplicar Filtro de Histórico</button>
           </div>
         </div>
 
-        {/* Estado de erro */}
         {erro && (
           <div style={{ padding: '14px', background: '#fee2e2', borderRadius: '8px', color: '#991b1b', fontSize: '13px', marginBottom: '12px', borderLeft: '4px solid #dc2626' }}>
             ❌ <strong>Atenção:</strong> {erro}
           </div>
         )}
 
-        {/* Contador */}
         {!loading && !erro && (
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
             {registros.length === 0
@@ -406,12 +445,13 @@ export const HistoricoConferencias: React.FC = () => {
           </div>
         )}
 
-        {/* Listagem do histórico */}
         {!loading && registros.map(reg => {
           const cfg = STATUS_CFG[reg.status_conferencia] || STATUS_CFG.avariado;
           const localInfo = reg.viatura_nome
             ? `${reg.viatura_nome}${reg.compartimento_nome ? ` › ${reg.compartimento_nome}` : ''}`
             : reg.local_nome || '—';
+
+          const perm = calcularPermanencia(reg.data_conferencia);
 
           return (
             <div
@@ -426,35 +466,37 @@ export const HistoricoConferencias: React.FC = () => {
                 opacity: reg.resolvido ? 0.85 : 1,
               }}
             >
-              {/* Data + Status */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
-                  📅 {formataData(reg.data_conferencia)}
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                    📅 {formataData(reg.data_conferencia)}
+                  </span>
+                  {!reg.resolvido && (
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase ${perm.badgeClass}`}>
+                      {perm.label}
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: reg.resolvido ? '#166534' : cfg.cor }}>
                   {reg.resolvido ? '✅ REGULARIZADO / EM USO' : cfg.label}
                 </span>
               </div>
 
-              {/* Nome do item */}
               <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>
                 {reg.tipo_item === 'viatura' ? '🚒' : reg.tipo_item === 'consumo' ? '📋' : '🔧'}{' '}
                 {reg.item_nome || '(sem nome)'}
               </div>
 
-              {/* Localização */}
               <div style={{ fontSize: '12px', color: '#475569', marginBottom: '4px' }}>
                 📍 {localInfo}
               </div>
 
-              {/* Observação */}
               {reg.observacao && (
                 <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontStyle: 'italic' }}>
                   💬 {reg.observacao}
                 </div>
               )}
 
-              {/* Rodapé: conferido por + botão ou status de resolução */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>
                   🔏 Registrado por <strong>{reg.conferido_por_nome || '—'}</strong> às {formataHora(reg.conferido_em)}

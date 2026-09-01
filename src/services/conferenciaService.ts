@@ -278,6 +278,50 @@ export async function salvarConferencia(
     } catch (err) {
       console.error('Erro ao gravar histórico B4:', err);
     }
+
+    // ROTEAMENTO AUTOMÁTICO:
+    // 1. Caso "Sem Conserto, Deverá Baixar" -> Enviar ao submódulo Baixa Patrimônio
+    if (dados.sub_tipo_avaria === 'sem_conserto_baixar') {
+      try {
+        await supabase
+          .from('baixa_patrimonio')
+          .insert({
+            item_id: itemId,
+            item_nome: dados.item_nome || 'Item Avariado Sem Conserto',
+            tipo_item: tipoItem,
+            viatura_nome: dados.viatura_nome || null,
+            compartimento_nome: dados.compartimento_nome || null,
+            local_nome: dados.local_nome || null,
+            motivo_baixa: `Avaria sem conserto identificada na conferência diária de ${hoje}. Obs: ${dados.observacao || 'Sem observação detalhada'}`,
+            status: 'pendente_baixa',
+            cadastrado_por_nome: nomeUsuario,
+          });
+      } catch (errBaixa) {
+        console.error('Erro no roteamento para Baixa Patrimônio:', errBaixa);
+      }
+    }
+
+    // 2. Caso "Deverá Consertar" OU "Falta do Item" -> Enviar DIRETO ao submódulo Compras (purchases)
+    if (dados.sub_tipo_avaria === 'devera_consertar' || dados.tipo_ocorrencia === 'falta' || dados.status === 'nao_encontrado') {
+      try {
+        const itemDesc = dados.item_nome || 'Item em Ocorrência';
+        const contextoLocal = dados.viatura_nome ? ` (${dados.viatura_nome}${dados.compartimento_nome ? ` - ${dados.compartimento_nome}` : ''})` : '';
+        const qtdPurch = dados.quantidade_falta || 1;
+        const motivoOuTipo = dados.tipo_ocorrencia === 'falta' ? 'Falta / Não encontrado' : 'Avaria / Necessita Conserto';
+
+        await supabase
+          .from('purchases')
+          .insert({
+            item: `${itemDesc}${contextoLocal}`,
+            quantity: qtdPurch,
+            unit_price: 0,
+            status: 'Pendente',
+            requester: `Conferência Diária (${nomeUsuario}) - ${motivoOuTipo}`
+          });
+      } catch (errPurch) {
+        console.error('Erro no roteamento para Compras:', errPurch);
+      }
+    }
   }
 
   return true;
