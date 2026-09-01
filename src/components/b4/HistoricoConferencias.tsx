@@ -76,11 +76,12 @@ export const HistoricoConferencias: React.FC = () => {
   const hoje = new Date().toISOString().slice(0, 10);
   const trintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [filtros, setFiltros] = useState({
-    dataInicio: trintaDiasAtras,
-    dataFim: hoje,
-    status: '',
-  });
+  const [mostrarHistoricoFiltrado, setMostrarHistoricoFiltrado] = useState(false);
+
+  const aplicarFiltroHistorico = () => {
+    setMostrarHistoricoFiltrado(true);
+    carregar();
+  };
 
   // Checar permissões do usuário logado
   useEffect(() => {
@@ -160,6 +161,24 @@ export const HistoricoConferencias: React.FC = () => {
         .eq('id', reg.id);
 
       if (error) throw error;
+
+      // Se o item estiver no submódulo Baixa Patrimônio com status 'pendente_baixa', remove/cancela a baixa pendente pois o item foi regularizado
+      if (reg.item_id) {
+        try {
+          await supabase
+            .from('baixa_patrimonio')
+            .update({
+              status: 'rejeitado',
+              processado_em: new Date().toISOString(),
+              processado_por_nome: nomeUsuario,
+              observacao_gestor: `Solicitação cancelada automaticamente: Item regularizado na conferência B4 por ${nomeUsuario}.`
+            })
+            .eq('item_id', reg.item_id)
+            .eq('status', 'pendente_baixa');
+        } catch (errBaixa) {
+          console.warn('Erro ao atualizar status na baixa_patrimonio:', errBaixa);
+        }
+      }
 
       toast.success(`Pendência de "${reg.item_nome}" resolvida! Item regularizado.`);
       carregar();
@@ -426,7 +445,7 @@ export const HistoricoConferencias: React.FC = () => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignSelf: 'flex-end' }}>
             <label style={{ fontSize: '11px', color: 'transparent' }}>-</label>
-            <button onClick={carregar} style={btnStyle}>🔍 Aplicar Filtro de Histórico</button>
+            <button onClick={aplicarFiltroHistorico} style={btnStyle}>🔍 Aplicar Filtro de Histórico</button>
           </div>
         </div>
 
@@ -436,16 +455,22 @@ export const HistoricoConferencias: React.FC = () => {
           </div>
         )}
 
-        {!loading && !erro && (
-          <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
-            {registros.length === 0
-              ? 'Nenhum registro encontrado para o período.'
-              : `${registros.length} registro${registros.length !== 1 ? 's' : ''} encontrado${registros.length !== 1 ? 's' : ''}.`
-            }
+        {!mostrarHistoricoFiltrado ? (
+          <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+            🔍 Defina os filtros acima e clique em <strong>"Aplicar Filtro de Histórico"</strong> para carregar o histórico completo de pendências anteriores e regularizadas.
           </div>
-        )}
+        ) : (
+          <>
+            {!loading && !erro && (
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
+                {registros.length === 0
+                  ? 'Nenhum registro encontrado para o período.'
+                  : `${registros.length} registro${registros.length !== 1 ? 's' : ''} encontrado${registros.length !== 1 ? 's' : ''}.`
+                }
+              </div>
+            )}
 
-        {!loading && registros.map(reg => {
+            {!loading && registros.map(reg => {
           const cfg = STATUS_CFG[reg.status_conferencia] || STATUS_CFG.avariado;
           const localInfo = reg.viatura_nome
             ? `${reg.viatura_nome}${reg.compartimento_nome ? ` › ${reg.compartimento_nome}` : ''}`
@@ -530,6 +555,8 @@ export const HistoricoConferencias: React.FC = () => {
             </div>
           );
         })}
+          </>
+        )}
       </div>
     </div>
   );

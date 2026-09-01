@@ -236,6 +236,18 @@ export async function salvarConferencia(
         })
         .eq('item_id', itemId)
         .eq('resolvido', false);
+
+      // Também cancela solicitações de baixa pendentes se o item voltou a estar OK
+      await supabase
+        .from('baixa_patrimonio')
+        .update({
+          status: 'rejeitado',
+          processado_em: agora,
+          processado_por_nome: nomeUsuario,
+          observacao_gestor: `Solicitação cancelada automaticamente: Item verificado como OK na conferência por ${nomeUsuario}.`
+        })
+        .eq('item_id', itemId)
+        .eq('status', 'pendente_baixa');
     } catch (e) {
       console.error('Erro ao resolver pendência prévia no OK:', e);
     }
