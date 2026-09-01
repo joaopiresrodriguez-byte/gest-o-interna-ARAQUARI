@@ -169,12 +169,30 @@ export const ModalEditarItemB4: React.FC<ModalEditarItemB4Props> = ({
 
         if (errFleet) throw errFleet;
 
+        // Se o status foi alterado para 'active' (ativado novamente), cancela solicitações pendentes de baixa
+        if (status === 'active') {
+          try {
+            await supabase
+              .from('baixa_patrimonio')
+              .update({
+                status: 'rejeitado',
+                processado_em: new Date().toISOString(),
+                observacao_gestor: 'Solicitação cancelada: Item reativado manualmente pelo gestor B4.'
+              })
+              .eq('item_id', item.id)
+              .eq('status', 'pendente_baixa');
+          } catch (errBaixa) {
+            console.warn('Erro ao atualizar status na baixa_patrimonio:', errBaixa);
+          }
+        }
+
         // Atualização complementar em equipamentos
         try {
           await supabase
             .from('equipamentos')
             .update({
               nome: nome.trim(),
+              status: status === 'active' ? 'Ok' : 'Baixado / Inativo',
               quantidade: novaQuantidadeCalculada,
               local_id: finalLocalId,
               compartimento_id: finalCompartimentoId,

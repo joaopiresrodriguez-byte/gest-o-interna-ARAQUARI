@@ -67,9 +67,10 @@ export class RouteErrorBoundary extends Component<Props, State> {
                         </Button>
                     </div>
 
-                    {process.env.NODE_ENV === 'development' && (
-                        <pre className="mt-8 p-4 bg-black/50 rounded-lg text-left text-xs text-red-400 overflow-auto max-w-full">
-                            {this.state.error?.toString()}
+                    {this.state.error && (
+                        <pre className="mt-8 p-4 bg-black/80 rounded-lg text-left text-xs text-red-400 overflow-auto max-w-full font-mono select-text">
+                            {this.state.error.toString()}
+                            {this.state.error.stack && `\n${this.state.error.stack}`}
                         </pre>
                     )}
                 </div>

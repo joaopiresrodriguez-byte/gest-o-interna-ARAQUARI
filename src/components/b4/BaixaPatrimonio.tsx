@@ -67,7 +67,31 @@ export const BaixaPatrimonio: React.FC = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      setItens(data || []);
+
+      let listaItens = data || [];
+
+      // Filtro de consistência: Se o item já foi reativado (status = 'active' no fleet) ou a pendência foi regularizada no histórico, não exibir como 'pendente_baixa'
+      if (filtroStatus === 'pendente_baixa' && listaItens.length > 0) {
+        const itemIds = listaItens.map(i => i.item_id).filter(Boolean);
+        if (itemIds.length > 0) {
+          const [fleetRes, histRes] = await Promise.all([
+            supabase.from('fleet').select('id, status').in('id', itemIds),
+            supabase.from('historico_conferencias_b4').select('item_id, resolvido').in('item_id', itemIds).eq('resolvido', true),
+          ]);
+
+          const fleetAtivos = new Set((fleetRes.data || []).filter(f => f.status === 'active').map(f => f.id));
+          const histResolvidos = new Set((histRes.data || []).map(h => h.item_id));
+
+          listaItens = listaItens.filter(item => {
+            if (fleetAtivos.has(item.item_id) || histResolvidos.has(item.item_id)) {
+              return false; // Item já foi ativado/regularizado, não mostrar em pendente_baixa
+            }
+            return true;
+          });
+        }
+      }
+
+      setItens(listaItens);
     } catch (err: any) {
       console.error('Erro ao carregar itens para Baixa Patrimônio:', err);
       toast.error('Erro ao carregar lista de baixas patrimoniais.');
