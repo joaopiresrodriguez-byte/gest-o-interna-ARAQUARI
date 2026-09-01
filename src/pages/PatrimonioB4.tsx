@@ -1869,38 +1869,8 @@ const PatrimonioB4: React.FC = () => {
               )}
 
               {activeTab === 'conferencias' && (
-                <div className="space-y-6">
-                  {/* Pending Notices Section */}
-                  <div className="bg-white border border-rustic-border rounded-xl p-6">
-                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-red-500">warning</span>
-                      Pendências em Aberto
-                    </h3>
-                    <div className="space-y-4">
-                      {notices.map(notice => (
-                        <div key={notice.id} className="p-4 border border-rustic-border rounded-lg flex justify-between items-center bg-stone-50">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${notice.status === 'pendente' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{notice.status}</span>
-                              <span className="font-bold text-sm">{notice.description}</span>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">Registrado em: {new Date(notice.created_at!).toLocaleDateString()} - Viatura: {fleet.find(v => v.id === notice.viatura_id)?.name || 'N/A'}</p>
-                          </div>
-                          {profile?.p_logistica === 'editor' && notice.status === 'pendente' && (
-                            <button onClick={() => handleResolveNotice(notice.id!)} className="text-xs font-bold text-primary border border-primary px-3 py-1 rounded hover:bg-primary hover:text-white transition-colors">
-                              RESOLVER
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {notices.length === 0 && <p className="text-center text-gray-400 italic">Nenhuma pendência em aberto.</p>}
-                    </div>
-                  </div>
-
-                  {/* Daily Checklists History */}
-                  <div className="bg-white border border-rustic-border rounded-xl p-6">
-                    <HistoricoConferencias />
-                  </div>
+                <div className="bg-white border border-rustic-border rounded-xl p-6">
+                  <HistoricoConferencias />
                 </div>
               )}
 
