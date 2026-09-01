@@ -22,11 +22,23 @@ interface RegistroHistorico {
   resolvido_por?: string | null;
 }
 
-async function buscarHistorico(filtros: {
-  dataInicio?: string;
-  dataFim?: string;
-  status?: string;
-} = {}): Promise<RegistroHistorico[]> {
+interface FiltrosHistorico {
+  dataInicio: string;
+  dataFim: string;
+  status: string;
+}
+
+async function buscarPendenciasAbertas(): Promise<RegistroHistorico[]> {
+  const { data, error } = await supabase
+    .from('historico_conferencias_b4')
+    .select('*')
+    .eq('resolvido', false)
+    .order('conferido_em', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function buscarHistoricoFiltrado(filtros: FiltrosHistorico): Promise<RegistroHistorico[]> {
   let query = supabase
     .from('historico_conferencias_b4')
     .select('*')
@@ -64,26 +76,54 @@ const STATUS_CFG = {
     fundo: '#fee2e2',
     borda: '#dc2626',
   },
-};
+} as const;
+
+function calcularPermanencia(dataConf: string) {
+  if (!dataConf || typeof dataConf !== 'string') {
+    return { dias: 0, nivel: 'normal', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', label: 'Recente' };
+  }
+  const dateStr = dataConf.includes('T') ? dataConf : `${dataConf}T12:00:00`;
+  const confDate = new Date(dateStr);
+  if (isNaN(confDate.getTime())) {
+    return { dias: 0, nivel: 'normal', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', label: 'Recente' };
+  }
+  const dias = Math.floor((Date.now() - confDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (dias >= 180) {
+    return { dias, nivel: 'preto', badgeClass: 'bg-black text-white border-black shadow-md', label: `🚨 ALERTA PRETO (+6 Meses - ${dias} dias)` };
+  }
+  if (dias >= 90) {
+    return { dias, nivel: 'vermelho', badgeClass: 'bg-red-600 text-white border-red-700 shadow-sm', label: `🔴 ALERTA VERMELHO (+3 Meses - ${dias} dias)` };
+  }
+  if (dias >= 30) {
+    return { dias, nivel: 'laranja', badgeClass: 'bg-orange-500 text-white border-orange-600', label: `🟠 ALERTA LARANJA (+1 Mês - ${dias} dias)` };
+  }
+  return { dias, nivel: 'normal', badgeClass: 'bg-amber-100 text-amber-900 border-amber-300', label: `${dias} dia(s)` };
+}
 
 export const HistoricoConferencias: React.FC = () => {
+  // ── Estado das pendências em aberto (carregadas no mount) ──
+  const [pendencias, setPendencias] = useState<RegistroHistorico[]>([]);
+  const [loadingPendencias, setLoadingPendencias] = useState(true);
+
+  // ── Estado do histórico filtrado ──
   const [registros, setRegistros] = useState<RegistroHistorico[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [erroHistorico, setErroHistorico] = useState<string | null>(null);
+  const [mostrarHistoricoFiltrado, setMostrarHistoricoFiltrado] = useState(false);
+
+  // ── Filtros do histórico ──
+  const [filtros, setFiltros] = useState<FiltrosHistorico>({
+    dataInicio: '',
+    dataFim: '',
+    status: '',
+  });
+
+  // ── Permissões e resolução ──
   const [isGestor, setIsGestor] = useState<boolean>(false);
   const [resolvendoId, setResolvendoId] = useState<string | null>(null);
 
-  const hoje = new Date().toISOString().slice(0, 10);
-  const trintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-  const [mostrarHistoricoFiltrado, setMostrarHistoricoFiltrado] = useState(false);
-
-  const aplicarFiltroHistorico = () => {
-    setMostrarHistoricoFiltrado(true);
-    carregar();
-  };
-
-  // Checar permissões do usuário logado
+  // ── Checar permissões do usuário logado ──
   useEffect(() => {
     async function checarPermissao() {
       try {
@@ -97,37 +137,51 @@ export const HistoricoConferencias: React.FC = () => {
           .maybeSingle();
 
         if (profile) {
-          const permissaoGestor = Boolean(profile.is_manager || profile.p_logistica === 'editor');
-          setIsGestor(permissaoGestor);
+          setIsGestor(Boolean(profile.is_manager || profile.p_logistica === 'editor'));
         } else {
-          // Fallback: se for admin/gestor por padrão
           setIsGestor(true);
         }
-      } catch (e) {
+      } catch {
         setIsGestor(true);
       }
     }
     checarPermissao();
   }, []);
 
-  const carregar = useCallback(async () => {
+  // ── Carregar pendências em aberto (ao montar o componente) ──
+  const carregarPendencias = useCallback(async () => {
     try {
-      setLoading(true);
-      setErro(null);
-      const dados = await buscarHistorico(filtros);
-      setRegistros(dados);
+      setLoadingPendencias(true);
+      const dados = await buscarPendenciasAbertas();
+      setPendencias(dados);
     } catch (e: any) {
-      console.error('Erro ao buscar histórico:', e);
-      setErro(e.message || 'Não foi possível carregar o histórico de conferências.');
+      console.error('Erro ao buscar pendências:', e);
     } finally {
-      setLoading(false);
+      setLoadingPendencias(false);
     }
-  }, [filtros]);
+  }, []);
 
   useEffect(() => {
-    carregar();
-  }, [carregar]);
+    carregarPendencias();
+  }, [carregarPendencias]);
 
+  // ── Carregar histórico filtrado (somente ao clicar no botão) ──
+  const aplicarFiltroHistorico = async () => {
+    try {
+      setLoadingHistorico(true);
+      setErroHistorico(null);
+      setMostrarHistoricoFiltrado(true);
+      const dados = await buscarHistoricoFiltrado(filtros);
+      setRegistros(dados);
+    } catch (e: any) {
+      console.error('Erro ao buscar histórico filtrado:', e);
+      setErroHistorico(e.message || 'Não foi possível carregar o histórico de conferências.');
+    } finally {
+      setLoadingHistorico(false);
+    }
+  };
+
+  // ── Resolver pendência ──
   const resolverPendencia = async (reg: RegistroHistorico) => {
     if (!isGestor) {
       toast.error('Apenas gestores do B4 têm permissão para resolver pendências.');
@@ -145,10 +199,7 @@ export const HistoricoConferencias: React.FC = () => {
           .select('nome_guerra')
           .eq('user_id', user.id)
           .maybeSingle();
-
-        if (perfil?.nome_guerra) {
-          nomeUsuario = perfil.nome_guerra;
-        }
+        if (perfil?.nome_guerra) nomeUsuario = perfil.nome_guerra;
       }
 
       const { error } = await supabase
@@ -162,7 +213,7 @@ export const HistoricoConferencias: React.FC = () => {
 
       if (error) throw error;
 
-      // Se o item estiver no submódulo Baixa Patrimônio com status 'pendente_baixa', remove/cancela a baixa pendente pois o item foi regularizado
+      // Cancela baixa pendente associada ao item, se existir
       if (reg.item_id) {
         try {
           await supabase
@@ -171,65 +222,29 @@ export const HistoricoConferencias: React.FC = () => {
               status: 'rejeitado',
               processado_em: new Date().toISOString(),
               processado_por_nome: nomeUsuario,
-              observacao_gestor: `Solicitação cancelada automaticamente: Item regularizado na conferência B4 por ${nomeUsuario}.`
+              observacao_gestor: `Solicitação cancelada automaticamente: Item regularizado na conferência B4 por ${nomeUsuario}.`,
             })
             .eq('item_id', reg.item_id)
             .eq('status', 'pendente_baixa');
         } catch (errBaixa) {
-          console.warn('Erro ao atualizar status na baixa_patrimonio:', errBaixa);
+          console.warn('Erro ao cancelar baixa_patrimonio:', errBaixa);
         }
       }
 
       toast.success(`Pendência de "${reg.item_nome}" resolvida! Item regularizado.`);
-      carregar();
+      // Recarrega pendências em aberto para remover o item da lista
+      carregarPendencias();
+      // Se o histórico filtrado estiver visível, atualiza também
+      if (mostrarHistoricoFiltrado) {
+        const dados = await buscarHistoricoFiltrado(filtros);
+        setRegistros(dados);
+      }
     } catch (err: any) {
       console.error('Erro ao resolver pendência:', err);
       toast.error('Erro ao marcar pendência como resolvida');
     } finally {
       setResolvendoId(null);
     }
-  };
-
-  const pendenciasEmAberto = registros.filter(r => !r.resolvido);
-
-  const calcularPermanencia = (dataConf: string) => {
-    if (!dataConf) return { dias: 0, nivel: 'normal', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', label: 'Recente' };
-    const confDate = new Date(dataConf + (dataConf.includes('T') ? '' : 'T12:00:00'));
-    const hojeDate = new Date();
-    const diffMs = hojeDate.getTime() - confDate.getTime();
-    const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (dias >= 180) {
-      return {
-        dias,
-        nivel: 'preto',
-        badgeClass: 'bg-black text-white border-black shadow-md',
-        label: `🚨 ALERTA PRETO (+6 Meses - ${dias} dias)`
-      };
-    }
-    if (dias >= 90) {
-      return {
-        dias,
-        nivel: 'vermelho',
-        badgeClass: 'bg-red-600 text-white border-red-700 shadow-sm',
-        label: `🔴 ALERTA VERMELHO (+3 Meses - ${dias} dias)`
-      };
-    }
-    if (dias >= 30) {
-      return {
-        dias,
-        nivel: 'laranja',
-        badgeClass: 'bg-orange-500 text-white border-orange-600',
-        label: `🟠 ALERTA LARANJA (+1 Mês - ${dias} dias)`
-      };
-    }
-
-    return {
-      dias,
-      nivel: 'normal',
-      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
-      label: `${dias} dia(s)`
-    };
   };
 
   const inputStyle: React.CSSProperties = {
@@ -252,7 +267,8 @@ export const HistoricoConferencias: React.FC = () => {
 
   return (
     <div style={{ fontFamily: 'sans-serif', maxWidth: '950px', margin: '0 auto' }} className="space-y-6">
-      
+
+      {/* ── Pendências em Aberto ── */}
       <div style={{
         background: '#fff',
         border: '1px solid #e2e8f0',
@@ -264,19 +280,22 @@ export const HistoricoConferencias: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '20px' }}>⚠️</span>
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#991b1b', margin: 0 }}>
-              Pendências em Aberto ({pendenciasEmAberto.length})
+              Pendências em Aberto ({pendencias.length})
             </h3>
           </div>
-          <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px', fontWeight: '600' }}>
-            {isGestor ? '🔑 Acesso Gestor: Você pode regularizar pendências' : '👁️ Visualização de Leitura'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px', fontWeight: '600' }}>
+              {isGestor ? '🔑 Acesso Gestor: Você pode regularizar pendências' : '👁️ Visualização de Leitura'}
+            </span>
+            <button onClick={carregarPendencias} style={btnStyle}>🔄 Atualizar</button>
+          </div>
         </div>
 
-        {loading ? (
+        {loadingPendencias ? (
           <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>
             ⏳ Carregando pendências em aberto...
           </div>
-        ) : pendenciasEmAberto.length === 0 ? (
+        ) : pendencias.length === 0 ? (
           <div style={{
             background: '#f8fafc',
             border: '1px dashed #cbd5e1',
@@ -290,12 +309,11 @@ export const HistoricoConferencias: React.FC = () => {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {pendenciasEmAberto.map(item => {
-              const cfg = STATUS_CFG[item.status_conferencia] || STATUS_CFG.avariado;
+            {pendencias.map(item => {
+              const cfg = STATUS_CFG[item.status_conferencia] ?? STATUS_CFG.avariado;
               const local = item.viatura_nome
                 ? `${item.viatura_nome}${item.compartimento_nome ? ` › ${item.compartimento_nome}` : ''}`
                 : item.local_nome || 'Local não informado';
-
               const perm = calcularPermanencia(item.data_conferencia);
 
               return (
@@ -384,6 +402,7 @@ export const HistoricoConferencias: React.FC = () => {
         )}
       </div>
 
+      {/* ── Histórico Filtrado ── */}
       <div style={{
         background: '#fff',
         border: '1px solid #e2e8f0',
@@ -391,16 +410,13 @@ export const HistoricoConferencias: React.FC = () => {
         padding: '20px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div>
-            <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>
-              📋 Histórico Geral de Pendências (Filtro B4)
-            </h3>
-            <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0' }}>
-              Utilize o filtro de busca abaixo para visualizar o histórico completo de pendências anteriores e resolvidas.
-            </p>
-          </div>
-          <button onClick={carregar} style={btnStyle}>🔄 Atualizar</button>
+        <div style={{ marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: '0 0 4px' }}>
+            📋 Histórico Geral de Pendências (Filtro B4)
+          </h3>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+            Utilize o filtro abaixo para visualizar o histórico completo de pendências anteriores e resolvidas.
+          </p>
         </div>
 
         <div style={{
@@ -449,9 +465,9 @@ export const HistoricoConferencias: React.FC = () => {
           </div>
         </div>
 
-        {erro && (
+        {erroHistorico && (
           <div style={{ padding: '14px', background: '#fee2e2', borderRadius: '8px', color: '#991b1b', fontSize: '13px', marginBottom: '12px', borderLeft: '4px solid #dc2626' }}>
-            ❌ <strong>Atenção:</strong> {erro}
+            ❌ <strong>Atenção:</strong> {erroHistorico}
           </div>
         )}
 
@@ -461,7 +477,13 @@ export const HistoricoConferencias: React.FC = () => {
           </div>
         ) : (
           <>
-            {!loading && !erro && (
+            {loadingHistorico && (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>
+                ⏳ Carregando histórico...
+              </div>
+            )}
+
+            {!loadingHistorico && !erroHistorico && (
               <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
                 {registros.length === 0
                   ? 'Nenhum registro encontrado para o período.'
@@ -470,91 +492,91 @@ export const HistoricoConferencias: React.FC = () => {
               </div>
             )}
 
-            {!loading && registros.map(reg => {
-          const cfg = STATUS_CFG[reg.status_conferencia] || STATUS_CFG.avariado;
-          const localInfo = reg.viatura_nome
-            ? `${reg.viatura_nome}${reg.compartimento_nome ? ` › ${reg.compartimento_nome}` : ''}`
-            : reg.local_nome || '—';
+            {!loadingHistorico && registros.map(reg => {
+              const cfg = STATUS_CFG[reg.status_conferencia] ?? STATUS_CFG.avariado;
+              const localInfo = reg.viatura_nome
+                ? `${reg.viatura_nome}${reg.compartimento_nome ? ` › ${reg.compartimento_nome}` : ''}`
+                : reg.local_nome || '—';
+              const perm = calcularPermanencia(reg.data_conferencia);
 
-          const perm = calcularPermanencia(reg.data_conferencia);
-
-          return (
-            <div
-              key={reg.id}
-              style={{
-                border: `1px solid ${reg.resolvido ? '#cbd5e1' : cfg.borda}`,
-                borderLeft: `4px solid ${reg.resolvido ? '#166534' : cfg.borda}`,
-                borderRadius: '10px',
-                padding: '14px 16px',
-                marginBottom: '10px',
-                background: reg.resolvido ? '#f8fafc' : cfg.fundo,
-                opacity: reg.resolvido ? 0.85 : 1,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
-                    📅 {formataData(reg.data_conferencia)}
-                  </span>
-                  {!reg.resolvido && (
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase ${perm.badgeClass}`}>
-                      {perm.label}
+              return (
+                <div
+                  key={reg.id}
+                  style={{
+                    border: `1px solid ${reg.resolvido ? '#cbd5e1' : cfg.borda}`,
+                    borderLeft: `4px solid ${reg.resolvido ? '#166534' : cfg.borda}`,
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    marginBottom: '10px',
+                    background: reg.resolvido ? '#f8fafc' : cfg.fundo,
+                    opacity: reg.resolvido ? 0.85 : 1,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                        📅 {formataData(reg.data_conferencia)}
+                      </span>
+                      {!reg.resolvido && (
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase ${perm.badgeClass}`}>
+                          {perm.label}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: reg.resolvido ? '#166534' : cfg.cor }}>
+                      {reg.resolvido ? '✅ REGULARIZADO / EM USO' : cfg.label}
                     </span>
-                  )}
-                </div>
-                <span style={{ fontSize: '12px', fontWeight: 'bold', color: reg.resolvido ? '#166534' : cfg.cor }}>
-                  {reg.resolvido ? '✅ REGULARIZADO / EM USO' : cfg.label}
-                </span>
-              </div>
-
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>
-                {reg.tipo_item === 'viatura' ? '🚒' : reg.tipo_item === 'consumo' ? '📋' : '🔧'}{' '}
-                {reg.item_nome || '(sem nome)'}
-              </div>
-
-              <div style={{ fontSize: '12px', color: '#475569', marginBottom: '4px' }}>
-                📍 {localInfo}
-              </div>
-
-              {reg.observacao && (
-                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontStyle: 'italic' }}>
-                  💬 {reg.observacao}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  🔏 Registrado por <strong>{reg.conferido_por_nome || '—'}</strong> às {formataHora(reg.conferido_em)}
-                </span>
-
-                {!reg.resolvido && isGestor && (
-                  <button
-                    onClick={() => resolverPendencia(reg)}
-                    disabled={resolvendoId === reg.id}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      background: '#166534',
-                      color: 'white',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    ✅ Marcar como Regularizado
-                  </button>
-                )}
-
-                {reg.resolvido && (
-                  <div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>
-                    ✅ Regularizado por <strong>{reg.resolvido_por || 'Gestor'}</strong> em {new Date(reg.resolvido_em!).toLocaleString('pt-BR')}
                   </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>
+                    {reg.tipo_item === 'viatura' ? '🚒' : reg.tipo_item === 'consumo' ? '📋' : '🔧'}{' '}
+                    {reg.item_nome || '(sem nome)'}
+                  </div>
+
+                  <div style={{ fontSize: '12px', color: '#475569', marginBottom: '4px' }}>
+                    📍 {localInfo}
+                  </div>
+
+                  {reg.observacao && (
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontStyle: 'italic' }}>
+                      💬 {reg.observacao}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      🔏 Registrado por <strong>{reg.conferido_por_nome || '—'}</strong> às {formataHora(reg.conferido_em)}
+                    </span>
+
+                    {!reg.resolvido && isGestor && (
+                      <button
+                        onClick={() => resolverPendencia(reg)}
+                        disabled={resolvendoId === reg.id}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#166534',
+                          color: 'white',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          opacity: resolvendoId === reg.id ? 0.6 : 1,
+                        }}
+                      >
+                        ✅ Marcar como Regularizado
+                      </button>
+                    )}
+
+                    {reg.resolvido && (
+                      <div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>
+                        ✅ Regularizado por <strong>{reg.resolvido_por || 'Gestor'}</strong> em {reg.resolvido_em ? new Date(reg.resolvido_em).toLocaleString('pt-BR') : '—'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </>
         )}
       </div>
