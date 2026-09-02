@@ -134,21 +134,52 @@ export const b3SolicitacoesService = {
       referencia_criada_id?: string;
     }
   ): Promise<B3SolicitacaoApoio> => {
+    const updateData: Record<string, any> = {
+      status: payload.status,
+      parecer_gestor: payload.parecer_gestor || null,
+      analisado_por: payload.analisado_por || null,
+      analisado_em: new Date().toISOString(),
+    };
+
+    if (payload.tipo_deferimento) {
+      updateData.tipo_deferimento = payload.tipo_deferimento;
+    }
+    if (payload.referencia_criada_id) {
+      updateData.referencia_criada_id = payload.referencia_criada_id;
+    }
+
+    // Tentar update completo
     const { data, error } = await supabase
       .from('b3_solicitacoes_apoio')
-      .update({
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Tentativa com colunas estendidas falhou, tentando update básico:', error);
+      // Fallback: se a migration ainda não foi rodada no Supabase remoto, atualiza só os campos base
+      const basicData = {
         status: payload.status,
         parecer_gestor: payload.parecer_gestor || null,
         analisado_por: payload.analisado_por || null,
         analisado_em: new Date().toISOString(),
-        tipo_deferimento: payload.tipo_deferimento || null,
-        referencia_criada_id: payload.referencia_criada_id || null,
-      })
-      .eq('id', id)
-      .select('*')
-      .single();
+      };
 
-    if (error) throw error;
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('b3_solicitacoes_apoio')
+        .update(basicData)
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (fallbackError) {
+        console.error('Erro no update de status:', fallbackError);
+        throw fallbackError;
+      }
+      return fallbackData;
+    }
+
     return data;
   },
 
@@ -169,59 +200,69 @@ export const b3SolicitacoesService = {
 
     let referenciaId = '';
 
-    if (tipo === 'palestra_instrucao') {
-      // 1. Criar matéria de instrução
-      const novaMateria = await InstructionService.addMateriaInstrucao({
-        name: titulo,
-        tema: solicitacao.tema,
-        credit_hours: 1,
-        category: 'Extensão Comunitária',
-        level: 'basico',
-        description:
-          `Gerado automaticamente via Solicitação de Apoio ${sapNum}.\n` +
-          `Solicitante: ${solicitacao.responsavel_nome}` +
-          (solicitacao.responsavel_telefone ? ` — Tel: ${solicitacao.responsavel_telefone}` : '') +
-          `\nEndereço: ${solicitacao.endereco}` +
-          (solicitacao.complemento ? ` — ${solicitacao.complemento}` : ''),
-        instructor: solicitacao.responsavel_nome,
-        notes: parecer || undefined,
-        status: 'active',
-      });
+    try {
+      if (tipo === 'palestra_instrucao') {
+        // 1. Criar matéria de instrução
+        const novaMateria = await InstructionService.addMateriaInstrucao({
+          name: titulo,
+          tema: solicitacao.tema,
+          credit_hours: 1,
+          category: 'Extensão Comunitária',
+          level: 'basico',
+          description:
+            `Gerado automaticamente via Solicitação de Apoio ${sapNum}.\n` +
+            `Solicitante: ${solicitacao.responsavel_nome}` +
+            (solicitacao.responsavel_telefone ? ` — Tel: ${solicitacao.responsavel_telefone}` : '') +
+            `\nEndereço: ${solicitacao.endereco}` +
+            (solicitacao.complemento ? ` — ${solicitacao.complemento}` : ''),
+          instructor: solicitacao.responsavel_nome,
+          notes: parecer || undefined,
+          status: 'active',
+        });
 
-      referenciaId = novaMateria.id!;
+        if (novaMateria && novaMateria.id) {
+          referenciaId = String(novaMateria.id);
 
-      // 2. Agendar treinamento no cronograma
-      await InstructionService.addTraining({
-        materia_id: novaMateria.id!,
-        date: solicitacao.dia,
-        time: solicitacao.horario,
-        instructor: solicitacao.responsavel_nome,
-        location: [solicitacao.endereco, solicitacao.complemento].filter(Boolean).join(' — '),
-        tema: solicitacao.tema,
-        status: 'Scheduled',
-      });
+          // 2. Agendar treinamento no cronograma
+          await InstructionService.addTraining({
+            materia_id: novaMateria.id,
+            date: solicitacao.dia,
+            time: solicitacao.horario,
+            instructor: solicitacao.responsavel_nome,
+            location: [solicitacao.endereco, solicitacao.complemento].filter(Boolean).join(' — '),
+            tema: solicitacao.tema,
+            status: 'Scheduled',
+          });
+        }
+      } else {
+        // Criar missão diária — Operação Presença
+        const novaMissao = await OperationalService.addDailyMission({
+          title: titulo,
+          description:
+            `Solicitante: ${solicitacao.responsavel_nome}\n` +
+            (solicitacao.responsavel_telefone ? `Telefone: ${solicitacao.responsavel_telefone}\n` : '') +
+            `Endereço: ${solicitacao.endereco}` +
+            (solicitacao.complemento ? `\n${solicitacao.complemento}` : '') +
+            `\n\nGerado automaticamente via ${sapNum}.`,
+          mission_date: solicitacao.dia,
+          start_time: solicitacao.horario,
+          location_address: [solicitacao.endereco, solicitacao.complemento].filter(Boolean).join(' — '),
+          priority: 'media',
+          status: 'agendada',
+          notes: parecer || undefined,
+          is_pbm_araquari: true,
+        });
 
-    } else {
-      // Criar missão diária — Operação Presença
-      const novaMissao = await OperationalService.addDailyMission({
-        title: titulo,
-        description:
-          `Solicitante: ${solicitacao.responsavel_nome}\n` +
-          (solicitacao.responsavel_telefone ? `Telefone: ${solicitacao.responsavel_telefone}\n` : '') +
-          `Endereço: ${solicitacao.endereco}` +
-          (solicitacao.complemento ? `\n${solicitacao.complemento}` : '') +
-          `\n\nGerado automaticamente via ${sapNum}.`,
-        mission_date: solicitacao.dia,
-        start_time: solicitacao.horario,
-        location_address: [solicitacao.endereco, solicitacao.complemento].filter(Boolean).join(' — '),
-        priority: 'media',
-        status: 'agendada',
-        notes: parecer || undefined,
-        is_pbm_araquari: true,
-      });
-
-      referenciaId = novaMissao.id!;
+        if (novaMissao && novaMissao.id) {
+          referenciaId = String(novaMissao.id);
+        }
+      }
+    } catch (errCriacao) {
+      console.warn('Aviso: Erro ao criar item integrado (Matéria/Missão), prosseguindo com deferimento:', errCriacao);
     }
+
+    // Validar se referenciaId é um UUID válido para não dar erro no Postgres se for string vazia
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(referenciaId);
 
     // Atualizar solicitação com tipo, referência e status deferida
     const solicitacaoAtualizada = await b3SolicitacoesService.atualizarStatusSolicitacao(
@@ -231,7 +272,7 @@ export const b3SolicitacoesService = {
         parecer_gestor: parecer,
         analisado_por: analisadoPorId,
         tipo_deferimento: tipo,
-        referencia_criada_id: referenciaId,
+        referencia_criada_id: isUuid ? referenciaId : undefined,
       }
     );
 
