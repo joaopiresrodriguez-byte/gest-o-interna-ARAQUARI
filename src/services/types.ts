@@ -679,6 +679,7 @@ export interface B3WhatsappCadastro {
 }
 
 export type StatusSolicitacaoApoio = 'pendente' | 'em_analise' | 'deferida' | 'indeferida';
+export type TipoDeferimentoB3 = 'palestra_instrucao' | 'operacao_presenca';
 
 export interface B3SolicitacaoApoio {
   id?: string;
@@ -697,4 +698,7 @@ export interface B3SolicitacaoApoio {
   analisado_em?: string;
   criado_em?: string;
   whatsapp_origem?: B3WhatsappCadastro;
+  // Campos de deferimento integrado
+  tipo_deferimento?: TipoDeferimentoB3;
+  referencia_criada_id?: string;
 }

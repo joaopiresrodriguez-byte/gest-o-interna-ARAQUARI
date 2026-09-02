@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
-import { B3WhatsappCadastro, B3SolicitacaoApoio, StatusSolicitacaoApoio } from './types';
+import { B3WhatsappCadastro, B3SolicitacaoApoio, StatusSolicitacaoApoio, TipoDeferimentoB3 } from './types';
+import { InstructionService } from './instructionService';
+import { OperationalService } from './operationalService';
 
 export const b3SolicitacoesService = {
   // ==================== CADASTROS WHATSAPP ====================
@@ -20,7 +22,6 @@ export const b3SolicitacoesService = {
     descricao?: string;
     cadastrado_por?: string;
   }): Promise<B3WhatsappCadastro> => {
-    // Tratar número removendo caracteres não numéricos
     const numeroLimpo = payload.numero.replace(/\D/g, '');
 
     const { data, error } = await supabase
@@ -129,6 +130,8 @@ export const b3SolicitacoesService = {
       status: StatusSolicitacaoApoio;
       parecer_gestor?: string;
       analisado_por?: string;
+      tipo_deferimento?: TipoDeferimentoB3;
+      referencia_criada_id?: string;
     }
   ): Promise<B3SolicitacaoApoio> => {
     const { data, error } = await supabase
@@ -138,6 +141,8 @@ export const b3SolicitacoesService = {
         parecer_gestor: payload.parecer_gestor || null,
         analisado_por: payload.analisado_por || null,
         analisado_em: new Date().toISOString(),
+        tipo_deferimento: payload.tipo_deferimento || null,
+        referencia_criada_id: payload.referencia_criada_id || null,
       })
       .eq('id', id)
       .select('*')
@@ -145,6 +150,92 @@ export const b3SolicitacoesService = {
 
     if (error) throw error;
     return data;
+  },
+
+  /**
+   * Deferir uma solicitação com integração automática:
+   *  - palestra_instrucao: cria MateriaInstrucao + Training agendado
+   *  - operacao_presenca: cria DailyMission agendada
+   * Retorna a solicitação atualizada + id do registro criado
+   */
+  deferir: async (
+    solicitacao: B3SolicitacaoApoio,
+    tipo: TipoDeferimentoB3,
+    parecer: string,
+    analisadoPorId?: string
+  ): Promise<{ solicitacaoAtualizada: B3SolicitacaoApoio; referenciaId: string }> => {
+    const sapNum = solicitacao.numero_solicitacao || 'SAP';
+    const titulo = `[${sapNum}] ${tipo === 'palestra_instrucao' ? 'Palestra' : 'Operação Presença'}: ${solicitacao.tema}`;
+
+    let referenciaId = '';
+
+    if (tipo === 'palestra_instrucao') {
+      // 1. Criar matéria de instrução
+      const novaMateria = await InstructionService.addMateriaInstrucao({
+        name: titulo,
+        tema: solicitacao.tema,
+        credit_hours: 1,
+        category: 'Extensão Comunitária',
+        level: 'basico',
+        description:
+          `Gerado automaticamente via Solicitação de Apoio ${sapNum}.\n` +
+          `Solicitante: ${solicitacao.responsavel_nome}` +
+          (solicitacao.responsavel_telefone ? ` — Tel: ${solicitacao.responsavel_telefone}` : '') +
+          `\nEndereço: ${solicitacao.endereco}` +
+          (solicitacao.complemento ? ` — ${solicitacao.complemento}` : ''),
+        instructor: solicitacao.responsavel_nome,
+        notes: parecer || undefined,
+        status: 'active',
+      });
+
+      referenciaId = novaMateria.id!;
+
+      // 2. Agendar treinamento no cronograma
+      await InstructionService.addTraining({
+        materia_id: novaMateria.id!,
+        date: solicitacao.dia,
+        time: solicitacao.horario,
+        instructor: solicitacao.responsavel_nome,
+        location: [solicitacao.endereco, solicitacao.complemento].filter(Boolean).join(' — '),
+        tema: solicitacao.tema,
+        status: 'Scheduled',
+      });
+
+    } else {
+      // Criar missão diária — Operação Presença
+      const novaMissao = await OperationalService.addDailyMission({
+        title: titulo,
+        description:
+          `Solicitante: ${solicitacao.responsavel_nome}\n` +
+          (solicitacao.responsavel_telefone ? `Telefone: ${solicitacao.responsavel_telefone}\n` : '') +
+          `Endereço: ${solicitacao.endereco}` +
+          (solicitacao.complemento ? `\n${solicitacao.complemento}` : '') +
+          `\n\nGerado automaticamente via ${sapNum}.`,
+        mission_date: solicitacao.dia,
+        start_time: solicitacao.horario,
+        location_address: [solicitacao.endereco, solicitacao.complemento].filter(Boolean).join(' — '),
+        priority: 'media',
+        status: 'agendada',
+        notes: parecer || undefined,
+        is_pbm_araquari: true,
+      });
+
+      referenciaId = novaMissao.id!;
+    }
+
+    // Atualizar solicitação com tipo, referência e status deferida
+    const solicitacaoAtualizada = await b3SolicitacoesService.atualizarStatusSolicitacao(
+      solicitacao.id!,
+      {
+        status: 'deferida',
+        parecer_gestor: parecer,
+        analisado_por: analisadoPorId,
+        tipo_deferimento: tipo,
+        referencia_criada_id: referenciaId,
+      }
+    );
+
+    return { solicitacaoAtualizada, referenciaId };
   },
 
   obterTotaisResumo: async () => {
