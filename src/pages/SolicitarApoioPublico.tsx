@@ -168,9 +168,12 @@ export const SolicitarApoioPublico: React.FC = () => {
         {/* Cabeçalho da Página Pública */}
         <header className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
           <img
-            src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brasao_Santa_Catarina.svg/1200px-Brasao_Santa_Catarina.svg.png"
-            alt="Brasão SC"
+            src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg/200px-Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg.png"
+            alt="Brasão CBMSC"
             className="w-16 h-16 object-contain"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = '/brasao_cbmsc.png';
+            }}
           />
           <div>
             <h1 className="text-base font-black text-stone-900 tracking-wide uppercase leading-tight">
