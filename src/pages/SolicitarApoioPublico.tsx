@@ -163,7 +163,7 @@ export const SolicitarApoioPublico: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 font-display flex flex-col justify-between p-4 md:p-8">
+    <div className="min-h-screen h-full w-full overflow-y-auto bg-stone-100 font-display flex flex-col justify-between p-4 md:p-8">
       <div className="max-w-2xl w-full mx-auto space-y-6">
         {/* Cabeçalho da Página Pública */}
         <header className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
