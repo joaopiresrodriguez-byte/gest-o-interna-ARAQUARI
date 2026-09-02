@@ -168,9 +168,9 @@ export const SolicitarApoioPublico: React.FC = () => {
         {/* Cabeçalho da Página Pública */}
         <header className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 flex flex-col md:flex-row items-center gap-5 text-center md:text-left">
           <img
-            src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg/200px-Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg.png"
-            alt="Brasão CBMSC"
-            className="w-16 h-16 object-contain"
+            src="/emblema_cbmsc.png"
+            alt="Emblema CBMSC"
+            className="w-20 h-20 object-contain"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = '/brasao_cbmsc.png';
             }}
@@ -182,7 +182,7 @@ export const SolicitarApoioPublico: React.FC = () => {
             <h2 className="text-sm font-bold text-red-700 uppercase tracking-wider">
               2º Pelotão de Bombeiros Militar — Araquari - SC
             </h2>
-            <p className="text-xs text-stone-500 mt-1">Formulário Oficial de Solicitação de Apoio Institucional</p>
+            <p className="text-xs text-stone-500 mt-1">Formulário de Solicitação de Apoio Institucional</p>
           </div>
         </header>
 
