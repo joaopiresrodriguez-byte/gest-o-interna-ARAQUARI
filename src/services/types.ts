@@ -664,3 +664,37 @@ export interface BcSelecionado {
 }
 
 
+
+// ==================== B3 SOLICITAÇÕES DE APOIO E WHATSAPP ====================
+
+export interface B3WhatsappCadastro {
+  id?: string;
+  numero: string;
+  nome_contato?: string;
+  descricao?: string;
+  ativo?: boolean;
+  token_link?: string;
+  cadastrado_por?: string;
+  criado_em?: string;
+}
+
+export type StatusSolicitacaoApoio = 'pendente' | 'em_analise' | 'deferida' | 'indeferida';
+
+export interface B3SolicitacaoApoio {
+  id?: string;
+  numero_solicitacao?: string;
+  whatsapp_origem_id?: string;
+  responsavel_nome: string;
+  responsavel_telefone?: string;
+  tema: string;
+  dia: string;
+  horario: string;
+  endereco: string;
+  complemento?: string;
+  status: StatusSolicitacaoApoio;
+  parecer_gestor?: string;
+  analisado_por?: string;
+  analisado_em?: string;
+  criado_em?: string;
+  whatsapp_origem?: B3WhatsappCadastro;
+}

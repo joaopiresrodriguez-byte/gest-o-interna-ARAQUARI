@@ -6,6 +6,10 @@ import { B3CursosService } from '../services/b3CursosService';
 import { useEdicao } from '../hooks/useEdicao';
 import { ModalEdicao } from '../components/shared/ModalEdicao';
 import { ActionButton } from '../components/ui/Icons';
+import SubmoduloCadastroWhatsapp from '../components/b3/SubmoduloCadastroWhatsapp';
+import SubmoduloSolicitacoesApoio from '../components/b3/SubmoduloSolicitacoesApoio';
+import { b3SolicitacoesService } from '../services/b3SolicitacoesService';
+import { supabase } from '../services/supabase';
 
 
 const InstrucaoB3: React.FC = () => {
@@ -37,7 +41,41 @@ const InstrucaoB3: React.FC = () => {
   };
 
   // Main Tab State
-  const [mainTab, setMainTab] = useState<'acervo' | 'formacao'>('acervo');
+  const [mainTab, setMainTab] = useState<'acervo' | 'formacao' | 'whatsapp' | 'solicitacoes'>('acervo');
+
+  // Gestor Check (is_manager || p_instrucao === 'editor')
+  const isGestorB3 = !!(profile?.is_manager || profile?.p_instrucao === 'editor');
+
+  // Badge de pendências em tempo real para o menu
+  const [pendentesCount, setPendentesCount] = useState<number>(0);
+
+  useEffect(() => {
+    const carregarPendentes = async () => {
+      try {
+        const tot = await b3SolicitacoesService.obterTotaisResumo();
+        setPendentesCount(tot.pendente);
+      } catch (err) {
+        console.error('Erro ao buscar resumo pendentes:', err);
+      }
+    };
+
+    if (isGestorB3) {
+      carregarPendentes();
+
+      const channel = supabase
+        .channel('realtime_b3_badge')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'b3_solicitacoes_apoio' },
+          () => carregarPendentes()
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [isGestorB3]);
 
   // Formacao State
   const [cursosList, setCursosList] = useState<any[]>([]);
@@ -431,21 +469,42 @@ const InstrucaoB3: React.FC = () => {
         </div>
 
         {/* Main Tabs */}
-        <div className="flex items-center gap-2 border-t border-[#F2EFE9] pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-[#F2EFE9] pt-3">
           <button 
             onClick={() => setMainTab('acervo')} 
-            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${mainTab === 'acervo' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${mainTab === 'acervo' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
           >
             <span className="material-symbols-outlined text-base">auto_stories</span>
             Acervo e Cronograma
           </button>
           <button 
             onClick={() => setMainTab('formacao')} 
-            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${mainTab === 'formacao' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${mainTab === 'formacao' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
           >
             <span className="material-symbols-outlined text-base">school</span>
             Formação e Treinamentos
           </button>
+          <button 
+            onClick={() => setMainTab('whatsapp')} 
+            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${mainTab === 'whatsapp' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+          >
+            <span className="material-symbols-outlined text-base">send_to_mobile</span>
+            Cadastro WhatsApp
+          </button>
+          {isGestorB3 && (
+            <button 
+              onClick={() => setMainTab('solicitacoes')} 
+              className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all relative cursor-pointer ${mainTab === 'solicitacoes' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+            >
+              <span className="material-symbols-outlined text-base">inbox_customize</span>
+              Solicitações de Apoio
+              {pendentesCount > 0 && (
+                <span className="ml-1 px-2 py-0.5 bg-amber-400 text-stone-900 text-[10px] font-black rounded-full shadow-xs animate-bounce">
+                  {pendentesCount}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </header>
 
@@ -459,6 +518,18 @@ const InstrucaoB3: React.FC = () => {
       )}
 
       <div className="flex-1 p-8">
+        {mainTab === 'whatsapp' && (
+          <div className="mx-auto max-w-[1600px]">
+            <SubmoduloCadastroWhatsapp />
+          </div>
+        )}
+
+        {mainTab === 'solicitacoes' && isGestorB3 && (
+          <div className="mx-auto max-w-[1600px]">
+            <SubmoduloSolicitacoesApoio />
+          </div>
+        )}
+
         {mainTab === 'acervo' && (
           <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-8 xl:grid-cols-12">
 

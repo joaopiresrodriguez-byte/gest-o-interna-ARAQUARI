@@ -19,6 +19,7 @@ const GestaoUsuarios = lazy(() => import('./pages/GestaoUsuarios'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const ExtratoPublico = lazy(() => import('./pages/ExtratoPublico'));
 const BcIntencaoPublica = lazy(() => import('./pages/BcIntencaoPublica').then(m => ({ default: m.BcIntencaoPublica })));
+const SolicitarApoioPublico = lazy(() => import('./pages/SolicitarApoioPublico'));
 
 import ChangePasswordModal from './components/ChangePasswordModal';
 
@@ -256,6 +257,14 @@ const App: React.FC = () => {
               element={
                 <Suspense fallback={<LoadingFallback message="Carregando extrato público do compartimento..." />}>
                   <ExtratoPublico />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/solicitar-apoio"
+              element={
+                <Suspense fallback={<LoadingFallback message="Carregando formulário de solicitação de apoio..." />}>
+                  <SolicitarApoioPublico />
                 </Suspense>
               }
             />
