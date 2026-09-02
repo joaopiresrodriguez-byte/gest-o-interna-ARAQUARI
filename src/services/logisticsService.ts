@@ -61,58 +61,53 @@ export const LogisticsService = {
      * Buscar recibos de produtos (limitado a 10 mais recentes)
      */
     getProductsReceipts: async (): Promise<ProductReceipt[]> => {
-        try {
-            let data: any[] | null = null;
-            let error: any = null;
+        // Tentativa 1: busca com ordenação por created_at desc
+        const res1 = await supabase
+            .from('product_receipts')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
 
-            // Tentativa 1: Busca ordenando por created_at desc
-            const res1 = await supabase
+        let rows: any[] | null = null;
+
+        if (res1.error) {
+            console.warn('getProductsReceipts: erro na busca ordenada, tentando sem ordenação:', res1.error);
+            // Tentativa 2: busca simples (tabela pode não ter created_at indexado)
+            const res2 = await supabase
                 .from('product_receipts')
                 .select('*')
-                .order('created_at', { ascending: false })
                 .limit(50);
 
-            if (res1.error) {
-                // Tentativa 2: Busca simples sem ordenação caso created_at não exista
-                const res2 = await supabase
-                    .from('product_receipts')
-                    .select('*')
-                    .limit(50);
-                data = res2.data;
-                error = res2.error;
-            } else {
-                data = res1.data;
+            if (res2.error) {
+                // Propaga o erro para que o chamador possa tratar
+                console.error('getProductsReceipts: falha definitiva ao buscar recebimentos:', res2.error);
+                throw res2.error;
             }
-
-            if (error) {
-                console.error('Error fetching product_receipts:', error);
-                return [];
-            }
-
-            if (!data || !Array.isArray(data)) return [];
-
-            return data.map((row: any) => {
-                const photo = row.photo_url || row.foto_url || row.photo || row.imagem || row.url || '';
-                const nf = row.fiscal_note_number || row.numero_nota_fiscal || row.nf_number || row.nf || row.nota_fiscal || 'S/N';
-                const date = row.receipt_date || row.data_recebimento || row.created_at || row.date || '';
-                const obs = row.notes || row.observacoes || row.description || row.obs || '';
-
-                return {
-                    id: row.id || `rec-${Math.random()}`,
-                    photo_url: photo,
-                    fiscal_note_number: String(nf),
-                    receipt_date: date,
-                    notes: obs,
-                    product: row.product || row.produto || '',
-                    quantity: row.quantity || row.quantidade || 1,
-                    supplier: row.supplier || row.fornecedor || '',
-                    created_at: row.created_at || date
-                };
-            });
-        } catch (error) {
-            console.error('Unexpected error in getProductsReceipts:', error);
-            return [];
+            rows = res2.data;
+        } else {
+            rows = res1.data;
         }
+
+        if (!rows || !Array.isArray(rows)) return [];
+
+        return rows.map((row: any) => {
+            const photo = row.photo_url || row.foto_url || row.photo || row.imagem || row.url || '';
+            const nf = row.fiscal_note_number || row.numero_nota_fiscal || row.nf_number || row.nf || row.nota_fiscal || 'S/N';
+            const date = row.receipt_date || row.data_recebimento || row.created_at || row.date || '';
+            const obs = row.notes || row.observacoes || row.description || row.obs || '';
+
+            return {
+                id: row.id || `rec-${Math.random()}`,
+                photo_url: photo,
+                fiscal_note_number: String(nf),
+                receipt_date: date,
+                notes: obs,
+                product: row.product || row.produto || '',
+                quantity: row.quantity || row.quantidade || 1,
+                supplier: row.supplier || row.fornecedor || '',
+                created_at: row.created_at || date
+            };
+        });
     },
 
     /**

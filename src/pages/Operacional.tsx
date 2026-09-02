@@ -517,11 +517,15 @@ const Operacional: React.FC = () => {
     setLoading(true);
     try {
       const todayStr = new Date().toISOString().split('T')[0];
-      const currentMonthPrefix = todayStr.substring(0, 7); // YYYY-MM
+
+      // Busca recebimentos separadamente para não bloquear o resto em caso de erro
+      const receiptsPromise = SupabaseService.getProductsReceipts().catch((err) => {
+        console.error('Erro ao buscar recebimentos:', err);
+        return [] as typeof receipts;
+      });
 
       const [recs, missionsData, trainingsData, escalaData] = await Promise.all([
-        SupabaseService.getProductsReceipts(),
-        // Buscar todas as missões diárias
+        receiptsPromise,
         supabase.from('daily_missions').select('*').order('created_at', { ascending: false }),
         SupabaseService.getTrainings(),
         SupabaseService.getEscalaByDate(todayStr)
@@ -530,7 +534,6 @@ const Operacional: React.FC = () => {
       setReceipts(recs);
       setEscalaHoje(escalaData);
 
-      // Carregar todas as missões sem restringir por filtro rígido de data
       const allMissions = (missionsData.data || []) as DailyMission[];
       setMissions(allMissions);
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
@@ -600,16 +603,27 @@ const Operacional: React.FC = () => {
       await SupabaseService.uploadFile('produto-fotos', fileName, receiptFile);
       const publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
 
-      await SupabaseService.addProductReceipt({
+      const newReceipt = await SupabaseService.addProductReceipt({
         photo_url: publicUrl,
         fiscal_note_number: receiptNF,
         notes: receiptObs,
         receipt_date: new Date().toISOString()
       });
 
+      // Optimistic update: adiciona imediatamente ao estado local
+      const optimisticRec: ProductReceipt = {
+        id: (newReceipt as any)?.id || `tmp-${Date.now()}`,
+        photo_url: publicUrl,
+        fiscal_note_number: receiptNF,
+        receipt_date: new Date().toISOString(),
+        notes: receiptObs,
+        created_at: new Date().toISOString(),
+      };
+      setReceipts(prev => [optimisticRec, ...prev]);
+
       toast.success("Recebimento registrado com sucesso!");
 
-      // Show notification modal instead of auto-opening
+      // Show notification modal
       const notifData = NotificationService.getReceiptNotificationData({
         nf: receiptNF, obs: receiptObs, photoUrl: publicUrl, user: user?.email || 'N/A'
       });
@@ -618,6 +632,8 @@ const Operacional: React.FC = () => {
       setReceiptFile(null);
       setReceiptNF("");
       setReceiptObs("");
+
+      // Refetch em background para sincronizar com o banco
       loadAllData();
     } catch (error) {
       console.error("Error uploading product:", error);
