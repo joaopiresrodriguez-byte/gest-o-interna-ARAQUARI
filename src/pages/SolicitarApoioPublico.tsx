@@ -14,6 +14,7 @@ export const SolicitarApoioPublico: React.FC = () => {
   // Form State
   const [responsavelNome, setResponsavelNome] = useState('');
   const [responsavelTelefone, setResponsavelTelefone] = useState('');
+  const [empresaEntidade, setEmpresaEntidade] = useState('');
   const [tema, setTema] = useState('');
   const [dia, setDia] = useState('');
   const [horario, setHorario] = useState('');
@@ -63,7 +64,7 @@ export const SolicitarApoioPublico: React.FC = () => {
       return;
     }
 
-    if (!responsavelNome || !tema || !dia || !horario || !endereco) {
+    if (!responsavelNome || !empresaEntidade || !tema || !dia || !horario || !endereco) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
@@ -79,6 +80,7 @@ export const SolicitarApoioPublico: React.FC = () => {
         whatsapp_origem_id: cadastro.id,
         responsavel_nome: responsavelNome,
         responsavel_telefone: responsavelTelefone,
+        empresa_entidade: empresaEntidade,
         tema,
         dia,
         horario,
@@ -145,6 +147,9 @@ export const SolicitarApoioPublico: React.FC = () => {
 
           <div className="bg-stone-50 p-4 rounded-xl text-left border border-stone-200 space-y-2 text-xs text-stone-700">
             <p><strong>Solicitante:</strong> {solicitacaoConcluida.responsavel_nome}</p>
+            {solicitacaoConcluida.empresa_entidade && (
+              <p><strong>Empresa / Entidade:</strong> {solicitacaoConcluida.empresa_entidade}</p>
+            )}
             <p><strong>Tema/Assunto:</strong> {solicitacaoConcluida.tema}</p>
             <p><strong>Data Solicitada:</strong> {new Date(solicitacaoConcluida.dia + 'T00:00:00').toLocaleDateString('pt-BR')} às {solicitacaoConcluida.horario}</p>
             <p><strong>Endereço:</strong> {solicitacaoConcluida.endereco}</p>
@@ -226,6 +231,20 @@ export const SolicitarApoioPublico: React.FC = () => {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 uppercase mb-1">
+                Empresa / Entidade *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Escola Municipal, Nome da Empresa, Associação de Bairro..."
+                value={empresaEntidade}
+                onChange={e => setEmpresaEntidade(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
             </div>
 
             <div>

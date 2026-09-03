@@ -687,6 +687,7 @@ export interface B3SolicitacaoApoio {
   whatsapp_origem_id?: string;
   responsavel_nome: string;
   responsavel_telefone?: string;
+  empresa_entidade?: string;
   tema: string;
   dia: string;
   horario: string;

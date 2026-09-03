@@ -238,6 +238,9 @@ export const SubmoduloSolicitacoesApoio: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-bold block text-stone-800">{sol.responsavel_nome}</span>
+                      {sol.empresa_entidade && (
+                        <span className="text-[11px] font-medium text-stone-600 block">{sol.empresa_entidade}</span>
+                      )}
                       <span className="text-[10px] text-stone-500">{sol.responsavel_telefone || 'Sem WhatsApp'}</span>
                     </td>
                     <td className="px-4 py-3 max-w-xs truncate" title={sol.tema}>
@@ -291,6 +294,11 @@ export const SubmoduloSolicitacoesApoio: React.FC = () => {
                 <div>
                   <span className="text-stone-500 font-bold block uppercase text-[10px]">Solicitante</span>
                   <span className="text-stone-800 font-bold text-sm">{solicitacaoSelecionada.responsavel_nome}</span>
+                  {solicitacaoSelecionada.empresa_entidade && (
+                    <span className="block text-stone-700 font-semibold text-xs mt-0.5">
+                      🏢 {solicitacaoSelecionada.empresa_entidade}
+                    </span>
+                  )}
                   <span className="block text-stone-600 mt-0.5">{solicitacaoSelecionada.responsavel_telefone || 'Telefone não informado'}</span>
                 </div>
 

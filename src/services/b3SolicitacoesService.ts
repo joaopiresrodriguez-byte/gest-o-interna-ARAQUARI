@@ -66,6 +66,7 @@ export const b3SolicitacoesService = {
     whatsapp_origem_id: string;
     responsavel_nome: string;
     responsavel_telefone?: string;
+    empresa_entidade?: string;
     tema: string;
     dia: string;
     horario: string;
@@ -78,6 +79,7 @@ export const b3SolicitacoesService = {
         whatsapp_origem_id: payload.whatsapp_origem_id,
         responsavel_nome: payload.responsavel_nome,
         responsavel_telefone: payload.responsavel_telefone || null,
+        empresa_entidade: payload.empresa_entidade || null,
         tema: payload.tema,
         dia: payload.dia,
         horario: payload.horario,
@@ -212,6 +214,7 @@ export const b3SolicitacoesService = {
           description:
             `Gerado automaticamente via Solicitação de Apoio ${sapNum}.\n` +
             `Solicitante: ${solicitacao.responsavel_nome}` +
+            (solicitacao.empresa_entidade ? ` — Empresa/Entidade: ${solicitacao.empresa_entidade}` : '') +
             (solicitacao.responsavel_telefone ? ` — Tel: ${solicitacao.responsavel_telefone}` : '') +
             `\nEndereço: ${solicitacao.endereco}` +
             (solicitacao.complemento ? ` — ${solicitacao.complemento}` : ''),
@@ -240,6 +243,7 @@ export const b3SolicitacoesService = {
           title: titulo,
           description:
             `Solicitante: ${solicitacao.responsavel_nome}\n` +
+            (solicitacao.empresa_entidade ? `Empresa/Entidade: ${solicitacao.empresa_entidade}\n` : '') +
             (solicitacao.responsavel_telefone ? `Telefone: ${solicitacao.responsavel_telefone}\n` : '') +
             `Endereço: ${solicitacao.endereco}` +
             (solicitacao.complemento ? `\n${solicitacao.complemento}` : '') +
