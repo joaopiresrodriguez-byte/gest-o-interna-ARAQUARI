@@ -178,7 +178,7 @@ export const imprimirDocumentoCautela = (cautela: Cautela) => {
     </head>
     <body>
       <div class="header" style="text-align: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 15px;">
-        <img src="/brasao_cbmsc.png" style="height: 85px; margin: 0 auto 8px auto; display: block;" alt="Brasão do Estado de Santa Catarina" onError="this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg/200px-Bras%C3%A3o_do_Corpo_de_Bombeiros_Militar_de_Santa_Catarina.svg.png';" />
+        <img src="/emblema_cbmsc.png" style="height: 85px; margin: 0 auto 8px auto; display: block;" alt="Emblema CBMSC" />
         <div style="font-size: 11px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">ESTADO DE SANTA CATARINA</div>
         <div style="font-size: 11px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px;">CORPO DE BOMBEIROS MILITAR DE SANTA CATARINA</div>
         <div style="font-size: 10px; font-weight: 700; color: #334155; margin-top: 1px;">4ª RBM — 16º BBM — 2ª CBM</div>

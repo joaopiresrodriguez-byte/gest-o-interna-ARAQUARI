@@ -623,9 +623,23 @@ const Operacional: React.FC = () => {
 
       toast.success("Recebimento registrado com sucesso!");
 
+      // Buscar nome de guerra do usuário logado para o recibo
+      let responsavelNomeGuerra = user?.email || 'N/A';
+      if (user?.email) {
+        const { data: p } = await SupabaseService.supabase
+          .from('personnel')
+          .select('war_name, name, graduation')
+          .eq('email', user.email.toLowerCase().trim())
+          .maybeSingle();
+        if (p) {
+          const grad = p.graduation ? `${p.graduation} ` : '';
+          responsavelNomeGuerra = `${grad}${p.war_name || p.name}`.trim().toUpperCase();
+        }
+      }
+
       // Show notification modal
       const notifData = NotificationService.getReceiptNotificationData({
-        nf: receiptNF, obs: receiptObs, photoUrl: publicUrl, user: user?.email || 'N/A'
+        nf: receiptNF, obs: receiptObs, photoUrl: publicUrl, user: responsavelNomeGuerra
       });
       setNotifModal({ open: true, data: notifData, type: 'receipt' });
 

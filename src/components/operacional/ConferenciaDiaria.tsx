@@ -794,11 +794,24 @@ const ConferenciaDiaria: React.FC = () => {
       });
   }, []);
 
-  // Obter nome de quem está realizando
+  // Obter nome de guerra do responsável logado
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user?.email) {
-        setNomeConferente(user.email.split('@')[0].toUpperCase());
+        const userEmail = user.email.toLowerCase().trim();
+        const { data: p } = await supabase
+          .from('personnel')
+          .select('war_name, name, graduation')
+          .eq('email', userEmail)
+          .maybeSingle();
+
+        if (p) {
+          const grad = p.graduation ? `${p.graduation} ` : '';
+          const nomeGuerra = p.war_name || p.name;
+          setNomeConferente(`${grad}${nomeGuerra}`.trim().toUpperCase());
+        } else {
+          setNomeConferente(user.email.split('@')[0].toUpperCase());
+        }
       }
     });
   }, []);
