@@ -21,6 +21,9 @@ const ExportSection: React.FC<Props> = ({
     disciplinaryRecords = [],
     onAddExport
 }) => {
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
     const [activeSubTab, setActiveSubTab] = useState<'sigrh' | 'sgpe' | 'csv_escalas'>('sigrh');
     const [selectedPersonnelId, setSelectedPersonnelId] = useState<string>('');
     const [escalaDate, setEscalaDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -240,9 +243,6 @@ const ExportSection: React.FC<Props> = ({
             setExportandoCsvBC(false);
         }
     };
-
-    const today = new Date();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
     const handleMarkSubmitted = (exportType: string, system: 'SIGRH' | 'SGP-e') => {
         onAddExport({ export_type: exportType, month_ref: currentMonth, submitted_date: today.toISOString().split('T')[0], responsible: 'Operador B1', system });
