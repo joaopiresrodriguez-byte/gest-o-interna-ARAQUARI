@@ -496,6 +496,7 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
               <tr>
                 <th className="py-2.5 px-3">Data / Hora</th>
                 <th className="py-2.5 px-3">Tipo de Alteração</th>
+                <th className="py-2.5 px-3">Militar(es) Envolvido(s)</th>
                 <th className="py-2.5 px-3">Descrição / Detalhes</th>
                 <th className="py-2.5 px-3">Responsável</th>
               </tr>
@@ -503,31 +504,57 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
             <tbody className="divide-y divide-rustic-border/30">
               {historico.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-stone-400 italic">
+                  <td colSpan={5} className="py-6 text-center text-stone-400 italic">
                     Nenhuma alteração registrada até o momento.
                   </td>
                 </tr>
               ) : (
-                historico.map((h, idx) => (
-                  <tr key={h.id || idx} className="hover:bg-stone-50/50">
-                    <td className="py-2.5 px-3 font-medium text-stone-500 whitespace-nowrap">
-                      {new Date(h.criado_em || h.created_at || Date.now()).toLocaleString('pt-BR')}
-                    </td>
-                    <td className="py-2.5 px-3 font-bold">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                        h.tipo_alteracao?.includes('troca_militares') || h.tipo_alteracao?.includes('Mútua')
-                          ? 'bg-amber-100 text-amber-800'
-                          : h.tipo_alteracao?.includes('individual') || h.tipo_alteracao?.includes('Individual')
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {h.tipo_alteracao}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 font-medium text-rustic-brown">{h.detalhes || h.reason || '—'}</td>
-                    <td className="py-2.5 px-3 font-bold text-stone-600">{h.criado_por || h.performed_by || 'Administrador B1'}</td>
-                  </tr>
-                ))
+                historico.map((h, idx) => {
+                  // Resolver identificadores de militares envolvidos
+                  const milA = h.militar_a || personnelList.find(p => p.id === Number(h.militar_a_id));
+                  const milB = h.militar_b || personnelList.find(p => p.id === Number(h.militar_b_id));
+
+                  const nomeA = milA ? `${milA.graduation || ''} ${milA.war_name || milA.name}`.trim() : (h.militar_a_id ? `Militar #${h.militar_a_id}` : null);
+                  const nomeB = milB ? `${milB.graduation || ''} ${milB.war_name || milB.name}`.trim() : (h.militar_b_id ? `Militar #${h.militar_b_id}` : null);
+
+                  let rotuloTipo = h.tipo_alteracao;
+                  if (h.tipo_alteracao === 'troca_militares') rotuloTipo = 'Troca Mútua';
+                  else if (h.tipo_alteracao === 'troca_individual') rotuloTipo = 'Troca Individual';
+                  else if (h.tipo_alteracao === 'transferencia_guarnicao') rotuloTipo = 'Transf. Guarnição';
+
+                  return (
+                    <tr key={h.id || idx} className="hover:bg-stone-50/50">
+                      <td className="py-2.5 px-3 font-medium text-stone-500 whitespace-nowrap">
+                        {new Date(h.criado_em || h.created_at || Date.now()).toLocaleString('pt-BR')}
+                      </td>
+                      <td className="py-2.5 px-3 font-bold whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                          h.tipo_alteracao?.includes('troca_militares') || rotuloTipo === 'Troca Mútua'
+                            ? 'bg-amber-100 text-amber-800'
+                            : h.tipo_alteracao?.includes('individual') || rotuloTipo === 'Troca Individual'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {rotuloTipo}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-stone-800 whitespace-nowrap">
+                        {nomeA && nomeB ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-amber-900 font-bold">1º: {nomeA}</span>
+                            <span className="text-blue-900 font-bold">2º: {nomeB}</span>
+                          </div>
+                        ) : nomeA ? (
+                          <span className="text-stone-800 font-bold">{nomeA}</span>
+                        ) : (
+                          <span className="text-stone-400 italic">N/D</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 font-medium text-rustic-brown">{h.detalhes || h.reason || '—'}</td>
+                      <td className="py-2.5 px-3 font-bold text-stone-600 whitespace-nowrap">{h.criado_por || h.performed_by || 'Administrador B1'}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -315,19 +315,34 @@ export const ScaleAdjustmentService = {
     getHistoricoAlteracoes: async (): Promise<any[]> => {
         const { data, error } = await supabase
             .from('escala_alteracoes')
-            .select('*')
+            .select(`
+                *,
+                militar_a:personnel!militar_a_id (id, name, war_name, graduation),
+                militar_b:personnel!militar_b_id (id, name, war_name, graduation),
+                guarnicao_origem:guarnicoes!guarnicao_origem_id (id, nome),
+                guarnicao_destino:guarnicoes!guarnicao_destino_id (id, nome)
+            `)
             .order('criado_em', { ascending: false });
 
         if (error) {
-            // Fallback audit log
-            const logs = await ScaleAdjustmentService.getAuditLogs();
-            return logs.map(l => ({
-                id: l.id,
-                tipo_alteracao: l.action_type,
-                detalhes: l.reason,
-                criado_por: l.performed_by,
-                criado_em: l.performed_at
-            }));
+            // Se falhar o select com joins (por exemplo RLS ou relação), tenta select simples
+            const { data: simpleData, error: simpleErr } = await supabase
+                .from('escala_alteracoes')
+                .select('*')
+                .order('criado_em', { ascending: false });
+
+            if (simpleErr || !simpleData) {
+                // Fallback audit log
+                const logs = await ScaleAdjustmentService.getAuditLogs();
+                return logs.map(l => ({
+                    id: l.id,
+                    tipo_alteracao: l.action_type,
+                    detalhes: l.reason,
+                    criado_por: l.performed_by,
+                    criado_em: l.performed_at
+                }));
+            }
+            return simpleData;
         }
         return data || [];
     }

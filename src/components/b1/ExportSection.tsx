@@ -21,9 +21,13 @@ const ExportSection: React.FC<Props> = ({
     disciplinaryRecords = [],
     onAddExport
 }) => {
-    const [activeSubTab, setActiveSubTab] = useState<'sigrh' | 'sgpe'>('sigrh');
+    const [activeSubTab, setActiveSubTab] = useState<'sigrh' | 'sgpe' | 'csv_escalas'>('sigrh');
     const [selectedPersonnelId, setSelectedPersonnelId] = useState<string>('');
     const [escalaDate, setEscalaDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [csvMonthBM, setCsvMonthBM] = useState<string>(currentMonth);
+    const [csvMonthBC, setCsvMonthBC] = useState<string>(currentMonth);
+    const [exportandoCsvBM, setExportandoCsvBM] = useState<boolean>(false);
+    const [exportandoCsvBC, setExportandoCsvBC] = useState<boolean>(false);
     const [chefeSocorroId, setChefeSocorroId] = useState<string>('');
     const [abtrMotoristaId, setAbtrMotoristaId] = useState<string>('');
     const [abtrResgatista1Id, setAbtrResgatista1Id] = useState<string>('');
@@ -32,6 +36,210 @@ const ExportSection: React.FC<Props> = ({
     const [asuSocorrista1Id, setAsuSocorrista1Id] = useState<string>('');
     const [asuSocorrista2Id, setAsuSocorrista2Id] = useState<string>('');
     const [observacoesChefe, setObservacoesChefe] = useState<string>('');
+
+    // EXPORTAÇÃO CSV — ESCALA DE MILITARES (BM)
+    const exportarEscalaBMCSV = async () => {
+        try {
+            setExportandoCsvBM(true);
+            const [yearStr, monthNumStr] = csvMonthBM.split('-');
+            const year = Number(yearStr);
+            const monthNum = Number(monthNumStr);
+            const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+            // Buscar escalas publicadas do mês
+            const startDate = `${csvMonthBM}-01`;
+            const endDate = `${csvMonthBM}-${String(daysInMonth).padStart(2, '0')}`;
+            const { data: escalasData } = await supabase
+                .from('escalas')
+                .select('*')
+                .gte('data', startDate)
+                .lte('data', endDate);
+
+            // Buscar guarnições e seus membros
+            const { data: guarnicoes } = await supabase.from('guarnicoes').select('*').order('nome');
+            const { data: membros } = await supabase.from('guarnicao_membros').select('*');
+
+            // Militares ativos BM
+            const bms = personnelList.filter(p => (p.type === 'BM' || !p.type) && p.status === 'Ativo');
+
+            // Montar dias da semana (ex: T, Q, Q, S, S, D, S...)
+            const diasSemana = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+            const headerSemana = ['SEMANA'];
+            const headerDias = ['NOME/DIA'];
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(year, monthNum - 1, d);
+                headerSemana.push(diasSemana[dateObj.getDay()]);
+                headerDias.push(String(d).padStart(2, '0'));
+            }
+            headerSemana.push('Horas trabalho', 'Horas prevista', 'Horas Excedentes');
+            headerDias.push('', '', '');
+
+            const rowsCSV: string[][] = [];
+            rowsCSV.push([`PREVISÃO ESCALA MÊS DE ${new Date(year, monthNum - 1).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()} DE ${year}`]);
+            rowsCSV.push(['ESCALA - ARAQUARI']);
+            rowsCSV.push(headerSemana);
+            rowsCSV.push(headerDias);
+
+            // Função para calcular horas do dia do BM (ex: 24h ou expediente 7h/8h/11h)
+            const getEscalaHoras = (pId: number, dateStr: string): number => {
+                const dayEscala = (escalasData || []).find(e => e.data === dateStr);
+                const isScaled = dayEscala?.militares?.includes(pId);
+                if (!isScaled) return 0;
+                // Exemplo 24h ordinário ou valor específico
+                return 24;
+            };
+
+            // Agrupar BMs por Guarnição
+            const bmsPorGuarnicao: Record<string, Personnel[]> = {
+                'EXPEDIENTE / OUTROS': [],
+                'GUARNIÇÃO AMARELA': [],
+                'GUARNIÇÃO VERMELHA': [],
+                'GUARNIÇÃO VERDE': [],
+                'GUARNIÇÃO AZUL': [],
+            };
+
+            bms.forEach(bm => {
+                const mLink = (membros || []).find(m => m.militar_id === bm.id);
+                const g = (guarnicoes || []).find(g => g.id === mLink?.guarnicao_id);
+                const gNome = g?.nome?.toUpperCase() || '';
+
+                if (gNome.includes('AMAREL') || gNome.includes('CHARLIE')) bmsPorGuarnicao['GUARNIÇÃO AMARELA'].push(bm);
+                else if (gNome.includes('VERMELH') || gNome.includes('BRAVO')) bmsPorGuarnicao['GUARNIÇÃO VERMELHA'].push(bm);
+                else if (gNome.includes('VERDE') || gNome.includes('DELTA')) bmsPorGuarnicao['GUARNIÇÃO VERDE'].push(bm);
+                else if (gNome.includes('AZUL') || gNome.includes('ALPHA')) bmsPorGuarnicao['GUARNIÇÃO AZUL'].push(bm);
+                else bmsPorGuarnicao['EXPEDIENTE / OUTROS'].push(bm);
+            });
+
+            Object.entries(bmsPorGuarnicao).forEach(([gTitulo, grupoBMs]) => {
+                if (grupoBMs.length === 0) return;
+                rowsCSV.push([gTitulo]);
+
+                grupoBMs.forEach(bm => {
+                    const nomeCompleto = `${bm.graduation || ''} ${bm.name}`.trim();
+                    const row = [nomeCompleto];
+                    let totalHoras = 0;
+
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const isVacation = vacations.some(v => v.personnel_id === bm.id && dateStr >= v.start_date && dateStr <= v.end_date);
+
+                        if (isVacation) {
+                            row.push('F');
+                        } else {
+                            const h = getEscalaHoras(bm.id, dateStr);
+                            if (h > 0) {
+                                row.push(String(h));
+                                totalHoras += h;
+                            } else {
+                                row.push('');
+                            }
+                        }
+                    }
+                    const prevista = 168; // Carga padrão do mês
+                    const excedentes = Math.max(0, totalHoras - prevista);
+                    row.push(String(totalHoras), String(prevista), String(excedentes));
+                    rowsCSV.push(row);
+                });
+            });
+
+            const csvContent = rowsCSV.map(r => r.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(';')).join('\n');
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Escala_BM_Araquari_${csvMonthBM}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success('Escala BM em CSV baixada com sucesso!');
+        } catch (e: any) {
+            console.error('Erro ao exportar escala BM CSV:', e);
+            toast.error('Erro ao gerar CSV: ' + (e?.message || 'Falha'));
+        } finally {
+            setExportandoCsvBM(false);
+        }
+    };
+
+    // EXPORTAÇÃO CSV — ESCALA DE BOMBEIROS COMUNITÁRIOS (BC)
+    const exportarEscalaBCCSV = async () => {
+        try {
+            setExportandoCsvBC(true);
+            const [yearStr, monthNumStr] = csvMonthBC.split('-');
+            const year = Number(yearStr);
+            const monthNum = Number(monthNumStr);
+            const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+            // Buscar BCs cadastrados
+            const bcs = personnelList.filter(p => p.type === 'BC' && p.status === 'Ativo');
+
+            // Buscar intenções/selecionados de BC do mês
+            const { data: selecionados } = await supabase
+                .from('bc_selecionados')
+                .select('*')
+                .eq('mes_referencia', csvMonthBC);
+
+            const { data: intencoes } = await supabase
+                .from('bc_intencoes')
+                .select('*')
+                .eq('mes_referencia', csvMonthBC);
+
+            // Mapeamento dos dias da semana em português (ter., qua., qui., sex., sáb., dom., seg.)
+            const diasSemanaPt = ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.'];
+            const headerSemana = [csvMonthBC];
+            const headerDias = ['NOME BC', 'NOME DE GUERRA'];
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(year, monthNum - 1, d);
+                headerSemana.push(diasSemanaPt[dateObj.getDay()]);
+                headerDias.push(String(d));
+            }
+
+            const rowsCSV: string[][] = [];
+            rowsCSV.push(headerSemana);
+            rowsCSV.push(headerDias);
+
+            bcs.forEach(bc => {
+                const row = [bc.name, bc.war_name || bc.name];
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = `${csvMonthBC}-${String(d).padStart(2, '0')}`;
+                    const sel = (selecionados || []).find(s => String(s.bombeiro_id) === String(bc.id) && s.dia === dateStr);
+                    const int = (intencoes || []).find(i => String(i.bombeiro_id) === String(bc.id) && i.dia === dateStr);
+
+                    const itemData = sel || int;
+                    if (itemData) {
+                        const hIni = itemData.horario_inicio || '07:00';
+                        const hFim = itemData.horario_fim || '19:00';
+                        let codigo = 'D'; // Diurno
+                        if (hIni.startsWith('19') || hIni.startsWith('18')) codigo = 'N'; // Noturno
+                        else if (itemData.total_horas >= 24) codigo = '24';
+                        else if (hIni.startsWith('07') || hIni.startsWith('08')) codigo = 'D';
+                        row.push(codigo);
+                    } else {
+                        row.push('');
+                    }
+                }
+                rowsCSV.push(row);
+            });
+
+            const csvContent = rowsCSV.map(r => r.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(';')).join('\n');
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Escala_BC_Araquari_${csvMonthBC}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success('Escala BC em CSV baixada com sucesso!');
+        } catch (e: any) {
+            console.error('Erro ao exportar escala BC CSV:', e);
+            toast.error('Erro ao gerar CSV: ' + (e?.message || 'Falha'));
+        } finally {
+            setExportandoCsvBC(false);
+        }
+    };
 
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
@@ -591,7 +799,8 @@ const ExportSection: React.FC<Props> = ({
             <div className="flex gap-2 border-b border-stone-200 pb-3">
                 {[
                     { id: 'sigrh', label: 'SIGRH (Extrato Completo)', icon: 'table_view' },
-                    { id: 'sgpe', label: 'SGP-e (Ficha Frequência & Escala 24x72)', icon: 'description' }
+                    { id: 'sgpe', label: 'SGP-e (Ficha Frequência & Escala 24x72)', icon: 'description' },
+                    { id: 'csv_escalas', label: 'Exportar Escalas (CSV)', icon: 'csv' }
                 ].map(t => (
                     <button
                         key={t.id}
@@ -648,6 +857,87 @@ const ExportSection: React.FC<Props> = ({
                                     PDF GERAL (TODOS)
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB: EXPORTAR ESCALAS CSV */}
+            {activeSubTab === 'csv_escalas' && (
+                <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm space-y-6">
+                    <div>
+                        <h3 className="font-black text-lg text-gray-800 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-green-700">csv</span>
+                            Exportação de Escalas em CSV (BM e BC)
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Gere planilhas CSV com a previsão e distribuição mensal de escalas nos modelos padronizados do CBMSC.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* OPÇÃO 1 — ESCALA BM (BOMBEIROS MILITARES) */}
+                        <div className="p-5 bg-stone-50 rounded-2xl border border-stone-200 space-y-4 flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-red-700 text-2xl">local_fire_department</span>
+                                    <div>
+                                        <h4 className="font-black text-base text-gray-800">1. Escala de Bombeiros Militares (BM)</h4>
+                                        <span className="text-[10px] text-stone-500 font-medium">Modelo com guarnições (Amarela, Vermelha, Verde, Azul, Expediente) e totalizador de horas/excedentes.</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Mês de Referência:</label>
+                                    <input
+                                        type="month"
+                                        value={csvMonthBM}
+                                        onChange={e => setCsvMonthBM(e.target.value)}
+                                        className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={exportarEscalaBMCSV}
+                                disabled={exportandoCsvBM}
+                                className="w-full py-3 bg-red-800 text-white font-black text-xs rounded-xl hover:bg-red-900 transition-all shadow flex items-center justify-center gap-2 mt-4"
+                            >
+                                <span className="material-symbols-outlined text-base">download</span>
+                                {exportandoCsvBM ? 'GERANDO CSV...' : 'EXPORTAR ESCALA BM EM CSV'}
+                            </button>
+                        </div>
+
+                        {/* OPÇÃO 2 — ESCALA BC (BOMBEIROS COMUNITÁRIOS) */}
+                        <div className="p-5 bg-stone-50 rounded-2xl border border-stone-200 space-y-4 flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-amber-600 text-2xl">groups</span>
+                                    <div>
+                                        <h4 className="font-black text-base text-gray-800">2. Escala de Bombeiros Comunitários (BC)</h4>
+                                        <span className="text-[10px] text-stone-500 font-medium">Modelo com distribuição dos dias do mês (códigos D/N/24) por Bombeiro Comunitário.</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Mês de Referência:</label>
+                                    <input
+                                        type="month"
+                                        value={csvMonthBC}
+                                        onChange={e => setCsvMonthBC(e.target.value)}
+                                        className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={exportarEscalaBCCSV}
+                                disabled={exportandoCsvBC}
+                                className="w-full py-3 bg-amber-700 text-white font-black text-xs rounded-xl hover:bg-amber-800 transition-all shadow flex items-center justify-center gap-2 mt-4"
+                            >
+                                <span className="material-symbols-outlined text-base">download</span>
+                                {exportandoCsvBC ? 'GERANDO CSV...' : 'EXPORTAR ESCALA BC EM CSV'}
+                            </button>
                         </div>
                     </div>
                 </div>
