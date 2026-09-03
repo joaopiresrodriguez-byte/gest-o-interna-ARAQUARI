@@ -254,11 +254,12 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
     const targetIdx = direcao === 'up' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= compItens.length) return;
 
-    const itemAtual = compItens[idx];
-    const itemOutro = compItens[targetIdx];
-
-    const novaOrdemAtual = itemOutro.sort_order ?? (targetIdx + 1);
-    const novaOrdemOutro = itemAtual.sort_order ?? (idx + 1);
+    // Criar uma cópia da lista ordenada dos itens do compartimento
+    const novaoLista = [...compItens];
+    // Trocar os elementos de posição no array
+    const temp = novaoLista[idx];
+    novaoLista[idx] = novaoLista[targetIdx];
+    novaoLista[targetIdx] = temp;
 
     const getTable = (f: ItemFlota['fonte']) => {
       if (f === 'fleet') return 'fleet';
@@ -269,12 +270,16 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
 
     try {
       setLoading(true);
-      await Promise.all([
-        supabase.from(getTable(itemAtual.fonte)).update({ sort_order: novaOrdemAtual }).eq('id', itemAtual.id),
-        supabase.from(getTable(itemOutro.fonte)).update({ sort_order: novaOrdemOutro }).eq('id', itemOutro.id),
-      ]);
+      // Atualizar todas as posições da lista de forma sequencial (1, 2, 3...) no banco
+      const updates = novaoLista.map((it, posIndex) =>
+        supabase.from(getTable(it.fonte)).update({ sort_order: posIndex + 1 }).eq('id', it.id)
+      );
+
+      await Promise.all(updates);
       await carregarDados();
+      toast.success('Ordem dos itens atualizada!');
     } catch (err: any) {
+      console.error('Erro ao reordenar item:', err);
       toast.error('Erro ao reordenar item: ' + (err?.message || 'Falha'));
     } finally {
       setLoading(false);
@@ -284,7 +289,12 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
   const itensPorComp = (compId: string) => {
     return itens
       .filter(i => i.compartimento_id === compId)
-      .sort((a, b) => (a.sort_order - b.sort_order) || a.nome.localeCompare(b.nome));
+      .sort((a, b) => {
+        if ((a.sort_order || 0) !== (b.sort_order || 0)) {
+          return (a.sort_order || 0) - (b.sort_order || 0);
+        }
+        return a.nome.localeCompare(b.nome);
+      });
   };
   const itensSemComp = itens.filter(i => !i.compartimento_id);
   const totalUnidades = itens.reduce((acc, i) => acc + i.quantidade, 0);
