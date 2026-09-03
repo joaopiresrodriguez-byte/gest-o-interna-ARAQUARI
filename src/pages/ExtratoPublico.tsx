@@ -20,6 +20,7 @@ interface ItemExtrato {
   plate?: string;
   compartimento_id?: string;
   compartimento_nome?: string;
+  sort_order?: number;
 }
 
 interface CompartimentoGroup {
@@ -152,9 +153,8 @@ export function ExtratoPublico() {
 
           const { data: equip } = await supabase
             .from('equipamentos')
-            .select('id, nome, tipo, numero_serie, quantidade, status')
+            .select('id, nome, tipo, numero_serie, quantidade, status, sort_order')
             .eq('compartimento_id', id)
-            .order('nome')
             .limit(1000);
 
           const equipItens: ItemExtrato[] = (equip && equip.length > 0)
@@ -164,25 +164,25 @@ export function ExtratoPublico() {
                 type: `🔧 ${e.tipo || 'Equipamento'}`,
                 patrimonio_number: e.numero_serie,
                 status: e.status || 'Ok',
+                sort_order: Number(e.sort_order) || 0,
               }))
             : await (async () => {
                 const { data: fleetData } = await supabase
                   .from('fleet')
-                  .select('id, name, type, patrimonio_number, status, brand, plate')
+                  .select('id, name, type, patrimonio_number, status, brand, plate, sort_order')
                   .eq('compartimento_id', id)
-                  .order('name')
                   .limit(1000);
                 return (fleetData || []).map(f => ({
                   ...f,
                   type: `🔧 ${f.type || 'Equipamento'}`,
+                  sort_order: Number(f.sort_order) || 0,
                 }));
               })();
 
           const { data: consumo } = await supabase
             .from('materiais_consumo')
-            .select('id, nome, unidade, quantidade, estoque_minimo, categoria')
+            .select('id, nome, unidade, quantidade, estoque_minimo, categoria, sort_order')
             .eq('compartimento_id', id)
-            .order('nome')
             .limit(1000);
 
           const consumoItens: ItemExtrato[] = (consumo || []).map(c => ({
@@ -191,9 +191,35 @@ export function ExtratoPublico() {
             type: `📦 Consumo (${c.categoria || 'Geral'})`,
             patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
             status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
+            sort_order: Number(c.sort_order) || 0,
           }));
 
-          const todosItens = [...equipItens, ...consumoItens];
+          const { data: checkData } = await supabase
+            .from('checklist_items')
+            .select('id, item_name, category, quantidade, is_active, sort_order')
+            .eq('compartimento_id', id)
+            .eq('is_active', true)
+            .limit(1000);
+
+          const checkItens: ItemExtrato[] = (checkData || []).map(ci => ({
+            id: ci.id,
+            name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
+            type: `✅ ${ci.category || 'Equipamento'}`,
+            status: ci.is_active === false ? 'down' : 'Ok',
+            sort_order: Number(ci.sort_order) || 0,
+          }));
+
+          const todosItensMap = new Map<string, ItemExtrato>();
+          [...equipItens, ...consumoItens, ...checkItens].forEach(it => {
+            if (!todosItensMap.has(it.id)) todosItensMap.set(it.id, it);
+          });
+          const todosItens = Array.from(todosItensMap.values()).sort((a, b) => {
+            if ((a.sort_order || 0) !== (b.sort_order || 0)) {
+              return (a.sort_order || 0) - (b.sort_order || 0);
+            }
+            return a.name.localeCompare(b.name);
+          });
+
           setItens(todosItens);
           setGrupos([{
             id: id,
@@ -241,10 +267,9 @@ export function ExtratoPublico() {
           if (compIds.length > 0) {
             const { data: fleetItems } = await supabase
               .from('fleet')
-              .select('id, name, type, patrimonio_number, status, brand, plate, compartimento_id')
+              .select('id, name, type, patrimonio_number, status, brand, plate, compartimento_id, sort_order')
               .in('compartimento_id', compIds)
               .neq('type', 'Viatura')
-              .order('name')
               .limit(1000);
 
             itensFleet = (fleetItems || []).map(f => ({
@@ -252,14 +277,14 @@ export function ExtratoPublico() {
               type: `🔧 ${f.type}`,
               compartimento_id: f.compartimento_id,
               compartimento_nome: f.compartimento_id ? mapaComps[f.compartimento_id] : undefined,
+              sort_order: Number(f.sort_order) || 0,
             }));
           }
 
           const { data: equipItems } = await supabase
             .from('equipamentos')
-            .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id')
+            .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id, sort_order')
             .eq('viatura_id', id)
-            .order('nome')
             .limit(1000);
 
           const itensEquip: ItemExtrato[] = (equipItems || []).map(e => ({
@@ -270,13 +295,13 @@ export function ExtratoPublico() {
             status: e.status || 'Ok',
             compartimento_id: e.compartimento_id,
             compartimento_nome: e.compartimento_id ? mapaComps[e.compartimento_id] : undefined,
+            sort_order: Number(e.sort_order) || 0,
           }));
 
           const { data: consumoData } = await supabase
             .from('materiais_consumo')
-            .select('id, nome, unidade, quantidade, estoque_minimo, categoria, compartimento_id')
+            .select('id, nome, unidade, quantidade, estoque_minimo, categoria, compartimento_id, sort_order')
             .eq('viatura_id', id)
-            .order('nome')
             .limit(1000);
 
           const itensConsumo: ItemExtrato[] = (consumoData || []).map(c => ({
@@ -287,19 +312,50 @@ export function ExtratoPublico() {
             status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
             compartimento_id: c.compartimento_id,
             compartimento_nome: c.compartimento_id ? mapaComps[c.compartimento_id] : undefined,
+            sort_order: Number(c.sort_order) || 0,
           }));
 
-          const fleetIds = new Set(itensFleet.map(f => f.id));
-          const equipNovos = itensEquip.filter(e => !fleetIds.has(e.id));
-          const idsJaIncluidos = new Set([...itensFleet.map(f => f.id), ...equipNovos.map(e => e.id)]);
-          const consumoNovos = itensConsumo.filter(c => !idsJaIncluidos.has(c.id));
-          const todosItens = [...itensFleet, ...equipNovos, ...consumoNovos];
+          let itensChecklist: ItemExtrato[] = [];
+          const { data: checkData } = await supabase
+            .from('checklist_items')
+            .select('id, item_name, category, quantidade, is_active, compartimento_id, sort_order')
+            .or(
+              compIds.length > 0
+                ? `viatura_id.eq.${id},compartimento_id.in.(${compIds.join(',')})`
+                : `viatura_id.eq.${id}`
+            )
+            .eq('is_active', true)
+            .limit(1000);
+
+          itensChecklist = (checkData || []).map(ci => ({
+            id: ci.id,
+            name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
+            type: `✅ ${ci.category || 'Equipamento'}`,
+            status: ci.is_active === false ? 'down' : 'Ok',
+            compartimento_id: ci.compartimento_id || undefined,
+            compartimento_nome: ci.compartimento_id ? mapaComps[ci.compartimento_id] : undefined,
+            sort_order: Number(ci.sort_order) || 0,
+          }));
+
+          const todosItensMap = new Map<string, ItemExtrato>();
+          [...itensFleet, ...itensEquip, ...itensConsumo, ...itensChecklist].forEach(it => {
+            if (!todosItensMap.has(it.id)) todosItensMap.set(it.id, it);
+          });
+          const todosItens = Array.from(todosItensMap.values());
 
           setItens(todosItens);
 
           const gruposMontados: CompartimentoGroup[] = [];
           (comps || []).forEach(comp => {
-            const itensDoComp = todosItens.filter(i => i.compartimento_id === comp.id);
+            const itensDoComp = todosItens
+              .filter(i => i.compartimento_id === comp.id)
+              .sort((a, b) => {
+                if ((a.sort_order || 0) !== (b.sort_order || 0)) {
+                  return (a.sort_order || 0) - (b.sort_order || 0);
+                }
+                return a.name.localeCompare(b.name);
+              });
+
             gruposMontados.push({
               id: comp.id,
               nome: comp.nome,
@@ -308,7 +364,15 @@ export function ExtratoPublico() {
             });
           });
 
-          const semComp = todosItens.filter(i => !i.compartimento_id || !mapaComps[i.compartimento_id]);
+          const semComp = todosItens
+            .filter(i => !i.compartimento_id || !mapaComps[i.compartimento_id])
+            .sort((a, b) => {
+              if ((a.sort_order || 0) !== (b.sort_order || 0)) {
+                return (a.sort_order || 0) - (b.sort_order || 0);
+              }
+              return a.name.localeCompare(b.name);
+            });
+
           if (semComp.length > 0) {
             gruposMontados.push({
               id: 'sem-compartimento',
