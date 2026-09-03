@@ -22,6 +22,7 @@ interface ItemFlota {
   compartimento_id?: string;
   local_id?: string;
   fonte: 'fleet' | 'equipamentos' | 'materiais' | 'checklist';
+  sort_order: number;
   rawItem: Vehicle;
 }
 
@@ -116,6 +117,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
             compartimento_id: f.compartimento_id || undefined,
             local_id: f.local_id || undefined,
             fonte: 'fleet',
+            sort_order: Number(f.sort_order) || 0,
             rawItem: { ...f, details: safeText(f.details) } as Vehicle,
           });
         });
@@ -143,6 +145,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
               compartimento_id: e.compartimento_id || undefined,
               local_id: e.viatura_id || undefined,
               fonte: 'equipamentos',
+              sort_order: Number(e.sort_order) || 0,
               rawItem: {
                 id: e.id,
                 name: e.nome,
@@ -175,6 +178,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
                 status: 'active',
                 compartimento_id: c.compartimento_id || undefined,
                 fonte: 'materiais',
+                sort_order: Number(c.sort_order) || 0,
                 rawItem: {
                   id: c.id,
                   name: c.nome || c.description,
@@ -214,6 +218,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
               compartimento_id: ci.compartimento_id || undefined,
               local_id: ci.viatura_id || undefined,
               fonte: 'checklist',
+              sort_order: Number(ci.sort_order) || 0,
               rawItem: {
                 id: ci.id,
                 name: ci.item_name,
@@ -243,7 +248,44 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
     if (viatura?.id) carregarDados();
   }, [viatura.id, carregarDados]);
 
-  const itensPorComp = (compId: string) => itens.filter(i => i.compartimento_id === compId);
+  const moverItem = async (item: ItemFlota, compItens: ItemFlota[], direcao: 'up' | 'down') => {
+    const idx = compItens.findIndex(i => i.id === item.id);
+    if (idx === -1) return;
+    const targetIdx = direcao === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= compItens.length) return;
+
+    const itemAtual = compItens[idx];
+    const itemOutro = compItens[targetIdx];
+
+    const novaOrdemAtual = itemOutro.sort_order ?? (targetIdx + 1);
+    const novaOrdemOutro = itemAtual.sort_order ?? (idx + 1);
+
+    const getTable = (f: ItemFlota['fonte']) => {
+      if (f === 'fleet') return 'fleet';
+      if (f === 'equipamentos') return 'equipamentos';
+      if (f === 'materiais') return 'materiais_consumo';
+      return 'checklist_items';
+    };
+
+    try {
+      setLoading(true);
+      await Promise.all([
+        supabase.from(getTable(itemAtual.fonte)).update({ sort_order: novaOrdemAtual }).eq('id', itemAtual.id),
+        supabase.from(getTable(itemOutro.fonte)).update({ sort_order: novaOrdemOutro }).eq('id', itemOutro.id),
+      ]);
+      await carregarDados();
+    } catch (err: any) {
+      toast.error('Erro ao reordenar item: ' + (err?.message || 'Falha'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const itensPorComp = (compId: string) => {
+    return itens
+      .filter(i => i.compartimento_id === compId)
+      .sort((a, b) => (a.sort_order - b.sort_order) || a.nome.localeCompare(b.nome));
+  };
   const itensSemComp = itens.filter(i => !i.compartimento_id);
   const totalUnidades = itens.reduce((acc, i) => acc + i.quantidade, 0);
 
@@ -396,7 +438,7 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
                         {compItens.length === 0 ? (
                           <p className="text-xs text-stone-400 italic py-5 text-center">Nenhum equipamento neste compartimento.</p>
                         ) : (
-                          compItens.map(item => {
+                          compItens.map((item, itemIdx) => {
                             const st = statusInfo(item.status);
                             const emoji = fonteEmoji[item.fonte];
                             const isDeleting = deletandoId === item.id;
@@ -406,6 +448,26 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
                                 className={`flex items-center justify-between px-4 py-2.5 hover:bg-stone-50 transition-colors group ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}
                               >
                                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                  {/* Botões Reordenar Item Cima/Baixo */}
+                                  <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => moverItem(item, compItens, 'up')}
+                                      disabled={itemIdx === 0 || loading}
+                                      title="Mover item para cima"
+                                      className="p-0.5 text-stone-400 hover:text-stone-800 disabled:opacity-20 transition-colors cursor-pointer"
+                                    >
+                                      <span className="material-symbols-outlined text-[13px]">arrow_upward</span>
+                                    </button>
+                                    <button
+                                      onClick={() => moverItem(item, compItens, 'down')}
+                                      disabled={itemIdx === compItens.length - 1 || loading}
+                                      title="Mover item para baixo"
+                                      className="p-0.5 text-stone-400 hover:text-stone-800 disabled:opacity-20 transition-colors cursor-pointer"
+                                    >
+                                      <span className="material-symbols-outlined text-[13px]">arrow_downward</span>
+                                    </button>
+                                  </div>
+
                                   <span className="text-base">{emoji}</span>
                                   <div className="min-w-0">
                                     <p className="text-xs font-bold text-stone-800 truncate">{item.nome}</p>

@@ -200,6 +200,33 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
     }
   };
 
+  const moverCompartimento = async (id: string, direcao: 'up' | 'down') => {
+    const idx = compartimentos.findIndex(c => c.id === id);
+    if (idx === -1) return;
+    const targetIdx = direcao === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= compartimentos.length) return;
+
+    const compAtual = compartimentos[idx];
+    const compOutro = compartimentos[targetIdx];
+
+    const novaOrdemAtual = compOutro.ordem ?? (targetIdx + 1);
+    const novaOrdemOutro = compAtual.ordem ?? (idx + 1);
+
+    try {
+      setLoading(true);
+      await Promise.all([
+        supabase.from('compartimentos_viatura').update({ ordem: novaOrdemAtual }).eq('id', compAtual.id),
+        supabase.from('compartimentos_viatura').update({ ordem: novaOrdemOutro }).eq('id', compOutro.id),
+      ]);
+      await recarregarCompartimentos();
+      if (onUpdated) onUpdated();
+    } catch (err: any) {
+      toast.error('Erro ao reordenar compartimento: ' + (err?.message || 'Falha'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-rustic-border shadow-lg p-6 max-w-2xl mx-auto space-y-6">
       {/* Cabeçalho */}
@@ -237,6 +264,26 @@ export const GerenciarCompartimentos: React.FC<GerenciarCompartimentosProps> = (
               className="flex items-center justify-between p-3 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl transition-colors"
             >
               <div className="flex items-center gap-3">
+                {/* Botões Reordenar Cima/Baixo */}
+                <div className="flex flex-col gap-0.5">
+                  <button
+                    onClick={() => moverCompartimento(comp.id, 'up')}
+                    disabled={index === 0 || loading}
+                    title="Mover para cima"
+                    className="p-0.5 text-stone-400 hover:text-stone-800 disabled:opacity-25 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+                  </button>
+                  <button
+                    onClick={() => moverCompartimento(comp.id, 'down')}
+                    disabled={index === compartimentos.length - 1 || loading}
+                    title="Mover para baixo"
+                    className="p-0.5 text-stone-400 hover:text-stone-800 disabled:opacity-25 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                  </button>
+                </div>
+
                 <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-md">
                   Nº {comp.ordem || index + 1}
                 </span>
