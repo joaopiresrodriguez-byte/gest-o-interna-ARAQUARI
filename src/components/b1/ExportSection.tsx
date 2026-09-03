@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Personnel, Vacation, SigrhExport, B1Course, RankHistory, DisciplinaryRecord } from '../../services/types';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { toast } from 'sonner';
+import { supabase } from '../../services/supabase';
 
 interface Props {
     personnelList: Personnel[];
