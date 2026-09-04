@@ -34,10 +34,10 @@ export const BirthdayCard = React.memo<BirthdayCardProps>(({ selectedDate }) => 
 
     return (
         <div className="bg-surface rounded-xl border border-rustic-border shadow-sm p-4 animate-slide-in">
-            <h3 className="text-sm font-black text-[#2c1810] mb-3 flex items-center gap-2">
+            <h2 className="text-base font-bold text-[#2c1810] mb-3 flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">cake</span>
                 Aniversariantes do Dia
-            </h3>
+            </h2>
             <div className="space-y-3">
                 {birthdays.map(p => (
                     <div key={p.id} className="flex items-center gap-3 bg-background-light p-2 rounded-lg border border-rustic-border/50">

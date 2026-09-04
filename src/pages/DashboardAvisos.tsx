@@ -483,7 +483,7 @@ const DashboardAvisos: React.FC = () => {
             {/* CREATE NEW AVISO (Para o Próximo Plantão) */}
             {isEditor && (
               <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-6">
-                <h2 className="font-bold text-[#2c1810] mb-2 flex items-center gap-2 text-sm">
+                <h2 className="font-bold text-[#2c1810] mb-2 flex items-center gap-2 text-base">
                   <span className="material-symbols-outlined text-primary">edit_note</span>
                   Deixar Aviso para o Próximo Plantão
                 </h2>
@@ -515,8 +515,8 @@ const DashboardAvisos: React.FC = () => {
               <div className="absolute top-0 right-0 p-4 opacity-5">
                 <span className="material-symbols-outlined text-9xl text-yellow-600">campaign</span>
               </div>
-              <h2 className="font-black text-yellow-800 mb-4 flex items-center gap-2 text-lg">
-                <span className="material-symbols-outlined">campaign</span>
+              <h2 className="font-bold text-[#2c1810] mb-4 flex items-center gap-2 text-base">
+                <span className="material-symbols-outlined text-primary">campaign</span>
                 Aviso do Plantão Anterior ({formatDateBR(targetDate)})
               </h2>
               {avisoDoDia ? (
@@ -557,8 +557,8 @@ const DashboardAvisos: React.FC = () => {
             {/* MISSÕES DO DIA + TREINAMENTOS */}
             <section className="bg-surface rounded-xl border border-rustic-border shadow-sm overflow-hidden">
               <div className="bg-gradient-to-r from-[#2c1810] to-[#4a2c20] px-6 py-4 flex justify-between items-center">
-                <h2 className="text-white font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined">format_list_bulleted</span>
+                <h2 className="text-white font-bold text-base flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary-light">format_list_bulleted</span>
                   Missões do Dia
                   {unifiedItems.length > 0 && (
                     <span className="text-white/60 text-xs font-normal ml-1">({completedMissions}/{missions.length})</span>
@@ -771,8 +771,8 @@ const DashboardAvisos: React.FC = () => {
             {/* Pendências (from checklist) */}
             {pendingNotices.length > 0 && (
               <section className="bg-red-50 rounded-xl border border-red-200 shadow-sm p-6">
-                <h2 className="font-black text-red-800 mb-4 flex items-center gap-2">
-                  <span className="material-symbols-outlined">report_problem</span>
+                <h2 className="font-bold text-[#2c1810] mb-4 flex items-center gap-2 text-base">
+                  <span className="material-symbols-outlined text-primary">report_problem</span>
                   Pendências Ativas
                   <span className="text-[10px] font-bold bg-red-200 text-red-800 px-2 py-0.5 rounded-full">{pendingNotices.length}</span>
                 </h2>
@@ -812,15 +812,15 @@ const DashboardAvisos: React.FC = () => {
 
             {/* Alteração de Efetivo */}
             <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-5 space-y-5">
-              <h2 className="font-bold text-[#2c1810] flex items-center gap-2 text-sm border-b border-rustic-border/30 pb-3">
+              <h2 className="font-bold text-[#2c1810] flex items-center gap-2 text-base border-b border-rustic-border/30 pb-3">
                 <span className="material-symbols-outlined text-primary">groups</span>
                 Alteração de Efetivo
               </h2>
 
               {/* 1. Guarnição de Serviço do Dia */}
               <div className="space-y-3">
-                <h3 className="text-xs font-black uppercase text-rustic-brown/70 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">shield_person</span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-rustic-brown flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-primary">shield_person</span>
                   Guarnição de Serviço do Dia
                   {escalaMilitares.length > 0 && (
                     <div className="flex items-center gap-1.5 ml-auto">
@@ -926,8 +926,8 @@ const DashboardAvisos: React.FC = () => {
 
               {/* 2. Trocas de Serviço do Dia */}
               <div className="space-y-3 pt-3 border-t border-rustic-border/30">
-                <h3 className="text-xs font-black uppercase text-rustic-brown/70 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">published_with_changes</span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-rustic-brown flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-primary">published_with_changes</span>
                   Trocas de Serviço do Dia
                   {swapsForToday.length > 0 && (
                     <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full ml-auto">
@@ -1028,8 +1028,8 @@ const DashboardAvisos: React.FC = () => {
 
               {/* 3. Férias e Afastamentos Ativos no Dia */}
               <div className="space-y-3 pt-3 border-t border-rustic-border/30">
-                <h3 className="text-xs font-black uppercase text-rustic-brown/70 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">flight_takeoff</span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-rustic-brown flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-primary">flight_takeoff</span>
                   Férias e Afastamentos Ativos
                   {vacationsOnDate.length > 0 && (
                     <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full ml-auto">
@@ -1067,7 +1067,7 @@ const DashboardAvisos: React.FC = () => {
             {/* Status da Frota */}
             <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="font-bold text-[#2c1810] flex items-center gap-2 text-sm">
+                <h2 className="font-bold text-[#2c1810] flex items-center gap-2 text-base">
                   <span className="material-symbols-outlined text-primary">directions_car</span>
                   Status da Frota
                 </h2>
@@ -1149,7 +1149,7 @@ const DashboardAvisos: React.FC = () => {
             {/* HISTÓRICO DE AVISOS */}
             {reports.length > 0 && (
               <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-6">
-                <h2 className="font-bold text-[#2c1810] mb-3 flex items-center gap-2 text-sm">
+                <h2 className="font-bold text-[#2c1810] mb-3 flex items-center gap-2 text-base">
                   <span className="material-symbols-outlined text-primary">history</span>
                   Histórico de Avisos
                 </h2>
@@ -1181,7 +1181,7 @@ const DashboardAvisos: React.FC = () => {
             {/* Read-only view for readers */}
             {!isEditor && reports.length > 0 && (
               <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-6">
-                <h2 className="font-bold text-[#2c1810] mb-3 flex items-center gap-2 text-sm">
+                <h2 className="font-bold text-[#2c1810] mb-3 flex items-center gap-2 text-base">
                   <span className="material-symbols-outlined text-primary">history</span>
                   Histórico de Avisos
                 </h2>
