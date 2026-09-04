@@ -18,3 +18,17 @@ root.render(
 
 // Inicia o scheduler de sincronização com o Google Sheets em segundo plano
 startSyncScheduler();
+
+// Registra o Service Worker para suporte PWA (cache offline + instalação)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then(reg => {
+        console.log('SW registrado:', reg.scope);
+      })
+      .catch(err => {
+        console.error('Erro ao registrar SW:', err);
+      });
+  });
+}

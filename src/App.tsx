@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import { LoadingFallback } from './components/LoadingFallback';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import NotificationBell from './components/NotificationBell';
+import InstallBanner from './components/shared/InstallBanner';
 
 // Lazy loading de páginas para code splitting
 const DashboardAvisos = lazy(() => import('./pages/DashboardAvisos'));
@@ -272,6 +273,7 @@ const App: React.FC = () => {
           </Routes>
         </RouteErrorBoundary>
       </AuthProvider>
+      <InstallBanner />
     </BrowserRouter>
   );
 };
