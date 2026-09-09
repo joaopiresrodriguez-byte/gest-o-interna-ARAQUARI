@@ -21,6 +21,8 @@ interface ItemExtrato {
   compartimento_id?: string;
   compartimento_nome?: string;
   sort_order?: number;
+  is_cautelado?: boolean;
+  cautela_info?: string;
 }
 
 interface CompartimentoGroup {
@@ -119,6 +121,18 @@ export function ExtratoPublico() {
 
         await recarregarConferencias();
 
+        // Carregar cautelas ativas para mapear itens acautelados
+        const { data: cautelasAtivasData } = await supabase
+          .from('cautelas')
+          .select('item_id, item_nome, solicitante, retirado_por, numero_cautela')
+          .eq('status', 'ativo');
+
+        const cautelaMap: Record<string, { solicitante: string; retirado_por: string; numero_cautela: string }> = {};
+        (cautelasAtivasData || []).forEach(c => {
+          if (c.item_id) cautelaMap[c.item_id] = c;
+          if (c.item_nome) cautelaMap[c.item_nome.toLowerCase().trim()] = c;
+        });
+
         // 1. COMPARTIMENTO INDIVIDUAL
         if (tipo === 'compartimento') {
           const { data: comp } = await supabase
@@ -132,115 +146,56 @@ export function ExtratoPublico() {
             let viaturaPlaca = '';
 
             if (comp.viatura_id) {
-              const { data: viat } = await supabase
-                .from('viaturas')
-                .select('nome, placa')
+              const { data: fleetViat } = await supabase
+                .from('fleet')
+                .select('name, plate')
                 .eq('id', comp.viatura_id)
                 .single();
 
-              if (!viat) {
-                const { data: fleetViat } = await supabase
-                  .from('fleet')
-                  .select('name, plate')
-                  .eq('id', comp.viatura_id)
-                  .single();
-
-                if (fleetViat) {
-                  viaturaNome = fleetViat.name;
-                  viaturaPlaca = fleetViat.plate || '';
-                }
-              } else {
-                viaturaNome = viat.nome;
-                viaturaPlaca = viat.placa || '';
+              if (fleetViat) {
+                viaturaNome = fleetViat.name;
+                viaturaPlaca = fleetViat.plate || '';
               }
             }
 
             const headerInfo = viaturaNome ? `${viaturaNome} ${viaturaPlaca ? `(${viaturaPlaca})` : ''}` : '';
             setTitulo(`${comp.nome} ${headerInfo ? `— ${headerInfo}` : ''}`);
             setLocalTipo('Compartimento');
+
+            const { data: checkData } = await supabase
+              .from('checklist_items')
+              .select('id, item_name, category, quantidade, is_active, sort_order, description')
+              .eq('compartimento_id', id)
+              .eq('is_active', true)
+              .order('sort_order', { ascending: true })
+              .limit(1000);
+
+            const todosItens: ItemExtrato[] = (checkData || []).map(ci => {
+              const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
+              return {
+                id: ci.id,
+                name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
+                type: `✅ ${ci.category || 'Equipamento'}`,
+                status: ci.is_active === false ? 'down' : 'Ok',
+                sort_order: Number(ci.sort_order) || 0,
+                is_cautelado: Boolean(infoCautela),
+                cautela_info: infoCautela ? `${infoCautela.retirado_por || infoCautela.solicitante} (${infoCautela.numero_cautela})` : undefined,
+              };
+            });
+
+            setItens(todosItens);
+            setGrupos([{
+              id: id,
+              nome: 'Itens do Compartimento',
+              itens: todosItens,
+            }]);
+            setCarregando(false);
+            return;
           } else {
             setErro('Compartimento não encontrado.');
             setCarregando(false);
             return;
           }
-
-          const { data: equip } = await supabase
-            .from('equipamentos')
-            .select('id, nome, tipo, numero_serie, quantidade, status, sort_order')
-            .eq('compartimento_id', id)
-            .limit(1000);
-
-          const equipItens: ItemExtrato[] = (equip && equip.length > 0)
-            ? equip.map(e => ({
-                id: e.id,
-                name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
-                type: `🔧 ${e.tipo || 'Equipamento'}`,
-                patrimonio_number: e.numero_serie,
-                status: e.status || 'Ok',
-                sort_order: Number(e.sort_order) || 0,
-              }))
-            : await (async () => {
-                const { data: fleetData } = await supabase
-                  .from('fleet')
-                  .select('id, name, type, patrimonio_number, status, brand, plate, sort_order')
-                  .eq('compartimento_id', id)
-                  .limit(1000);
-                return (fleetData || []).map(f => ({
-                  ...f,
-                  type: `🔧 ${f.type || 'Equipamento'}`,
-                  sort_order: Number(f.sort_order) || 0,
-                }));
-              })();
-
-          const { data: consumo } = await supabase
-            .from('materiais_consumo')
-            .select('id, nome, unidade, quantidade, estoque_minimo, categoria, sort_order')
-            .eq('compartimento_id', id)
-            .limit(1000);
-
-          const consumoItens: ItemExtrato[] = (consumo || []).map(c => ({
-            id: c.id,
-            name: c.nome,
-            type: `📦 Consumo (${c.categoria || 'Geral'})`,
-            patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
-            status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
-            sort_order: Number(c.sort_order) || 0,
-          }));
-
-          const { data: checkData } = await supabase
-            .from('checklist_items')
-            .select('id, item_name, category, quantidade, is_active, sort_order')
-            .eq('compartimento_id', id)
-            .eq('is_active', true)
-            .limit(1000);
-
-          const checkItens: ItemExtrato[] = (checkData || []).map(ci => ({
-            id: ci.id,
-            name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
-            type: `✅ ${ci.category || 'Equipamento'}`,
-            status: ci.is_active === false ? 'down' : 'Ok',
-            sort_order: Number(ci.sort_order) || 0,
-          }));
-
-          const todosItensMap = new Map<string, ItemExtrato>();
-          [...equipItens, ...consumoItens, ...checkItens].forEach(it => {
-            if (!todosItensMap.has(it.id)) todosItensMap.set(it.id, it);
-          });
-          const todosItens = Array.from(todosItensMap.values()).sort((a, b) => {
-            if ((a.sort_order || 0) !== (b.sort_order || 0)) {
-              return (a.sort_order || 0) - (b.sort_order || 0);
-            }
-            return a.name.localeCompare(b.name);
-          });
-
-          setItens(todosItens);
-          setGrupos([{
-            id: id,
-            nome: 'Itens do Compartimento',
-            itens: todosItens,
-          }]);
-          setCarregando(false);
-          return;
         }
 
         // 2. VIATURA COMPLETA
@@ -276,62 +231,9 @@ export function ExtratoPublico() {
 
           const compIds = (comps || []).map(c => c.id);
 
-          let itensFleet: ItemExtrato[] = [];
-          if (compIds.length > 0) {
-            const { data: fleetItems } = await supabase
-              .from('fleet')
-              .select('id, name, type, patrimonio_number, status, brand, plate, compartimento_id, sort_order')
-              .in('compartimento_id', compIds)
-              .neq('type', 'Viatura')
-              .limit(1000);
-
-            itensFleet = (fleetItems || []).map(f => ({
-              ...f,
-              type: `🔧 ${f.type}`,
-              compartimento_id: f.compartimento_id,
-              compartimento_nome: f.compartimento_id ? mapaComps[f.compartimento_id] : undefined,
-              sort_order: Number(f.sort_order) || 0,
-            }));
-          }
-
-          const { data: equipItems } = await supabase
-            .from('equipamentos')
-            .select('id, nome, tipo, numero_serie, quantidade, status, compartimento_id, sort_order')
-            .eq('viatura_id', id)
-            .limit(1000);
-
-          const itensEquip: ItemExtrato[] = (equipItems || []).map(e => ({
-            id: e.id,
-            name: `${e.nome}${e.quantidade && e.quantidade > 1 ? ` (x${e.quantidade})` : ''}`,
-            type: `🔧 ${e.tipo || 'Equipamento'}`,
-            patrimonio_number: e.numero_serie,
-            status: e.status || 'Ok',
-            compartimento_id: e.compartimento_id,
-            compartimento_nome: e.compartimento_id ? mapaComps[e.compartimento_id] : undefined,
-            sort_order: Number(e.sort_order) || 0,
-          }));
-
-          const { data: consumoData } = await supabase
-            .from('materiais_consumo')
-            .select('id, nome, unidade, quantidade, estoque_minimo, categoria, compartimento_id, sort_order')
-            .eq('viatura_id', id)
-            .limit(1000);
-
-          const itensConsumo: ItemExtrato[] = (consumoData || []).map(c => ({
-            id: c.id,
-            name: c.nome,
-            type: `📦 Consumo (${c.categoria || 'Geral'})`,
-            patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
-            status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
-            compartimento_id: c.compartimento_id,
-            compartimento_nome: c.compartimento_id ? mapaComps[c.compartimento_id] : undefined,
-            sort_order: Number(c.sort_order) || 0,
-          }));
-
-          let itensChecklist: ItemExtrato[] = [];
           const { data: checkData } = await supabase
             .from('checklist_items')
-            .select('id, item_name, category, quantidade, is_active, compartimento_id, sort_order')
+            .select('id, item_name, category, quantidade, is_active, compartimento_id, viatura_id, sort_order, description')
             .or(
               compIds.length > 0
                 ? `viatura_id.eq.${id},compartimento_id.in.(${compIds.join(',')})`
@@ -340,21 +242,20 @@ export function ExtratoPublico() {
             .eq('is_active', true)
             .limit(1000);
 
-          itensChecklist = (checkData || []).map(ci => ({
-            id: ci.id,
-            name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
-            type: `✅ ${ci.category || 'Equipamento'}`,
-            status: ci.is_active === false ? 'down' : 'Ok',
-            compartimento_id: ci.compartimento_id || undefined,
-            compartimento_nome: ci.compartimento_id ? mapaComps[ci.compartimento_id] : undefined,
-            sort_order: Number(ci.sort_order) || 0,
-          }));
-
-          const todosItensMap = new Map<string, ItemExtrato>();
-          [...itensFleet, ...itensEquip, ...itensConsumo, ...itensChecklist].forEach(it => {
-            if (!todosItensMap.has(it.id)) todosItensMap.set(it.id, it);
+          const todosItens: ItemExtrato[] = (checkData || []).map(ci => {
+            const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
+            return {
+              id: ci.id,
+              name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
+              type: `✅ ${ci.category || 'Equipamento'}`,
+              status: ci.is_active === false ? 'down' : 'Ok',
+              compartimento_id: ci.compartimento_id || undefined,
+              compartimento_nome: ci.compartimento_id ? mapaComps[ci.compartimento_id] : undefined,
+              sort_order: Number(ci.sort_order) || 0,
+              is_cautelado: Boolean(infoCautela),
+              cautela_info: infoCautela ? `${infoCautela.retirado_por || infoCautela.solicitante} (${infoCautela.numero_cautela})` : undefined,
+            };
           });
-          const todosItens = Array.from(todosItensMap.values());
 
           setItens(todosItens);
 
@@ -362,12 +263,7 @@ export function ExtratoPublico() {
           (comps || []).forEach(comp => {
             const itensDoComp = todosItens
               .filter(i => i.compartimento_id === comp.id)
-              .sort((a, b) => {
-                if ((a.sort_order || 0) !== (b.sort_order || 0)) {
-                  return (a.sort_order || 0) - (b.sort_order || 0);
-                }
-                return a.name.localeCompare(b.name);
-              });
+              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
             gruposMontados.push({
               id: comp.id,
@@ -379,12 +275,7 @@ export function ExtratoPublico() {
 
           const semComp = todosItens
             .filter(i => !i.compartimento_id || !mapaComps[i.compartimento_id])
-            .sort((a, b) => {
-              if ((a.sort_order || 0) !== (b.sort_order || 0)) {
-                return (a.sort_order || 0) - (b.sort_order || 0);
-              }
-              return a.name.localeCompare(b.name);
-            });
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
           if (semComp.length > 0) {
             gruposMontados.push({
@@ -416,41 +307,31 @@ export function ExtratoPublico() {
         setTitulo(local.nome);
         setLocalTipo(local.tipo === 'viatura' ? 'Viatura' : 'Ambiente');
 
-        const { data: fleetData } = await supabase
-          .from('fleet')
-          .select('id, name, type, patrimonio_number, status, brand, plate, location, local_id')
-          .or(`local_id.eq.${id},location.ilike.${local.nome}`)
-          .order('name')
+        const { data: checkDataLocal } = await supabase
+          .from('checklist_items')
+          .select('id, item_name, category, quantidade, is_active, sort_order, description')
+          .eq('viatura_id', id)
+          .eq('is_active', true)
           .limit(1000);
 
-        const { data: consumoData } = await supabase
-          .from('materiais_consumo')
-          .select('id, nome, unidade, quantidade, estoque_minimo, categoria, local_id, viatura_id')
-          .or(local.tipo === 'viatura' ? `viatura_id.eq.${id}` : `local_id.eq.${id}`)
-          .order('nome')
-          .limit(1000);
+        const todosItensLocal: ItemExtrato[] = (checkDataLocal || []).map(ci => {
+          const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
+          return {
+            id: ci.id,
+            name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
+            type: `✅ ${ci.category || 'Equipamento'}`,
+            status: ci.is_active === false ? 'down' : 'Ok',
+            sort_order: Number(ci.sort_order) || 0,
+            is_cautelado: Boolean(infoCautela),
+            cautela_info: infoCautela ? `${infoCautela.retirado_por || infoCautela.solicitante} (${infoCautela.numero_cautela})` : undefined,
+          };
+        });
 
-        const itensFleet = (fleetData || [])
-          .filter(item => item.id !== id)
-          .map(item => ({
-            ...item,
-            type: `🔧 ${item.type}`,
-          }));
-
-        const itensConsumo = (consumoData || []).map(c => ({
-          id: c.id,
-          name: c.nome,
-          type: `📦 Consumo (${c.categoria || 'Geral'})`,
-          patrimonio_number: `${c.quantidade} ${c.unidade || 'un'}`,
-          status: c.quantidade > (c.estoque_minimo || 0) ? 'Ok' : 'Baixo Estoque',
-        }));
-
-        const todosItens = [...itensFleet, ...itensConsumo];
-        setItens(todosItens);
+        setItens(todosItensLocal);
         setGrupos([{
           id: 'ambiente-geral',
           nome: `Itens do Local (${local.nome})`,
-          itens: todosItens,
+          itens: todosItensLocal,
         }]);
 
       } catch (err: any) {
@@ -773,9 +654,16 @@ export function ExtratoPublico() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                           {/* INFORMAÇÃO DO ITEM */}
                           <div style={{ flex: 1, minWidth: '180px' }}>
-                            <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#0f172a', lineHeight: '1.4' }}>
-                              {currentIndex}. {item.name}
-                            </p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#0f172a', lineHeight: '1.4' }}>
+                                {currentIndex}. {item.name}
+                              </p>
+                              {item.is_cautelado && (
+                                <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#2563eb', color: '#ffffff', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+                                  🔒 ACAUTELADO {item.cautela_info ? `— ${item.cautela_info}` : ''}
+                                </span>
+                              )}
+                            </div>
                             <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                               <span style={{ fontWeight: '600' }}>{item.type}</span>
                               {item.brand && <span>• {item.brand}</span>}

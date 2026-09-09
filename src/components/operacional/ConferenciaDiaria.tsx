@@ -40,6 +40,8 @@ interface ItemFleet {
   numero_serie?: string;
   quantidade?: number;
   unidade?: string;
+  is_cautelado?: boolean;
+  cautela_info?: string;
 }
 
 interface DadosConferencia {
@@ -50,18 +52,26 @@ interface DadosConferencia {
 }
 
 async function buscarDados(): Promise<DadosConferencia> {
-  const [r1, r2, r3, r7] = await Promise.all([
+  const [r1, r2, r3, r7, rCautelas] = await Promise.all([
     supabase.from('fleet').select('id, name, plate, status').eq('type', 'Viatura').order('name'),
     supabase.from('locais_equipamento').select('id, nome, tipo').eq('ativo', true).order('nome'),
     supabase.from('compartimentos_viatura').select('id, nome, posicao, viatura_id, ordem').eq('ativo', true).order('ordem', { ascending: true }),
     supabase.from('checklist_items').select('id, item_name, category, is_active, description, quantidade, viatura_id, compartimento_id').eq('is_active', true),
+    supabase.from('cautelas').select('item_id, item_nome, solicitante, retirado_por, numero_cautela').eq('status', 'ativo'),
   ]);
+
+  const cautelaMap: Record<string, { solicitante: string; retirado_por: string; numero_cautela: string }> = {};
+  (rCautelas.data || []).forEach((c: any) => {
+    if (c.item_id) cautelaMap[c.item_id] = c;
+    if (c.item_nome) cautelaMap[c.item_nome.toLowerCase().trim()] = c;
+  });
 
   const todosItens: ItemFleet[] = [];
 
   // Tabela principal do checklist operacional: checklist_items
   if (r7.data) {
     r7.data.forEach((ci: any) => {
+      const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
       todosItens.push({
         id: ci.id,
         name: ci.item_name || 'Item de Checklist',
@@ -71,6 +81,8 @@ async function buscarDados(): Promise<DadosConferencia> {
         local_id: ci.viatura_id || undefined,
         compartimento_id: ci.compartimento_id || undefined,
         quantidade: Number(ci.quantidade) || 1,
+        is_cautelado: Boolean(infoCautela),
+        cautela_info: infoCautela ? `${infoCautela.retirado_por || infoCautela.solicitante} (${infoCautela.numero_cautela})` : undefined,
       });
     });
   }
@@ -364,6 +376,11 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
             <span style={{ fontSize: '13px', color: '#1e293b', fontWeight: '600' }}>
               {tipo === 'consumo' ? '📋' : '🔧'} {item.name}
             </span>
+            {item.is_cautelado && (
+              <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#2563eb', color: '#ffffff', border: '1px solid #1d4ed8', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                🔒 ACAUTELADO {item.cautela_info ? `— ${item.cautela_info}` : ''}
+              </span>
+            )}
             {/* Indicador visual distinto para Falta Reposta ou Falta Normal */}
             {isOcorrencia && (
               conf?.reposto_reserva ? (
