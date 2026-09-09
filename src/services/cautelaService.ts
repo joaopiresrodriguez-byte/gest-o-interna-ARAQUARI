@@ -56,6 +56,7 @@ export const CautelaService = {
     data_retirada: string;
     data_prevista_devolucao?: string | null;
     observacoes?: string | null;
+    conferencia_retirada?: string | null;
   }): Promise<Cautela> {
     const numero_cautela = await this.gerarProximoNumeroCautela();
 
@@ -71,6 +72,7 @@ export const CautelaService = {
       data_retirada: payload.data_retirada || new Date().toISOString(),
       data_prevista_devolucao: payload.data_prevista_devolucao || null,
       observacoes: payload.observacoes || null,
+      conferencia_retirada: payload.conferencia_retirada || null,
       status: 'ativo',
     };
 
@@ -132,7 +134,8 @@ export const CautelaService = {
     condicao: CondicaoDevolucao,
     observacoesDevolucao?: string,
     dataDevolucao?: string,
-    devolvidoPor?: string
+    devolvidoPor?: string,
+    conferenciaDevol?: string
   ): Promise<Cautela> {
     const dataReal = dataDevolucao || new Date().toISOString();
 
@@ -143,6 +146,7 @@ export const CautelaService = {
         data_devolucao_real: dataReal,
         condicao_devolucao: condicao,
         observacoes_devolucao: observacoesDevolucao || null,
+        conferencia_devolucao: conferenciaDevol || null,
         devolvido_por: devolvidoPor || null,
         updated_at: new Date().toISOString(),
       })

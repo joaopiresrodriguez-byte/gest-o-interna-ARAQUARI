@@ -60,7 +60,7 @@ export const BcIntencaoPublica: React.FC = () => {
       } else {
         // Inicializar com 1 item padrão no dia 1º do mês de referência
         const diaPadrao = res.ciclo.mes_referencia ? `${res.ciclo.mes_referencia}-01` : '';
-        setIntencoes([{ dia: diaPadrao, horario_inicio: '07:00', horario_fim: '19:00' }]);
+        setIntencoes([{ dia: diaPadrao, horario_inicio: '08:00', horario_fim: '20:00' }]);
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao carregar link de intenções.');
@@ -78,7 +78,7 @@ export const BcIntencaoPublica: React.FC = () => {
     if (!ciclo) return;
     const proximoDiaNum = intencoes.length + 1;
     const diaFormatted = `${ciclo.mes_referencia}-${String(proximoDiaNum).padStart(2, '0')}`;
-    setIntencoes(prev => [...prev, { dia: diaFormatted, horario_inicio: '07:00', horario_fim: '19:00' }]);
+    setIntencoes(prev => [...prev, { dia: diaFormatted, horario_inicio: '08:00', horario_fim: '20:00' }]);
 
     // Rolar a tela suavemente para baixo para acompanhar o novo item adicionado
     setTimeout(() => {
@@ -337,25 +337,43 @@ export const BcIntencaoPublica: React.FC = () => {
                     {/* HORÁRIO INÍCIO */}
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">Horário Início</label>
-                      <input
-                        type="time"
-                        value={item.horario_inicio}
-                        onChange={e => atualizarCampo(index, 'horario_inicio', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                        required
-                      />
+                      <div className="flex gap-2">
+                        {['08:00', '20:00'].map(h => (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => atualizarCampo(index, 'horario_inicio', h)}
+                            className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                              item.horario_inicio === h
+                                ? 'bg-red-600 text-white border-red-500 shadow-md'
+                                : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500 hover:text-white'
+                            }`}
+                          >
+                            {h}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* HORÁRIO FIM */}
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1">Horário Fim</label>
-                      <input
-                        type="time"
-                        value={item.horario_fim}
-                        onChange={e => atualizarCampo(index, 'horario_fim', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                        required
-                      />
+                      <div className="flex gap-2">
+                        {['20:00', '08:00'].map(h => (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => atualizarCampo(index, 'horario_fim', h)}
+                            className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                              item.horario_fim === h
+                                ? 'bg-red-600 text-white border-red-500 shadow-md'
+                                : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500 hover:text-white'
+                            }`}
+                          >
+                            {h}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 

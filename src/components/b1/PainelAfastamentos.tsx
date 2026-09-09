@@ -22,6 +22,11 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
     // Mês atual YYYY-MM
     const curMonthPrefix = `${curYear}-${String(curMonth + 1).padStart(2, '0')}`;
 
+    // 30 dias atrás (YYYY-MM-DD) para janela móvel de retornos
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
     // Nome auxiliar do militar
     const getMilitarName = (v: Vacation) => {
         const p = personnelList.find(item => item.id === v.personnel_id);
@@ -55,10 +60,10 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
         return v.start_date && v.end_date && v.start_date <= todayStr && v.end_date >= todayStr;
     });
 
-    // SEÇÃO C — RETORNARAM ESTE MÊS
+    // SEÇÃO C — RETORNARAM (ÚLTIMOS 30 DIAS)
     const retornaramEsteMes = vacations.filter(v => {
         if (v.status === 'cancelado') return false;
-        return v.end_date && v.end_date.startsWith(curMonthPrefix) && v.end_date < todayStr;
+        return v.end_date && v.end_date >= thirtyDaysAgoStr && v.end_date < todayStr;
     });
 
     return (
@@ -142,13 +147,13 @@ export default function PainelAfastamentos({ personnelList, vacations }: Props) 
                     </div>
                 </div>
 
-                {/* SEÇÃO C — RETORNARAM ESTE MÊS */}
+                {/* SEÇÃO C — RETORNARAM (ÚLTIMOS 30 DIAS) */}
                 <div className="bg-emerald-50/30 border border-emerald-200/80 rounded-xl p-3 flex flex-col justify-start h-full min-w-0">
                     <div>
                         <div className="flex items-center justify-between mb-2.5 border-b border-emerald-200/60 pb-2">
                             <span className="font-black text-[11px] uppercase tracking-wide text-emerald-800 flex items-center gap-1">
                                 <span className="material-symbols-outlined text-sm">assignment_return</span>
-                                Retornaram Este Mês
+                                Retornaram (Últimos 30 Dias)
                             </span>
                             <span className="text-[10px] font-black bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
                                 {retornaramEsteMes.length}

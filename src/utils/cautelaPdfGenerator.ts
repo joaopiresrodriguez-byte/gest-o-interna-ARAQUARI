@@ -255,6 +255,20 @@ export const imprimirDocumentoCautela = (cautela: Cautela) => {
           ` : ''}
         </div>
 
+        ${cautela.conferencia_retirada ? `
+          <div class="box box-full">
+            <div class="box-title">Conferência do Item na Retirada</div>
+            <div class="value" style="font-weight: 500;">${cautela.conferencia_retirada}</div>
+          </div>
+        ` : ''}
+
+        ${cautela.conferencia_devolucao ? `
+          <div class="box box-full">
+            <div class="box-title">Conferência do Item na Devolução</div>
+            <div class="value" style="font-weight: 500;">${cautela.conferencia_devolucao}</div>
+          </div>
+        ` : ''}
+
         ${cautela.observacoes ? `
           <div class="box box-full">
             <div class="box-title">Observações da Retirada</div>

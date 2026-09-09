@@ -29,6 +29,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
   const [retiradoPor, setRetiradoPor] = useState<string>('');
   const [mtclCpfRetirada, setMtclCpfRetirada] = useState<string>('');
   const [observacoesRetirada, setObservacoesRetirada] = useState<string>('');
+  const [conferenciaRetirada, setConferenciaRetirada] = useState<string>('');
   const [salvandoRetirada, setSalvandoRetirada] = useState<boolean>(false);
 
   // Form Devolução State
@@ -36,6 +37,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
   const [dataDevolucaoReal, setDataDevolucaoReal] = useState<string>(new Date().toISOString().slice(0, 16));
   const [condicaoDevolucao, setCondicaoDevolucao] = useState<CondicaoDevolucao>('perfeito_estado');
   const [observacoesDevolucao, setObservacoesDevolucao] = useState<string>('');
+  const [conferenciaDevolucao, setConferenciaDevolucao] = useState<string>('');
   const [devolvidoPor, setDevolvidoPor] = useState<string>('');
   const [salvandoDevolucao, setSalvandoDevolucao] = useState<boolean>(false);
 
@@ -153,6 +155,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
         data_retirada: dataRetirada ? new Date(dataRetirada).toISOString() : new Date().toISOString(),
         data_prevista_devolucao: dataPrevista ? new Date(dataPrevista).toISOString() : null,
         observacoes: observacoesRetirada.trim() || null,
+        conferencia_retirada: conferenciaRetirada.trim() || null,
       });
 
       toast.success(`Cautela ${novaCautela.numero_cautela} registrada com sucesso!`);
@@ -179,6 +182,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
     setRetiradoPor('');
     setMtclCpfRetirada('');
     setObservacoesRetirada('');
+    setConferenciaRetirada('');
   };
 
   // Handler Registrar Devolução
@@ -198,7 +202,8 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
         condicaoDevolucao,
         observacoesDevolucao.trim() || undefined,
         dataDevolucaoReal ? new Date(dataDevolucaoReal).toISOString() : undefined,
-        devolvidoPor.trim()
+        devolvidoPor.trim(),
+        conferenciaDevolucao.trim() || undefined
       );
 
       toast.success(`Devolução da Cautela ${cautelaDevolucao.numero_cautela} concluída!`);
@@ -738,6 +743,20 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                 </div>
               </div>
 
+              {/* Conferência na Retirada */}
+              <div>
+                <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
+                  Conferência do Item na Retirada (Checklist / Estado do Material)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Relate o estado de conservação, acessórios entregues ou avarias pré-existentes..."
+                  value={conferenciaRetirada}
+                  onChange={e => setConferenciaRetirada(e.target.value)}
+                  className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-medium focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
               {/* Observações */}
               <div>
                 <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
@@ -847,6 +866,20 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                   <option value="avaria_grave">🔴 Com Avaria Grave</option>
                   <option value="item_perdido">❌ Item Perdido ou Não Devolvido</option>
                 </select>
+              </div>
+
+              {/* Conferência na Devolução */}
+              <div>
+                <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
+                  Conferência do Item na Devolução (Checklist / Estado na Recepção)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Relate o estado recebido, limpeza, presença de todos os acessórios..."
+                  value={conferenciaDevolucao}
+                  onChange={e => setConferenciaDevolucao(e.target.value)}
+                  className="w-full px-3 py-2 border border-rustic-border rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
 
               {/* Observações da Devolução */}

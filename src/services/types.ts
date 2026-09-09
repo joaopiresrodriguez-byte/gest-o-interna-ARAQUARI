@@ -48,6 +48,8 @@ export interface Cautela {
     condicao_devolucao?: CondicaoDevolucao | null;
     observacoes?: string | null;
     observacoes_devolucao?: string | null;
+    conferencia_retirada?: string | null;
+    conferencia_devolucao?: string | null;
     motivo_cancelamento?: string | null;
     status: StatusCautela;
     created_at?: string;

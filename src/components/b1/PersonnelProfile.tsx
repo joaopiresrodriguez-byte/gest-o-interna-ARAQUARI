@@ -53,6 +53,7 @@ const PersonnelProfile: React.FC<Props> = ({ person, rankHistory, swaps, discipl
                     </div>
                     {person.war_name && <p className="text-xs text-gray-400 mb-2">Nome de Guerra: {person.war_name}</p>}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div><span className="text-gray-400 block">Matrícula</span><span className="font-bold text-primary">{person.registration || '—'}</span></div>
                         <div><span className="text-gray-400 block">Tipo</span><span className="font-bold">{person.type}</span></div>
                         <div><span className="text-gray-400 block">Função</span><span className="font-bold">{person.role}</span></div>
                         <div><span className="text-gray-400 block">CPF</span><span className="font-bold">{person.cpf || '—'}</span></div>
