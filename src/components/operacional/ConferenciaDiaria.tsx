@@ -56,7 +56,7 @@ async function buscarDados(): Promise<DadosConferencia> {
     supabase.from('fleet').select('id, name, plate, status').eq('type', 'Viatura').order('name'),
     supabase.from('locais_equipamento').select('id, nome, tipo').eq('ativo', true).order('nome'),
     supabase.from('compartimentos_viatura').select('id, nome, posicao, viatura_id, ordem').eq('ativo', true).order('ordem', { ascending: true }),
-    supabase.from('checklist_items').select('id, item_name, category, is_active, description, quantidade, viatura_id, compartimento_id').eq('is_active', true),
+    supabase.from('checklist_items').select('id, item_name, category, is_active, description, quantidade, viatura_id, compartimento_id').eq('is_active', true).limit(2000),
     supabase.from('cautelas').select('item_id, item_nome, solicitante, retirado_por, numero_cautela').eq('status', 'ativo'),
   ]);
 
@@ -65,6 +65,9 @@ async function buscarDados(): Promise<DadosConferencia> {
     if (c.item_id) cautelaMap[c.item_id] = c;
     if (c.item_nome) cautelaMap[c.item_nome.toLowerCase().trim()] = c;
   });
+
+  const reservaLocalObj = (r2.data || []).find((l: any) => (l.nome || '').toLowerCase().includes('reserva')) || (r2.data || []).find((l: any) => (l.nome || '').toLowerCase().includes('central')) || (r2.data || [])[0];
+  const defaultLocalId = reservaLocalObj?.id;
 
   const todosItens: ItemFleet[] = [];
 
@@ -78,7 +81,7 @@ async function buscarDados(): Promise<DadosConferencia> {
         type: ci.category || 'Equipamento',
         status: ci.is_active === false ? 'down' : 'active',
         details: ci.description || '',
-        local_id: ci.viatura_id || undefined,
+        local_id: ci.viatura_id || defaultLocalId || undefined,
         compartimento_id: ci.compartimento_id || undefined,
         quantidade: Number(ci.quantidade) || 1,
         is_cautelado: Boolean(infoCautela),
