@@ -13,7 +13,7 @@ ALTER TABLE public.cautelas
 -- 2. Tabela historico_graduacao (promoções de militares e BCs)
 CREATE TABLE IF NOT EXISTS public.historico_graduacao (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  personnel_id UUID NOT NULL REFERENCES public.personnel(id) ON DELETE CASCADE,
+  personnel_id BIGINT NOT NULL REFERENCES public.personnel(id) ON DELETE CASCADE,
   graduacao TEXT NOT NULL,
   data_promocao DATE NOT NULL,
   observacao TEXT,
