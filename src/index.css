@@ -112,3 +112,59 @@ body {
     min-height: 100%;
     height: 100%;
 }
+
+/* ─────────────────────────────────────────
+   MOBILE RESPONSIVIDADE — Blocos 4 e 5
+   ───────────────────────────────────────── */
+
+/* Safe area inset for bottom navigation bar (iPhone notch / home bar) */
+.safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Responsive table: allow horizontal scroll without breaking layout */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+}
+
+.table-responsive table {
+    min-width: 600px;
+}
+
+/* Modals: ensure 90%+ width on mobile screens */
+@media (max-width: 767px) {
+    [role="dialog"],
+    .modal-container {
+        min-width: min(90vw, 100%) !important;
+        max-width: 95vw !important;
+        margin: 0 auto;
+    }
+
+    /* Grid collapse: force single column on narrow screens */
+    .mobile\:grid-cols-1 {
+        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    }
+
+    /* Buttons and form controls: full-width for easy tapping */
+    .mobile\:w-full {
+        width: 100% !important;
+    }
+}
+
+/* Prevent iOS font-size zoom on input focus (minimum 16px) */
+@media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+        font-size: max(16px, 1rem) !important;
+    }
+
+    /* Ensure buttons and interactive areas have adequate tap targets */
+    button,
+    [role="button"],
+    a {
+        min-height: 40px;
+    }
+}
