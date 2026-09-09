@@ -168,7 +168,7 @@ export function ExtratoPublico() {
               .eq('compartimento_id', id)
               .eq('is_active', true)
               .order('sort_order', { ascending: true })
-              .limit(1000);
+              .limit(2000);
 
             const todosItens: ItemExtrato[] = (checkData || []).map(ci => {
               const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
@@ -240,7 +240,7 @@ export function ExtratoPublico() {
                 : `viatura_id.eq.${id}`
             )
             .eq('is_active', true)
-            .limit(1000);
+            .limit(2000);
 
           const todosItens: ItemExtrato[] = (checkData || []).map(ci => {
             const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
@@ -312,7 +312,7 @@ export function ExtratoPublico() {
           .select('id, item_name, category, quantidade, is_active, sort_order, description')
           .eq('viatura_id', id)
           .eq('is_active', true)
-          .limit(1000);
+          .limit(2000);
 
         const todosItensLocal: ItemExtrato[] = (checkDataLocal || []).map(ci => {
           const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
