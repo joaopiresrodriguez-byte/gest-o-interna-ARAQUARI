@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SupabaseService, ProductReceipt, DailyMission, Training } from '../services/SupabaseService';
+import { OperationalService } from '../services/operationalService';
 import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -292,6 +293,13 @@ const CardMissao: React.FC<{
             )}
 
             <div className="flex flex-wrap items-center gap-2 mt-2">
+              {/* Data da missão */}
+              {missao.mission_date && (
+                <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-bold border border-blue-100 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px] align-middle">calendar_today</span>
+                  {new Date(missao.mission_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </span>
+              )}
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${priorityCfg.color}`}>
                 {priorityCfg.label}
               </span>
@@ -517,6 +525,8 @@ const Operacional: React.FC = () => {
     setLoading(true);
     try {
       const todayStr = new Date().toISOString().split('T')[0];
+      // Mês corrente no formato YYYY-MM
+      const mesAtual = new Date().toISOString().substring(0, 7);
 
       // Busca recebimentos separadamente para não bloquear o resto em caso de erro
       const receiptsPromise = SupabaseService.getProductsReceipts().catch((err) => {
@@ -526,16 +536,14 @@ const Operacional: React.FC = () => {
 
       const [recs, missionsData, trainingsData, escalaData] = await Promise.all([
         receiptsPromise,
-        supabase.from('daily_missions').select('*').order('created_at', { ascending: false }),
+        OperationalService.getDailyMissions({ mes: mesAtual }),
         SupabaseService.getTrainings(),
         SupabaseService.getEscalaByDate(todayStr)
       ]);
 
       setReceipts(recs);
       setEscalaHoje(escalaData);
-
-      const allMissions = (missionsData.data || []) as DailyMission[];
-      setMissions(allMissions);
+      setMissions(missionsData);
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
     } catch (error) {
       console.error("Error loading operational data:", error);
@@ -804,41 +812,6 @@ const Operacional: React.FC = () => {
                 </Button>
               )}
             </div>
-
-            {/* Mission Form */}
-            {showMissionForm && isEditor && (
-              <section className="bg-white rounded-xl shadow-sm border border-rustic-border p-6 animate-in slide-in-from-top duration-300">
-                <h3 className="text-sm font-black text-[#181111] uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">edit_note</span> Nova Missão
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <Input value={missionForm.title} onChange={v => setMissionForm(p => ({ ...p, title: v }))} placeholder="Título da Missão *" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <TextArea value={missionForm.description || ''} onChange={v => setMissionForm(p => ({ ...p, description: v }))} placeholder="Descrição (opcional)" rows={2} />
-                  </div>
-                  <Input value={missionForm.start_time} onChange={v => setMissionForm(p => ({ ...p, start_time: v }))} placeholder="Hora Início (ex: 08:00)" />
-                  <Input value={missionForm.end_time} onChange={v => setMissionForm(p => ({ ...p, end_time: v }))} placeholder="Hora Fim (ex: 17:00)" />
-                  <Input value={missionForm.responsible_name} onChange={v => setMissionForm(p => ({ ...p, responsible_name: v }))} placeholder="Responsável" />
-                  <select
-                    value={missionForm.priority}
-                    onChange={e => setMissionForm(p => ({ ...p, priority: e.target.value as any }))}
-                    className="h-12 px-4 rounded-xl border border-rustic-border bg-white text-sm font-bold focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="baixa">🟢 Baixa</option>
-                    <option value="media">🟡 Média</option>
-                    <option value="alta">🟠 Alta</option>
-                    <option value="urgente">🔴 Urgente</option>
-                  </select>
-                </div>
-                <div className="mt-4">
-                  <Button variant="success" size="lg" fullWidth icon="save" onClick={handleAddMission} loading={loading}>
-                    Criar Missão
-                  </Button>
-                </div>
-              </section>
-            )}
 
             {/* Missions + Trainings List */}
             <div className="space-y-3">

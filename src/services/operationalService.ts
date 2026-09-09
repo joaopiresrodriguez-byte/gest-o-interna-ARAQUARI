@@ -22,58 +22,43 @@ export const OperationalService = {
      */
     getDailyMissions: async (filters?: {
         data?: string;
+        mes?: string; // YYYY-MM — busca todas as missões do mês
         responsavel?: string;
         status?: string[];
     }): Promise<DailyMission[]> => {
         try {
-            // Se tem filtro de status (array), precisa usar query customizada
-            if (filters?.status && filters.status.length > 0) {
-                let query = supabase
-                    .from('daily_missions')
-                    .select('*')
-                    .in('status', filters.status);
+            let query = supabase
+                .from('daily_missions')
+                .select('*');
 
-                if (filters.data) {
-                    query = query.eq('mission_date', filters.data);
-                }
-                if (filters.responsavel) {
-                    query = query.eq('responsible_id', filters.responsavel);
-                }
-
-                const { data, error } = await query
-                    .order('created_at', { ascending: false });
-
-                if (error) {
-                    console.error('Error fetching daily missions:', error);
-                    return [];
-                }
-
-                return (data || []).map((m: any) => ({
-                    ...m,
-                    responsible_name: m.responsible // Already exists or mapped
-                        ? `${m.responsible.rank ? m.responsible.rank + ' ' : ''}${m.responsible.name}`
-                        : m.responsible_name
-                }));
+            // Filtro por mês completo (range gte/lte)
+            if (filters?.mes) {
+                const [ano, mes] = filters.mes.split('-').map(Number);
+                const inicio = `${filters.mes}-01`;
+                const ultimoDia = new Date(ano, mes, 0).getDate();
+                const fim = `${filters.mes}-${String(ultimoDia).padStart(2, '0')}`;
+                query = query.gte('mission_date', inicio).lte('mission_date', fim);
+            } else if (filters?.data) {
+                query = query.eq('mission_date', filters.data);
             }
 
-            // Filtros simples podem usar o BaseService
-            const simpleFilters: Record<string, unknown> = {};
-            if (filters?.data) simpleFilters.mission_date = filters.data;
-            if (filters?.responsavel) simpleFilters.responsible_id = filters.responsavel;
+            if (filters?.status && filters.status.length > 0) {
+                query = query.in('status', filters.status);
+            }
+            if (filters?.responsavel) {
+                query = query.eq('responsible_id', filters.responsavel);
+            }
 
-            const result = Object.keys(simpleFilters).length > 0
-                ? await dailyMissionsBase.query(simpleFilters, {
-                    orderBy: 'created_at',
-                    ascending: false,
-                })
-                : await dailyMissionsBase.getAll({
-                    orderBy: 'created_at',
-                    ascending: false,
-                });
+            const { data, error } = await query
+                .order('mission_date', { ascending: true })
+                .order('start_time', { ascending: true });
 
-            const flatData = Array.isArray(result) ? result : result.data;
+            if (error) {
+                console.error('Error fetching daily missions:', error);
+                return [];
+            }
 
-            return flatData;
+            return (data || []) as DailyMission[];
         } catch (error) {
             console.error('Error fetching daily missions:', error);
             throw error;
