@@ -667,10 +667,39 @@ const Operacional: React.FC = () => {
 
   // ============ COMPUTED VALUES ============
 
+  /**
+   * Datas de plantão da guarnição no mês corrente.
+   * Âncora = hoje. Ciclo = a cada 4 dias.
+   * Ex: hoje=09/09 → [09/09, 13/09, 17/09, 21/09, 25/09, 29/09]
+   */
+  const garrisonDates = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const year = today.getFullYear();
+    const month = today.getMonth(); // 0-indexed
+    const dates = new Set<string>();
+
+    let cursor = new Date(today);
+    // Avança pelo mês enquanto estiver no mesmo mês
+    while (cursor.getFullYear() === year && cursor.getMonth() === month) {
+      // Formata como YYYY-MM-DD sem usar toISOString para evitar fuso horário
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, '0');
+      const d = String(cursor.getDate()).padStart(2, '0');
+      dates.add(`${y}-${m}-${d}`);
+      cursor = new Date(cursor.getTime() + 4 * 24 * 60 * 60 * 1000);
+    }
+    return dates;
+  }, []);
+
   const filteredMissions = useMemo(() => {
-    if (missionFilter === 'all') return missions;
-    return missions.filter(m => m.status === missionFilter);
-  }, [missions, missionFilter]);
+    // Filtra pelo ciclo de plantão (4 em 4 dias a partir de hoje)
+    let base = missions.filter(m => !m.mission_date || garrisonDates.has(m.mission_date));
+    if (missionFilter !== 'all') {
+      base = base.filter(m => m.status === missionFilter);
+    }
+    return base;
+  }, [missions, missionFilter, garrisonDates]);
 
   const todayTrainings = useMemo(() => {
     const currentMonthPrefix = new Date().toISOString().substring(0, 7);
@@ -681,22 +710,23 @@ const Operacional: React.FC = () => {
     const missionItems = filteredMissions.map(m => ({ type: 'mission' as const, data: m }));
     const trainingItems = todayTrainings.map(t => ({ type: 'training' as const, data: t }));
     return [...missionItems, ...trainingItems].sort((a, b) => {
+      // Ordena primeiro por data da missão, depois por horário
+      const dateA = a.type === 'mission' ? ((a.data as DailyMission).mission_date || '9999-99-99') : ((a.data as Training).date || '9999-99-99');
+      const dateB = b.type === 'mission' ? ((b.data as DailyMission).mission_date || '9999-99-99') : ((b.data as Training).date || '9999-99-99');
+      const dateCompare = dateA.localeCompare(dateB);
+      if (dateCompare !== 0) return dateCompare;
       const timeA = a.type === 'mission' ? (a.data.start_time || '99:99') : (a.data as Training).time || '99:99';
       const timeB = b.type === 'mission' ? (b.data.start_time || '99:99') : (b.data as Training).time || '99:99';
-      const timeCompare = timeA.localeCompare(timeB);
-      if (timeCompare !== 0) return timeCompare;
-      if (a.type === 'mission' && b.type === 'training') return -1;
-      if (a.type === 'training' && b.type === 'mission') return 1;
-      return 0;
+      return timeA.localeCompare(timeB);
     });
   }, [filteredMissions, todayTrainings]);
 
   const dashboardStats = useMemo(() => {
-    const totalMissions = missions.length;
-    const completedMissions = missions.filter(m => m.status === 'concluida').length;
-    const activeMissions = missions.filter(m => m.status === 'em_andamento').length;
+    const totalMissions = filteredMissions.length;
+    const completedMissions = filteredMissions.filter(m => m.status === 'concluida').length;
+    const activeMissions = filteredMissions.filter(m => m.status === 'em_andamento').length;
     return { totalMissions, completedMissions, activeMissions, recentReceipts: receipts.slice(0, 3) };
-  }, [missions, receipts]);
+  }, [filteredMissions, receipts]);
 
   // ============ TAB CONFIG ============
 
@@ -769,12 +799,15 @@ const Operacional: React.FC = () => {
                     </h2>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 bg-white/15 rounded-lg text-xs font-bold border border-white/20">
-                    Todas as Missões do Mês
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-1 bg-white/15 rounded-lg text-xs font-bold border border-white/20 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">repeat</span>
+                    Ciclo 4 dias • {Array.from(garrisonDates).sort().map(d =>
+                      new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                    ).join(', ')}
                   </span>
                   <span className="px-3 py-1 bg-amber-500/20 text-amber-200 border border-amber-400/30 rounded-lg text-xs font-black">
-                    {missions.length} missão(ões)
+                    {filteredMissions.length} missão(ões)
                   </span>
                 </div>
               </div>
