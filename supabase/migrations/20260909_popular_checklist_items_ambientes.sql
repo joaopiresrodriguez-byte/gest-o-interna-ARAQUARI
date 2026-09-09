@@ -30,11 +30,11 @@ SELECT
   0 AS sort_order,
   COALESCE(f.quantidade, 1) AS quantidade,
   COALESCE(
-    f.local_id,
-    loc.id,
-    vtr.id,
-    (SELECT id FROM public.locais_equipamento WHERE LOWER(nome) LIKE '%reserva%' LIMIT 1),
-    (SELECT id FROM public.locais_equipamento WHERE LOWER(nome) LIKE '%central%' LIMIT 1)
+    f.local_id::text,
+    loc.id::text,
+    vtr.id::text,
+    (SELECT id::text FROM public.locais_equipamento WHERE LOWER(nome) LIKE '%reserva%' LIMIT 1),
+    (SELECT id::text FROM public.locais_equipamento WHERE LOWER(nome) LIKE '%central%' LIMIT 1)
   ) AS viatura_id,
   f.compartimento_id,
   NOW()
