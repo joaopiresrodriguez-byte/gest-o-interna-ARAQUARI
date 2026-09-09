@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist, LocalEquipamento, CompartimentoViatura } from '../services/SupabaseService';
+import React, { useState, useEffect, useMemo } from 'react';
+import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist, LocalEquipamento, CompartimentoViatura, Training } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
 import { useAuth } from '../context/AuthContext';
@@ -237,6 +237,7 @@ const PatrimonioB4: React.FC = () => {
   const { notices } = useRealtimeNotices(initialNotices);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
+  const [trainings, setTrainings] = useState<Training[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [dailyChecklists, setDailyChecklists] = useState<DailyChecklist[]>([]);
   const [loading, setLoading] = useState(false);
@@ -404,6 +405,34 @@ const PatrimonioB4: React.FC = () => {
   const [missionFilterStatus, setMissionFilterStatus] = useState<string>("agendada");
   const [missionFilterPriority, setMissionFilterPriority] = useState<string>("todos");
 
+  const unifiedMissions = useMemo(() => {
+    const missionItems = dailyMissions
+      .filter(m => (missionFilterStatus === 'todos' || m.status === missionFilterStatus))
+      .filter(m => (missionFilterPriority === 'todos' || m.priority === missionFilterPriority))
+      .map(m => ({ type: 'mission' as const, data: m }));
+
+    const trainingItems = trainings
+      .filter(t => {
+        if (missionFilterStatus === 'todos') return true;
+        if (missionFilterStatus === 'agendada' && (t.status === 'Scheduled' || !t.status)) return true;
+        if (missionFilterStatus === 'cancelada' && (t.status === 'Canceled' || t.status === 'Cancelado')) return true;
+        return false;
+      })
+      .map(t => ({ type: 'training' as const, data: t }));
+
+    const all = [...missionItems, ...trainingItems];
+
+    return all.sort((a, b) => {
+      const dateA = a.type === 'mission'
+        ? (a.data.mission_date ? `${a.data.mission_date.split('T')[0]}T${a.data.start_time || '00:00'}` : '9999-99-99')
+        : (a.data.date ? `${a.data.date}T${a.data.time || '00:00'}` : '9999-99-99');
+      const dateB = b.type === 'mission'
+        ? (b.data.mission_date ? `${b.data.mission_date.split('T')[0]}T${b.data.start_time || '00:00'}` : '9999-99-99')
+        : (b.data.date ? `${b.data.date}T${b.data.time || '00:00'}` : '9999-99-99');
+      return dateA.localeCompare(dateB);
+    });
+  }, [dailyMissions, trainings, missionFilterStatus, missionFilterPriority]);
+
   // Modais Unificados de Missão
   const [isNewMissionModalOpen, setIsNewMissionModalOpen] = useState(false);
   const [missionToEdit, setMissionToEdit] = useState<DailyMission | null>(null);
@@ -429,13 +458,14 @@ const PatrimonioB4: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [fleetData, noticesData, purchasesData, missionsData, personnelData, checklistsData] = await Promise.all([
+      const [fleetData, noticesData, purchasesData, missionsData, personnelData, checklistsData, trainingsData] = await Promise.all([
         SupabaseService.getFleet(),
         SupabaseService.getPendingNotices(),
         SupabaseService.getPurchases(),
         SupabaseService.getDailyMissions(),
         SupabaseService.getPersonnel(),
-        SupabaseService.getDailyChecklists()
+        SupabaseService.getDailyChecklists(),
+        SupabaseService.getTrainings()
       ]);
       setFleet(fleetData);
       setInitialNotices(noticesData);
@@ -443,6 +473,7 @@ const PatrimonioB4: React.FC = () => {
       setDailyMissions(missionsData);
       setPersonnel(personnelData);
       setDailyChecklists(checklistsData);
+      setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
     } catch (error) {
       console.error("Error loading B4 data:", error);
     } finally {
@@ -839,7 +870,7 @@ const PatrimonioB4: React.FC = () => {
                         <option value="alta">Alta</option>
                         <option value="urgente">Urgente</option>
                       </select>
-                      <div className="text-[10px] font-black uppercase text-gray-400">Total: {dailyMissions.length} Missões</div>
+                      <div className="text-[10px] font-black uppercase text-gray-400">Total: {unifiedMissions.length} Missões / Instruções</div>
                     </div>
 
                     {profile?.p_logistica === 'editor' && (
@@ -857,15 +888,57 @@ const PatrimonioB4: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto max-h-[800px] pr-2">
-                    {dailyMissions
-                      .filter(m => (missionFilterStatus === 'todos' || m.status === missionFilterStatus))
-                      .filter(m => (missionFilterPriority === 'todos' || m.priority === missionFilterPriority))
-                      .sort((a, b) => {
-                        const dateA = a.mission_date ? `${a.mission_date.split('T')[0]}T${a.start_time || '00:00'}` : '9999-99-99';
-                        const dateB = b.mission_date ? `${b.mission_date.split('T')[0]}T${b.start_time || '00:00'}` : '9999-99-99';
-                        return dateA.localeCompare(dateB);
-                      })
-                      .map(mission => (
+                    {unifiedMissions.map((item, idx) => {
+                      if (item.type === 'training') {
+                        const t = item.data as Training;
+                        const materiaName = t.tema || (t.materia as any)?.tema || (t.materia as any)?.name || t.materia_id || 'Instrução';
+                        const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
+                        return (
+                          <div key={`training-${t.id || idx}`} className={`bg-white border rounded-xl p-4 hover:shadow-md transition-all flex flex-col gap-3 ${isCanceled ? 'border-gray-200 opacity-60' : 'border-blue-200 bg-blue-50/20'}`}>
+                            <div className="flex justify-between items-start">
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${isCanceled ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'}`}>
+                                {isCanceled ? 'Instrução Cancelada' : 'Instrução Agendada'}
+                              </span>
+                              <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                Módulo B3
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className={`font-bold text-sm leading-tight mb-1 ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{materiaName}</h4>
+                              <p className="text-[11px] text-gray-500 mt-1">Treinamento cadastrado em B3 (Instrução)</p>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[10px] font-bold text-gray-500 mt-auto flex-wrap pt-2 border-t border-stone-100">
+                              <span className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                                {t.date ? new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR') : 'S/D'}
+                              </span>
+                              {t.time && (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                  {t.time}
+                                </span>
+                              )}
+                              {t.instructor && (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">person</span>
+                                  {t.instructor}
+                                </span>
+                              )}
+                              {t.location && (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">location_on</span>
+                                  {t.location}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const mission = item.data as DailyMission;
+                      return (
                         <div key={mission.id} className="bg-white border border-rustic-border rounded-xl p-4 hover:shadow-md transition-all flex flex-col gap-3">
                           <div className="flex justify-between items-start">
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${mission.priority === 'urgente' ? 'bg-red-100 text-red-600' :
@@ -976,11 +1049,11 @@ const PatrimonioB4: React.FC = () => {
                               <option value="nao_realizada">NÃO REALIZADA</option>
                               <option value="cancelada">CANCELADA</option>
                             </select>
-                            <span className="text-[9px] text-gray-300 italic">Cadastrado em {new Date(mission.created_at!).toLocaleDateString()}</span>
+                            <span className="text-[9px] text-gray-300 italic">Cadastrado em {mission.created_at ? new Date(mission.created_at).toLocaleDateString() : 'N/A'}</span>
                           </div>
                         </div>
-                      ))
-                    }
+                      );
+                    })}
                   </div>
                 </div>
               )}

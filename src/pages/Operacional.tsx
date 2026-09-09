@@ -702,9 +702,8 @@ const Operacional: React.FC = () => {
   }, [missions, missionFilter, garrisonDates]);
 
   const todayTrainings = useMemo(() => {
-    const currentMonthPrefix = new Date().toISOString().substring(0, 7);
-    return trainings.filter(t => t.date && t.date.startsWith(currentMonthPrefix));
-  }, [trainings]);
+    return trainings.filter(t => t.date && garrisonDates.has(t.date));
+  }, [trainings, garrisonDates]);
 
   const unifiedMissions = useMemo(() => {
     const missionItems = filteredMissions.map(m => ({ type: 'mission' as const, data: m }));
