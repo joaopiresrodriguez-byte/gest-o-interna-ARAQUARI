@@ -114,6 +114,65 @@ interface N1Props {
 function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMap, onAtualizar, isViatura, viaturaCtx, children }: N1Props) {
   const aberto = abertos[id];
   const confViatura = conferenciaMap[id];
+  const isOk = confViatura?.status === 'ok';
+  const isOcorrencia = confViatura?.status && confViatura.status !== 'ok';
+
+  const [formAberta, setFormAberta] = useState<boolean>(false);
+  const [tipoOcorrenciaVtr, setTipoOcorrenciaVtr] = useState<'avariado' | 'indisponivel'>(
+    confViatura?.tipo_ocorrencia === 'indisponivel' ? 'indisponivel' : 'avariado'
+  );
+  const [subTipoAvariaVtr, setSubTipoAvariaVtr] = useState<'devera_consertar' | 'sem_conserto_baixar'>(
+    confViatura?.sub_tipo_avaria === 'sem_conserto_baixar' ? 'sem_conserto_baixar' : 'devera_consertar'
+  );
+  const [obsVtr, setObsVtr] = useState<string>(confViatura?.observacao || confViatura?.observacao_ocorrencia || '');
+
+  useEffect(() => {
+    if (confViatura) {
+      if (confViatura.tipo_ocorrencia === 'indisponivel') setTipoOcorrenciaVtr('indisponivel');
+      if (confViatura.sub_tipo_avaria === 'sem_conserto_baixar') setSubTipoAvariaVtr('sem_conserto_baixar');
+      if (confViatura.observacao || confViatura.observacao_ocorrencia) {
+        setObsVtr(confViatura.observacao || confViatura.observacao_ocorrencia || '');
+      }
+    }
+  }, [confViatura]);
+
+  async function marcarOkViatura() {
+    setFormAberta(false);
+    setObsVtr('');
+    await salvarConferencia({
+      viatura_id: id,
+      fleet_item_id: id,
+      status: 'ok',
+      item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
+      viatura_nome: viaturaCtx?.nome || titulo,
+    });
+    onAtualizar();
+  }
+
+  async function salvarOcorrenciaViatura() {
+    if (tipoOcorrenciaVtr === 'avariado' && subTipoAvariaVtr === 'sem_conserto_baixar' && !obsVtr.trim()) {
+      toast.error('Informe a descrição detalhada para solicitação de baixa da viatura.');
+      return;
+    }
+
+    const confStatus: StatusConferencia = tipoOcorrenciaVtr === 'indisponivel' ? 'nao_encontrado' : 'avariado';
+
+    await salvarConferencia({
+      viatura_id: id,
+      fleet_item_id: id,
+      status: confStatus,
+      observacao: obsVtr.trim() || undefined,
+      tipo_ocorrencia: tipoOcorrenciaVtr,
+      sub_tipo_avaria: tipoOcorrenciaVtr === 'avariado' ? subTipoAvariaVtr : undefined,
+      observacao_ocorrencia: obsVtr.trim() || undefined,
+      item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
+      viatura_nome: viaturaCtx?.nome || titulo,
+    });
+
+    toast.success('Ocorrência da viatura salva com sucesso!');
+    setFormAberta(false);
+    onAtualizar();
+  }
 
   return (
     <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', marginBottom: '8px', overflow: 'hidden' }}>
@@ -130,30 +189,33 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
           borderLeft: '4px solid #1d4ed8',
         }}
       >
-        <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>
-          {icone} {titulo}
-        </span>
+        <div>
+          <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>
+            {icone} {titulo}
+          </span>
+          {isOcorrencia && (
+            <div style={{ marginTop: '4px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '9999px' }}>
+                ⚠️ {confViatura?.tipo_ocorrencia === 'indisponivel' ? 'Viatura Indisponível' : confViatura?.sub_tipo_avaria === 'sem_conserto_baixar' ? 'Avariada (Deverá Baixar)' : 'Avariada (Conserto)'}
+                {confViatura?.observacao ? ` — ${confViatura.observacao}` : ''}
+              </span>
+            </div>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {isViatura && (
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
               <button
                 onClick={async e => {
                   e.stopPropagation();
-                  await salvarConferencia({
-                    viatura_id: id,
-                    fleet_item_id: id,
-                    status: 'ok',
-                    item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
-                    viatura_nome: viaturaCtx?.nome || titulo,
-                  });
-                  onAtualizar();
+                  await marcarOkViatura();
                 }}
                 style={{
                   padding: '4px 10px',
                   borderRadius: '6px',
-                  border: confViatura?.status === 'ok' ? '2px solid #166534' : '1px solid #cbd5e1',
-                  background: confViatura?.status === 'ok' ? '#dcfce7' : '#f8fafc',
-                  color: confViatura?.status === 'ok' ? '#166534' : '#64748b',
+                  border: isOk ? '2px solid #166534' : '1px solid #cbd5e1',
+                  background: isOk ? '#dcfce7' : '#f8fafc',
+                  color: isOk ? '#166534' : '#64748b',
                   cursor: 'pointer',
                   fontSize: '11px',
                   fontWeight: 'bold',
@@ -162,23 +224,16 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
                 ✅ OK
               </button>
               <button
-                onClick={async e => {
+                onClick={e => {
                   e.stopPropagation();
-                  await salvarConferencia({
-                    viatura_id: id,
-                    fleet_item_id: id,
-                    status: 'avariado',
-                    item_nome: viaturaCtx ? `${viaturaCtx.nome}${viaturaCtx.placa ? ` — ${viaturaCtx.placa}` : ''}` : titulo,
-                    viatura_nome: viaturaCtx?.nome || titulo,
-                  });
-                  onAtualizar();
+                  setFormAberta(prev => !prev);
                 }}
                 style={{
                   padding: '4px 10px',
                   borderRadius: '6px',
-                  border: confViatura?.status && confViatura.status !== 'ok' ? '2px solid #991b1b' : '1px solid #cbd5e1',
-                  background: confViatura?.status && confViatura.status !== 'ok' ? '#fee2e2' : '#f8fafc',
-                  color: confViatura?.status && confViatura.status !== 'ok' ? '#991b1b' : '#64748b',
+                  border: isOcorrencia ? '2px solid #991b1b' : '1px solid #cbd5e1',
+                  background: isOcorrencia ? '#fee2e2' : '#f8fafc',
+                  color: isOcorrencia ? '#991b1b' : '#64748b',
                   cursor: 'pointer',
                   fontSize: '11px',
                   fontWeight: 'bold',
@@ -194,6 +249,123 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
           <span style={{ fontSize: '12px', color: '#94a3b8' }}>{aberto ? '▲' : '▼'}</span>
         </div>
       </div>
+
+      {/* FORMULÁRIO DE OCORRÊNCIA DA VIATURA */}
+      {isViatura && formAberta && (
+        <div style={{ padding: '12px 16px', background: '#fffbe3', borderTop: '1px solid #fde047', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#854d0e' }}>
+            Selecione o tipo de ocorrência da Viatura:
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setTipoOcorrenciaVtr('avariado')}
+              style={{
+                flex: 1,
+                padding: '8px',
+                borderRadius: '6px',
+                border: tipoOcorrenciaVtr === 'avariado' ? '2px solid #d97706' : '1px solid #cbd5e1',
+                background: tipoOcorrenciaVtr === 'avariado' ? '#fef3c7' : '#fff',
+                color: tipoOcorrenciaVtr === 'avariado' ? '#92400e' : '#475569',
+                fontWeight: 'bold',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              🛠️ 1 — AVARIADA
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipoOcorrenciaVtr('indisponivel')}
+              style={{
+                flex: 1,
+                padding: '8px',
+                borderRadius: '6px',
+                border: tipoOcorrenciaVtr === 'indisponivel' ? '2px solid #dc2626' : '1px solid #cbd5e1',
+                background: tipoOcorrenciaVtr === 'indisponivel' ? '#fee2e2' : '#fff',
+                color: tipoOcorrenciaVtr === 'indisponivel' ? '#991b1b' : '#475569',
+                fontWeight: 'bold',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              🚫 2 — INDISPONÍVEL / OFICINA
+            </button>
+          </div>
+
+          {tipoOcorrenciaVtr === 'avariado' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#854d0e' }}>Situação da Avaria:</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setSubTipoAvariaVtr('devera_consertar')}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: subTipoAvariaVtr === 'devera_consertar' ? '2px solid #ca8a04' : '1px solid #fde047',
+                    background: subTipoAvariaVtr === 'devera_consertar' ? '#fef08a' : '#fff',
+                    color: '#713f12',
+                    fontSize: '11px',
+                    fontWeight: subTipoAvariaVtr === 'devera_consertar' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                  }}
+                >
+                  1a — Deverá Consertar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubTipoAvariaVtr('sem_conserto_baixar')}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: subTipoAvariaVtr === 'sem_conserto_baixar' ? '2px solid #b45309' : '1px solid #fde047',
+                    background: subTipoAvariaVtr === 'sem_conserto_baixar' ? '#fef3c7' : '#fff',
+                    color: '#78350f',
+                    fontSize: '11px',
+                    fontWeight: subTipoAvariaVtr === 'sem_conserto_baixar' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                  }}
+                >
+                  1b — Sem Conserto, Baixar
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label style={{ fontSize: '11px', color: '#854d0e', fontWeight: 'bold' }}>
+              Observação / Motivo da Ocorrência: {subTipoAvariaVtr === 'sem_conserto_baixar' ? '*' : ''}
+            </label>
+            <input
+              value={obsVtr}
+              onChange={e => setObsVtr(e.target.value)}
+              placeholder="Descreva detalhes da avaria ou indisponibilidade da viatura..."
+              style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', marginTop: '4px', background: '#fff' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setFormAberta(false)}
+              style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: '11px', cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={salvarOcorrenciaViatura}
+              style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', background: '#b45309', color: '#fff', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Salvar Ocorrência
+            </button>
+          </div>
+        </div>
+      )}
+
       {aberto && <div style={{ padding: '8px 12px 12px', borderTop: '1px solid #e2e8f0' }}>{children}</div>}
     </div>
   );
@@ -843,6 +1015,18 @@ const ConferenciaDiaria: React.FC = () => {
       // Disparar WhatsApp
       const disparado = enviarConferenciaWhatsApp(mensagem);
 
+      // Salvar registro de finalização da conferência diária da guarnição
+      await salvarConferencia({
+        viatura_id: 'guarnicao_servico',
+        fleet_item_id: 'guarnicao_servico',
+        status: 'ok',
+        tipo_ocorrencia: 'finalizado',
+        observacao: `Conferência finalizada em ${horaFinalizacao || 'horário oficial'} por ${nomeConferente || 'Militar'}`,
+        item_nome: 'Guarnição de Serviço — Conferência Diária',
+      });
+
+      await recarregarConferencia();
+
       if (disparado) {
         toast.success(`✅ Conferência finalizada e relatório enviado ao Chefe de Socorro (${NUMERO_CHEFE_SOCORRO})!`);
         setModalResumoAberto(false);
@@ -869,6 +1053,9 @@ const ConferenciaDiaria: React.FC = () => {
     }
   };
 
+  const confGuarnicaoStatus = conferenciaMap['guarnicao_servico'];
+  const isFinalizada = Boolean(confGuarnicaoStatus?.status === 'ok' && confGuarnicaoStatus?.tipo_ocorrencia === 'finalizado');
+
   if (loading) return (
     <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
       <p style={{ fontSize: '14px' }}>⏳ Carregando conferência...</p>
@@ -883,6 +1070,45 @@ const ConferenciaDiaria: React.FC = () => {
 
   return (
     <div style={{ paddingBottom: '80px' }}>
+      {/* TARJA DE CONFERÊNCIA FINALIZADA */}
+      {isFinalizada && (
+        <div style={{ background: '#ecfdf5', border: '2px solid #059669', borderRadius: '12px', padding: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', boxShadow: '0 4px 12px rgba(5, 150, 105, 0.15)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#059669', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', fontWeight: 'bold' }}>
+              ✓
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '900', background: '#059669', color: 'white', padding: '2px 8px', borderRadius: '9999px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  CONFERÊNCIA FINALIZADA
+                </span>
+                <span style={{ fontSize: '11px', color: '#047857', fontWeight: '600' }}>
+                  {confGuarnicaoStatus.conferido_em ? new Date(confGuarnicaoStatus.conferido_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+              </div>
+              <h4 style={{ margin: '4px 0 2px', fontSize: '15px', fontWeight: 'bold', color: '#064e3b' }}>
+                Conferência Diária do Serviço Concluída e Validada
+              </h4>
+              <p style={{ margin: 0, fontSize: '12px', color: '#047857' }}>
+                Realizada por: <strong>{confGuarnicaoStatus.conferido_por_nome || nomeConferente || 'Militar de Serviço'}</strong> · Total conferidos: <strong>{totalConferidos}</strong> ({itensOk.length} OK / {ocorrenciasList.length} Ocorrências)
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (mensagemFormatadaCache) {
+                enviarConferenciaWhatsApp(mensagemFormatadaCache);
+              } else {
+                handleAbrirResumo();
+              }
+            }}
+            style={{ background: '#047857', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            📲 Reenviar Relatório WhatsApp
+          </button>
+        </div>
+      )}
+
       {/* Cabeçalho */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div>

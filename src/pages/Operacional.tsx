@@ -214,11 +214,12 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
 const CardMissao: React.FC<{
   missao: DailyMission;
   isEditor: boolean;
+  isFuture?: boolean;
   onAtualizar: () => void;
   onIniciar?: () => void;
   onExcluir?: () => void;
   onEditarCompleto?: (missao: DailyMission) => void;
-}> = ({ missao, isEditor, onAtualizar, onIniciar, onExcluir, onEditarCompleto }) => {
+}> = ({ missao, isEditor, isFuture, onAtualizar, onIniciar, onExcluir, onEditarCompleto }) => {
   const [editando, setEditando] = useState(false);
   const [status, setStatus] = useState<StatusMissao>((missao.status as StatusMissao) || 'agendada');
   const [observacoes, setObservacoes] = useState(missao.observacoes || '');
@@ -228,6 +229,7 @@ const CardMissao: React.FC<{
   const priorityCfg = PRIORITY_CONFIG[missao.priority || 'media'];
 
   async function handleSalvar() {
+    if (isFuture) return;
     setSalvando(true);
     try {
       await atualizarMissao(missao.id!, { status, observacoes });
@@ -242,21 +244,28 @@ const CardMissao: React.FC<{
   }
 
   return (
-    <div className="bg-white rounded-xl border border-rustic-border shadow-sm transition-all hover:shadow-md overflow-hidden">
+    <div className={`rounded-xl border shadow-sm transition-all overflow-hidden ${isFuture ? 'bg-slate-50/80 border-slate-200 opacity-80' : 'bg-white border-rustic-border hover:shadow-md'}`}>
       {/* CABEÇALHO */}
       <div
         className="flex flex-wrap items-start justify-between gap-3 p-5"
-        style={{ borderLeft: `4px solid ${cfgAtual.cor}` }}
+        style={{ borderLeft: `4px solid ${isFuture ? '#94a3b8' : cfgAtual.cor}` }}
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-lg"
-            style={{ background: cfgAtual.fundo }}
+            style={{ background: isFuture ? '#f1f5f9' : cfgAtual.fundo }}
           >
             {cfgAtual.icone}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-[#181111] text-base truncate">{missao.title}</p>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <p className="font-bold text-[#181111] text-base truncate">{missao.title}</p>
+              {isFuture && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                  FUTURO
+                </span>
+              )}
+            </div>
             {missao.description && (
               <p className="text-xs text-gray-600 mt-1 whitespace-pre-wrap leading-relaxed">{missao.description}</p>
             )}
@@ -337,7 +346,7 @@ const CardMissao: React.FC<{
         </div>
 
         {/* AÇÕES */}
-        {isEditor && (
+        {isEditor && !isFuture && (
           <div className="flex items-center gap-1 flex-shrink-0">
             {onEditarCompleto && (
               <button
@@ -848,25 +857,42 @@ const Operacional: React.FC = () => {
             {/* Missions + Trainings List */}
             <div className="space-y-3">
               {unifiedMissions.map((item, idx) => {
+                const todayStr = new Date().toISOString().split('T')[0];
+
                 // Render training item
                 if (item.type === 'training') {
                   const t = item.data as Training;
                   const materiaName = t.tema || (t.materia as any)?.tema || (t.materia as any)?.name || t.materia_id || 'Instrução';
                   const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
+                  const isFuture = Boolean(t.date && t.date > todayStr);
+
                   return (
-                    <div key={`training-${t.id || idx}`} className={`rounded-xl border shadow-sm p-5 transition-all hover:shadow-md ${isCanceled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-blue-50 border-blue-200'}`}>
+                    <div key={`training-${t.id || idx}`} className={`rounded-xl border shadow-sm p-5 transition-all ${isFuture ? 'bg-slate-50 border-slate-200 opacity-75' : isCanceled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-blue-50 border-blue-200 hover:shadow-md'}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isCanceled ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isFuture ? 'bg-slate-200 text-slate-600' : isCanceled ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>
                             <span className="material-symbols-outlined">school</span>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className={`font-bold text-base truncate ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{materiaName}</p>
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <p className={`font-bold text-base truncate ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{materiaName}</p>
+                              {isFuture && (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                                  FUTURO
+                                </span>
+                              )}
+                            </div>
                             <div className="flex flex-wrap items-center gap-2 mt-2">
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${isCanceled ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>Instrução</span>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isCanceled ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                                 {isCanceled ? 'Cancelada' : 'Agendada'}
                               </span>
+                              {t.date && (
+                                <span className="text-[10px] text-gray-500 font-bold flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">calendar_today</span>
+                                  {new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
                               {t.time && (
                                 <span className="text-[10px] text-gray-500 font-bold">
                                   <span className="material-symbols-outlined text-[12px] align-middle">schedule</span> {t.time}
@@ -890,23 +916,25 @@ const Operacional: React.FC = () => {
 
                 // Render mission item
                 const mission = item.data as DailyMission;
+                const isFuture = Boolean(mission.mission_date && mission.mission_date > todayStr);
 
                 return (
                   <CardMissao
                     key={`mission-${mission.id}`}
                     missao={mission}
                     isEditor={isEditor}
+                    isFuture={isFuture}
                     onAtualizar={loadAllData}
-                    onEditarCompleto={(m) => {
+                    onEditarCompleto={!isFuture ? (m) => {
                       setMissionToEdit(m);
                       setShowMissionForm(true);
-                    }}
+                    } : undefined}
                     onIniciar={
-                      mission.status === 'agendada'
+                      !isFuture && mission.status === 'agendada'
                         ? () => handleUpdateMissionStatus(mission.id!, 'em_andamento')
                         : undefined
                     }
-                    onExcluir={() => handleDeleteMission(mission.id!)}
+                    onExcluir={!isFuture ? () => handleDeleteMission(mission.id!) : undefined}
                   />
                 );
               })}
