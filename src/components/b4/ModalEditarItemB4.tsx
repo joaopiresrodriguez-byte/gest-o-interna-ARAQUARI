@@ -136,7 +136,7 @@ export const ModalEditarItemB4: React.FC<ModalEditarItemB4Props> = ({
             description: details.trim() || null,
             quantidade: novaQuantidadeCalculada,
             compartimento_id: finalCompartimentoId,
-            viatura_id: tipoDestino === 'viatura' ? viaturaId || null : (item as any).viatura_id || null,
+            viatura_id: tipoDestino === 'viatura' ? viaturaId || null : (finalLocalId || (item as any).viatura_id || null),
           })
           .eq('id', item.id);
 
@@ -168,6 +168,23 @@ export const ModalEditarItemB4: React.FC<ModalEditarItemB4Props> = ({
           .eq('id', item.id);
 
         if (errFleet) throw errFleet;
+
+        // Sincronizar atualização em checklist_items se o item existir na checklist
+        try {
+          await supabase
+            .from('checklist_items')
+            .update({
+              item_name: nome.trim(),
+              description: details.trim() || null,
+              quantidade: novaQuantidadeCalculada,
+              viatura_id: tipoDestino === 'ambiente' ? finalLocalId || null : (tipoDestino === 'viatura' ? viaturaId || null : null),
+              compartimento_id: finalCompartimentoId || null,
+              is_active: status === 'active'
+            })
+            .eq('id', item.id);
+        } catch (eCheck) {
+          console.warn('Atualização complementar em checklist_items:', eCheck);
+        }
 
         // Se o status foi alterado para 'active' (ativado novamente), cancela solicitações pendentes de baixa
         if (status === 'active') {
