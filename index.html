@@ -3,34 +3,102 @@
 
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>SISTEMA INTERNO DE GESTÃO CBMSC ARAQUARI</title>
   <meta name="description" content="Sistema de gestão estratégica e operacional para o Corpo de Bombeiros Militar de Araquari. Mobilidade, controle e eficiência." />
+  <meta name="robots" content="noindex, nofollow" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="/favicon.png" />
 
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="/manifest.json" />
+  <!-- PWA Manifest — injetado automaticamente pelo vite-plugin-pwa -->
 
-  <!-- Tema da barra do sistema -->
+  <!-- Tema da barra do sistema (Android/Chrome) -->
+  <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#cc0000" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#cc0000" />
 
-  <!-- Comportamento mobile / PWA -->
+  <!-- Comportamento PWA — Android (Chrome) -->
   <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Comportamento PWA — iOS (Safari) -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="CBMSC ARA" />
 
+  <!-- Prevenir zoom duplo no iOS ao tocar em inputs -->
+  <meta name="format-detection" content="telephone=no, email=no, address=no" />
+
   <!-- Ícones para iOS (Apple não usa manifest para ícones) -->
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
-  
-  <!-- Open Graph / Facebook -->
+  <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
+
+  <!-- Splash screens iOS — evita tela branca ao abrir como PWA -->
+  <!-- iPhone -->
+  <link rel="apple-touch-startup-image"
+    href="/icons/icon-512x512.png"
+    media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" />
+  <link rel="apple-touch-startup-image"
+    href="/icons/icon-512x512.png"
+    media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" />
+  <link rel="apple-touch-startup-image"
+    href="/icons/icon-512x512.png"
+    media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
+
+  <!-- Splash Screen inline — cor de fundo durante o boot do app -->
+  <style>
+    html {
+      background-color: #111827;
+    }
+    /* Splash de carregamento mostrado antes do React montar */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, #111827 0%, #1f2937 100%);
+      z-index: 9999;
+      transition: opacity 0.4s ease;
+    }
+    #splash-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #splash-screen img {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+      animation: splash-pulse 1.5s ease-in-out infinite;
+    }
+    #splash-screen p {
+      color: rgba(255,255,255,0.5);
+      font-size: 13px;
+      font-family: system-ui, -apple-system, sans-serif;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    #splash-screen .brand {
+      color: #cc0000;
+      font-weight: 800;
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    @keyframes splash-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.95); }
+    }
+  </style>
+
+  <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="SISTEMA INTERNO DE GESTÃO CBMSC ARAQUARI" />
   <meta property="og:description" content="Plataforma integrada de gestão administrativa e operacional." />
-  <meta property="og:image" content="/favicon.png" />
+  <meta property="og:image" content="/icons/icon-512x512.png" />
 
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com" rel="preconnect" />
@@ -102,18 +170,56 @@
       overflow: hidden;
       /* Prevent double scrollbars, let App.tsx handle scrolling */
       font-family: 'Work Sans', sans-serif;
+      /* Suporte para notch / safe area no iOS */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
     }
 
     #root {
       height: 100%;
+    }
+
+    /* Previne seleção indesejada de texto no app */
+    * {
+      -webkit-tap-highlight-color: transparent;
     }
   </style>
 
 </head>
 
 <body>
+  <!-- Splash screen exibida enquanto o bundle carrega -->
+  <div id="splash-screen">
+    <img src="/icons/icon-192x192.png" alt="CBMSC Araquari" />
+    <p class="brand">CBMSC Araquari</p>
+    <p>Gestão Interna</p>
+  </div>
+
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
+
+  <!-- Oculta a splash screen após o carregamento inicial -->
+  <script>
+    (function() {
+      function hideSplash() {
+        var splash = document.getElementById('splash-screen');
+        if (splash) {
+          splash.classList.add('hidden');
+          setTimeout(function() { splash.style.display = 'none'; }, 450);
+        }
+      }
+      // Oculta após o DOM estar pronto
+      if (document.readyState === 'complete') {
+        hideSplash();
+      } else {
+        window.addEventListener('load', hideSplash);
+        // Garante remoção máxima após 3 segundos (fallback)
+        setTimeout(hideSplash, 3000);
+      }
+    })();
+  </script>
 </body>
 
 </html>
