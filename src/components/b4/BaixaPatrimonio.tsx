@@ -70,21 +70,21 @@ export const BaixaPatrimonio: React.FC = () => {
 
       let listaItens = data || [];
 
-      // Filtro de consistência: Se o item já foi reativado (status = 'active' no fleet) ou a pendência foi regularizada no histórico, não exibir como 'pendente_baixa'
+      // Filtro de consistência: Se a pendência já foi regularizada no histórico por ter voltado a estar OK, não exibir como 'pendente_baixa'
       if (filtroStatus === 'pendente_baixa' && listaItens.length > 0) {
         const itemIds = listaItens.map(i => i.item_id).filter(Boolean);
         if (itemIds.length > 0) {
-          const [fleetRes, histRes] = await Promise.all([
-            supabase.from('fleet').select('id, status').in('id', itemIds),
-            supabase.from('historico_conferencias_b4').select('item_id, resolvido').in('item_id', itemIds).eq('resolvido', true),
-          ]);
+          const { data: histData } = await supabase
+            .from('historico_conferencias_b4')
+            .select('item_id, resolvido')
+            .in('item_id', itemIds)
+            .eq('resolvido', true);
 
-          const fleetAtivos = new Set((fleetRes.data || []).filter(f => f.status === 'active').map(f => f.id));
-          const histResolvidos = new Set((histRes.data || []).map(h => h.item_id));
+          const histResolvidos = new Set((histData || []).map(h => h.item_id));
 
           listaItens = listaItens.filter(item => {
-            if (fleetAtivos.has(item.item_id) || histResolvidos.has(item.item_id)) {
-              return false; // Item já foi ativado/regularizado, não mostrar em pendente_baixa
+            if (histResolvidos.has(item.item_id)) {
+              return false; // Item teve a pendência resolvida na conferência
             }
             return true;
           });

@@ -57,7 +57,8 @@ const QrCodeImage: React.FC<QrCodeImageProps> = ({ url, size = 80, className }) 
 // ─── Etiqueta QR individual ─────────────────────────────────────────────────
 
 const EtiquetaQR: React.FC<{ item: Vehicle }> = ({ item }) => {
-  const qrUrl = `${window.location.origin}/patrimonio/item/${item.id}`;
+  const tipoExtrato = item.type === 'Viatura' ? 'viatura' : 'ambiente';
+  const qrUrl = `${window.location.origin}/extrato/${tipoExtrato}/${item.id}`;
 
   return (
     <div
@@ -80,7 +81,8 @@ const EtiquetaQR: React.FC<{ item: Vehicle }> = ({ item }) => {
 // ─── Linha de item no extrato tabular ────────────────────────────────────────
 
 const ItemRow: React.FC<{ item: Vehicle; index: number }> = ({ item, index }) => {
-  const qrUrl = `${window.location.origin}/patrimonio/item/${item.id}`;
+  const tipoExtrato = item.type === 'Viatura' ? 'viatura' : 'ambiente';
+  const qrUrl = `${window.location.origin}/extrato/${tipoExtrato}/${item.id}`;
 
   return (
     <tr className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} style={{ pageBreakInside: 'avoid' }}>
