@@ -242,6 +242,7 @@ const PessoalB1: React.FC = () => {
 
   const [rankChangeNewRank, setRankChangeNewRank] = useState('');
   const [rankChangeLegalBasis, setRankChangeLegalBasis] = useState('');
+  const [rankChangeDate, setRankChangeDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Course state for registration form (kept for handleSavePersonnel compatibility)
   const [cursosForm, setCursosForm] = useState<CursoLocal[]>([]);
@@ -513,11 +514,29 @@ const PessoalB1: React.FC = () => {
   // Handle rank change
   const handleRankChange = async (person: Personnel) => {
     if (!rankChangeNewRank || !rankChangeLegalBasis) return toast.error('Informe a nova graduação e base legal!');
+    const promoDate = rankChangeDate || new Date().toISOString().split('T')[0];
     try {
-      await PersonnelService.addRankHistory({ personnel_id: person.id!, previous_rank: person.graduation || person.rank, new_rank: rankChangeNewRank, change_date: new Date().toISOString().split('T')[0], legal_basis: rankChangeLegalBasis });
-      await PersonnelService.updatePersonnel(person.id!, { graduation: rankChangeNewRank });
-      toast.success('Graduação atualizada e histórico registrado!');
-      setRankChangeNewRank(''); setRankChangeLegalBasis('');
+      const bcMatch = BC_RANKS_CONFIG.find(bc => bc.label === rankChangeNewRank);
+
+      await PersonnelService.addRankHistory({
+        personnel_id: person.id!,
+        previous_rank: person.graduation || person.rank || '—',
+        new_rank: rankChangeNewRank,
+        change_date: promoDate,
+        legal_basis: rankChangeLegalBasis
+      });
+
+      await PersonnelService.updatePersonnel(person.id!, {
+        graduation: rankChangeNewRank,
+        rank: rankChangeNewRank,
+        data_ultima_promocao: promoDate,
+        ...(bcMatch ? { type: 'BC', bc_graduacao_ordem: bcMatch.ordem } : {})
+      });
+
+      toast.success('Promoção registrada e histórico atualizado com sucesso!');
+      setRankChangeNewRank('');
+      setRankChangeLegalBasis('');
+      setRankChangeDate(new Date().toISOString().split('T')[0]);
       loadData();
     } catch (err: any) { toast.error('Erro: ' + err.message); }
   };
@@ -1196,12 +1215,56 @@ const PessoalB1: React.FC = () => {
 
                   {/* Rank Change Section (edit mode only) */}
                   {editId && (
-                    <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
-                      <h4 className="font-black text-sm mb-3 text-amber-700">Promoção / Alteração de Graduação</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div><label className="text-[10px] font-black block mb-1">Nova Graduação</label><select value={rankChangeNewRank} onChange={e => setRankChangeNewRank(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm"><option value="">Selecionar...</option>{RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
-                        <div><label className="text-[10px] font-black block mb-1">Base Legal</label><input value={rankChangeLegalBasis} onChange={e => setRankChangeLegalBasis(e.target.value)} className="w-full h-10 px-3 rounded-lg border text-sm" placeholder="Ex: LC 801/2022 Art. XX" /></div>
-                        <div className="flex items-end"><button onClick={() => handleRankChange(formData as Personnel)} className="px-4 py-2.5 bg-amber-600 text-white text-xs font-black rounded-lg">REGISTRAR PROMOÇÃO</button></div>
+                    <div className="mb-6 p-4 bg-amber-50/80 rounded-xl border border-amber-200/80 shadow-xs">
+                      <h4 className="font-black text-sm mb-3 text-amber-800 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-base">military_tech</span>
+                        Promoção / Alteração de Graduação / Grau
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-amber-900 block mb-1">Nova Graduação / Grau</label>
+                          <select
+                            value={rankChangeNewRank}
+                            onChange={e => setRankChangeNewRank(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-amber-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          >
+                            <option value="">Selecionar posto/graduação...</option>
+                            <optgroup label="Bombeiro Militar (BM)">
+                              {RANKS_BM.map(r => <option key={r} value={r}>{r}</option>)}
+                            </optgroup>
+                            <optgroup label="Bombeiro Comunitário (BC)">
+                              {BC_RANKS_CONFIG.map(bc => <option key={bc.label} value={bc.label}>{bc.label}</option>)}
+                            </optgroup>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-amber-900 block mb-1">Data da Promoção</label>
+                          <input
+                            type="date"
+                            value={rankChangeDate}
+                            onChange={e => setRankChangeDate(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-amber-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-amber-900 block mb-1">Base Legal / Portaria</label>
+                          <input
+                            value={rankChangeLegalBasis}
+                            onChange={e => setRankChangeLegalBasis(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-amber-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            placeholder="Ex: Portaria nº 123/CBMSC, Art. 5º"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <button
+                            type="button"
+                            onClick={() => handleRankChange(formData as Personnel)}
+                            className="w-full h-10 px-4 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-sm">workspace_premium</span>
+                            REGISTRAR PROMOÇÃO
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}

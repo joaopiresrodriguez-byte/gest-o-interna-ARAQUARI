@@ -205,13 +205,37 @@ export const PersonnelService = {
     // ===== RANK HISTORY =====
     getRankHistory: async (personnelId: number): Promise<RankHistory[]> => {
         try {
-            const { data, error } = await supabase
+            // Tenta primeiro a tabela rank_history
+            const { data: dataRank, error: errRank } = await supabase
                 .from('rank_history')
                 .select('*')
                 .eq('personnel_id', personnelId)
                 .order('change_date', { ascending: false });
-            if (error) throw error;
-            return data || [];
+            
+            if (!errRank && dataRank && dataRank.length > 0) {
+                return dataRank;
+            }
+
+            // Fallback para a tabela historico_graduacao (promoções de BC/BM)
+            const { data: dataHist, error: errHist } = await supabase
+                .from('historico_graduacao')
+                .select('*')
+                .eq('personnel_id', personnelId)
+                .order('data_promocao', { ascending: false });
+
+            if (!errHist && dataHist) {
+                return dataHist.map((item: any) => ({
+                    id: item.id,
+                    personnel_id: item.personnel_id,
+                    previous_rank: '—',
+                    new_rank: item.graduacao,
+                    change_date: item.data_promocao,
+                    legal_basis: item.observacao || 'Base Legal não informada',
+                    created_at: item.criado_em,
+                }));
+            }
+
+            return dataRank || [];
         } catch (error) {
             console.error('Error fetching rank history:', error);
             return [];
@@ -220,12 +244,37 @@ export const PersonnelService = {
 
     addRankHistory: async (entry: Omit<RankHistory, 'id'>): Promise<RankHistory> => {
         try {
+            // Tenta inserir na tabela rank_history
             const { data, error } = await supabase
                 .from('rank_history')
                 .insert(entry)
                 .select()
                 .single();
-            if (error) throw new Error(`Erro ao registrar histórico de posto: ${error.message}`);
+                
+            if (error) {
+                // Tenta salvar na tabela historico_graduacao como fallback
+                const { data: histData, error: histErr } = await supabase
+                    .from('historico_graduacao')
+                    .insert({
+                        personnel_id: entry.personnel_id,
+                        graduacao: entry.new_rank,
+                        data_promocao: entry.change_date,
+                        observacao: entry.legal_basis,
+                    })
+                    .select()
+                    .single();
+
+                if (histErr) throw new Error(`Erro ao registrar histórico: ${error.message}`);
+                
+                return {
+                    id: histData.id,
+                    personnel_id: histData.personnel_id,
+                    previous_rank: entry.previous_rank,
+                    new_rank: histData.graduacao,
+                    change_date: histData.data_promocao,
+                    legal_basis: histData.observacao,
+                };
+            }
             return data;
         } catch (error) {
             console.error('addRankHistory failed:', error);

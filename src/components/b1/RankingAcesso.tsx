@@ -25,7 +25,7 @@ export default function RankingAcesso({ personnelList }: Props) {
         const fetchAccessLogs = async () => {
             try {
                 setLoading(true);
-                let query = supabase.from('user_access_logs').select('user_email, accessed_at');
+                let query = supabase.from('user_access_logs').select('user_id, user_email, accessed_at');
 
                 const now = new Date();
                 if (periodo === 'mes_atual') {
@@ -49,38 +49,51 @@ export default function RankingAcesso({ personnelList }: Props) {
         fetchAccessLogs();
     }, [periodo]);
 
-    // Calcular o ranking agrupando pelos registros reais de acesso
+    // Calcular o ranking agrupando pelos registros reais de acesso (por email e user_id)
     const rankedPersonnel = useMemo(() => {
-        // Contar acessos por e-mail
         const countsByEmail: Record<string, number> = {};
+        const countsByUserId: Record<string, number> = {};
+
         accessLogs.forEach(log => {
             const email = (log.user_email || '').toLowerCase().trim();
+            const userId = log.user_id ? String(log.user_id).trim() : '';
+            
             if (email) {
                 countsByEmail[email] = (countsByEmail[email] || 0) + 1;
+            }
+            if (userId) {
+                countsByUserId[userId] = (countsByUserId[userId] || 0) + 1;
             }
         });
 
         // Mapear com os militares da lista de pessoal
         const ranked: RankedUser[] = personnelList.map(p => {
             const email = (p.email || '').toLowerCase().trim();
-            const count = countsByEmail[email] || 0;
+            const pId = p.id ? String(p.id) : '';
+            
+            // Tenta obter contagem por e-mail ou por user_id/id
+            const countByMail = email ? (countsByEmail[email] || 0) : 0;
+            const countById = pId ? (countsByUserId[pId] || 0) : 0;
+            const total = Math.max(countByMail, countById);
+
             return {
-                id: p.id || p.email,
+                id: p.id || p.email || p.name,
                 name: p.name,
-                graduation: p.graduation || p.rank || 'BM',
+                graduation: p.graduation || p.rank || (p.type === 'BC' ? 'BC' : 'BM'),
                 war_name: p.war_name,
-                totalAccesses: count,
+                totalAccesses: total,
             };
         });
 
         // Adicionar usuários que acessaram mas podem não estar na tabela personnel
+        const processedEmails = new Set(personnelList.map(p => (p.email || '').toLowerCase().trim()).filter(Boolean));
+        
         Object.keys(countsByEmail).forEach(email => {
-            const exists = personnelList.some(p => (p.email || '').toLowerCase().trim() === email);
-            if (!exists) {
+            if (!processedEmails.has(email)) {
                 ranked.push({
                     id: email,
-                    name: email.split('@')[0],
-                    graduation: 'USER',
+                    name: email.split('@')[0].toUpperCase(),
+                    graduation: 'USUÁRIO',
                     totalAccesses: countsByEmail[email],
                 });
             }
