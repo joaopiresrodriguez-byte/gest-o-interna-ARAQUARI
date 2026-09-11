@@ -286,7 +286,9 @@ export const PersonnelService = {
     getServiceSwaps: async (personnelId?: number, monthRef?: string): Promise<ServiceSwap[]> => {
         try {
             let query = supabase.from('service_swaps').select('*').order('swap_date', { ascending: false });
-            if (personnelId) query = query.eq('personnel_id', personnelId);
+            if (personnelId) {
+                query = query.or(`personnel_id.eq.${personnelId},swap_with_personnel_id.eq.${personnelId}`);
+            }
             if (monthRef) query = query.eq('month_ref', monthRef);
             const { data, error } = await query;
             if (error) throw error;
