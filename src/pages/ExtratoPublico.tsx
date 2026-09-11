@@ -242,19 +242,26 @@ export function ExtratoPublico() {
             .eq('is_active', true)
             .limit(2000);
 
-          const todosItens: ItemExtrato[] = (checkData || []).map(ci => {
-            const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
-            return {
-              id: ci.id,
-              name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
-              type: `✅ ${ci.category || 'Equipamento'}`,
-              status: ci.is_active === false ? 'down' : 'Ok',
-              compartimento_id: ci.compartimento_id || undefined,
-              compartimento_nome: ci.compartimento_id ? mapaComps[ci.compartimento_id] : undefined,
-              sort_order: Number(ci.sort_order) || 0,
-              is_cautelado: Boolean(infoCautela),
-              cautela_info: infoCautela ? `${infoCautela.retirado_por || infoCautela.solicitante} (${infoCautela.numero_cautela})` : undefined,
-            };
+          const rawItems = checkData || [];
+          const seenIds = new Set<string>();
+          const todosItens: ItemExtrato[] = [];
+
+          rawItems.forEach(ci => {
+            if (!seenIds.has(ci.id)) {
+              seenIds.add(ci.id);
+              const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
+              todosItens.push({
+                id: ci.id,
+                name: `${ci.item_name}${ci.quantidade && ci.quantidade > 1 ? ` (x${ci.quantidade})` : ''}`,
+                type: `✅ ${ci.category || 'Equipamento'}`,
+                status: ci.is_active === false ? 'down' : 'Ok',
+                compartimento_id: ci.compartimento_id || undefined,
+                compartimento_nome: ci.compartimento_id ? mapaComps[ci.compartimento_id] : undefined,
+                sort_order: Number(ci.sort_order) || 0,
+                is_cautelado: Boolean(infoCautela),
+                cautela_info: infoCautela ? `${infoCautela.retirado_por || infoCautela.solicitante} (${infoCautela.numero_cautela})` : undefined,
+              });
+            }
           });
 
           setItens(todosItens);
