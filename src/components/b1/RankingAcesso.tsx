@@ -49,43 +49,34 @@ export default function RankingAcesso({ personnelList }: Props) {
         fetchAccessLogs();
     }, [periodo]);
 
-    // Calcular o ranking agrupando pelos registros reais de acesso (por email e user_id)
+    // Calcular o ranking agrupando pelos registros reais de acesso por e-mail
     const rankedPersonnel = useMemo(() => {
         const countsByEmail: Record<string, number> = {};
-        const countsByUserId: Record<string, number> = {};
 
         accessLogs.forEach(log => {
             const email = (log.user_email || '').toLowerCase().trim();
-            const userId = log.user_id ? String(log.user_id).trim() : '';
-            
             if (email) {
                 countsByEmail[email] = (countsByEmail[email] || 0) + 1;
             }
-            if (userId) {
-                countsByUserId[userId] = (countsByUserId[userId] || 0) + 1;
-            }
         });
 
-        // Mapear com os militares da lista de pessoal
-        const ranked: RankedUser[] = personnelList.map(p => {
-            const email = (p.email || '').toLowerCase().trim();
-            const pId = p.id ? String(p.id) : '';
-            
-            // Tenta obter contagem por e-mail ou por user_id/id
-            const countByMail = email ? (countsByEmail[email] || 0) : 0;
-            const countById = pId ? (countsByUserId[pId] || 0) : 0;
-            const total = Math.max(countByMail, countById);
+        // Mapear com os militares da lista de pessoal que possuem e-mail válido registrado
+        const ranked: RankedUser[] = personnelList
+            .filter(p => p.email && p.email.trim().length > 0)
+            .map(p => {
+                const email = (p.email || '').toLowerCase().trim();
+                const total = countsByEmail[email] || 0;
 
-            return {
-                id: p.id || p.email || p.name,
-                name: p.name,
-                graduation: p.graduation || p.rank || (p.type === 'BC' ? 'BC' : 'BM'),
-                war_name: p.war_name,
-                totalAccesses: total,
-            };
-        });
+                return {
+                    id: p.id || p.email || p.name,
+                    name: p.name,
+                    graduation: p.graduation || p.rank || (p.type === 'BC' ? 'BC' : 'BM'),
+                    war_name: p.war_name,
+                    totalAccesses: total,
+                };
+            });
 
-        // Adicionar usuários que acessaram mas podem não estar na tabela personnel
+        // Adicionar e-mails de acesso que não estão associados a nenhum cadastro em personnel
         const processedEmails = new Set(personnelList.map(p => (p.email || '').toLowerCase().trim()).filter(Boolean));
         
         Object.keys(countsByEmail).forEach(email => {
@@ -99,7 +90,7 @@ export default function RankingAcesso({ personnelList }: Props) {
             }
         });
 
-        // Ordenar do maior para o menor número de acessos
+        // Filtrar apenas os que possuem ao menos 1 acesso e ordenar do maior para o menor
         return ranked
             .filter(r => r.totalAccesses > 0)
             .sort((a, b) => b.totalAccesses - a.totalAccesses);
