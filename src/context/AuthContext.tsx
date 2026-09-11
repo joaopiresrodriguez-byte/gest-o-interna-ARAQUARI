@@ -14,6 +14,12 @@ export interface UserProfile {
     p_instrucao: 'reader' | 'editor' | null;
     p_logistica: 'reader' | 'editor' | null;
     p_social: 'reader' | 'editor' | null;
+    // Google OAuth fields
+    avatar_url?: string | null;
+    full_name?: string | null;
+    status?: string;
+    provider?: string;
+    updated_at?: string | null;
 }
 
 interface AuthContextType {

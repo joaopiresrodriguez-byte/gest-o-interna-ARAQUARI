@@ -21,6 +21,8 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const ExtratoPublico = lazy(() => import('./pages/ExtratoPublico'));
 const BcIntencaoPublica = lazy(() => import('./pages/BcIntencaoPublica').then(m => ({ default: m.BcIntencaoPublica })));
 const SolicitarApoioPublico = lazy(() => import('./pages/SolicitarApoioPublico'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const AcessoPendente = lazy(() => import('./pages/AcessoPendente'));
 
 import ChangePasswordModal from './components/ChangePasswordModal';
 
@@ -340,7 +342,7 @@ const AppLayout: React.FC = () => {
 
 // Component to handle Auth state logic
 const ProtectedApp: React.FC = () => {
-  const { session, loading, isPasswordRecovery } = useAuth();
+  const { session, profile, loading, signOut, isPasswordRecovery } = useAuth();
 
   if (loading) {
     return (
@@ -362,6 +364,16 @@ const ProtectedApp: React.FC = () => {
   }
 
   if (!session) {
+    return (
+      <Suspense fallback={<LoadingFallback message="Carregando login..." />}>
+        <Login />
+      </Suspense>
+    );
+  }
+
+  // Profile loaded and status is not 'ativo' — block access
+  if (profile && profile.status && profile.status !== 'ativo') {
+    signOut();
     return (
       <Suspense fallback={<LoadingFallback message="Carregando login..." />}>
         <Login />
@@ -408,6 +420,23 @@ const App: React.FC = () => {
               element={
                 <Suspense fallback={<LoadingFallback message="Carregando formulário de solicitação de apoio..." />}>
                   <SolicitarApoioPublico />
+                </Suspense>
+              }
+            />
+            {/* Public OAuth callback — must be before /* to avoid ProtectedApp */}
+            <Route
+              path="/auth/callback"
+              element={
+                <Suspense fallback={<LoadingFallback message="Verificando acesso..." />}>
+                  <AuthCallback />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/acesso-pendente"
+              element={
+                <Suspense fallback={<LoadingFallback message="Carregando..." />}>
+                  <AcessoPendente />
                 </Suspense>
               }
             />
