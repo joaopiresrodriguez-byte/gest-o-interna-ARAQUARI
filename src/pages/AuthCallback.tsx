@@ -5,81 +5,115 @@ import { supabase } from '../services/supabase';
 // Handles the OAuth redirect from Google.
 // Flow:
 //   1. Read session from Supabase (auto-set after Google redirect)
-//   2. Look up profile by session.user.id
-//   3a. No profile  → create with status='pendente' → /acesso-pendente
-//   3b. Profile, status!='ativo' → signOut → /login?erro=acesso_pendente
-//   3c. Profile, status='ativo' → sync avatar if empty → /avisos
+//   2. Look up profile by EMAIL first (prevents duplicate pending users for existing email accounts)
+//   3. Look up profile by ID second
+//   4. New user without existing email/id -> create profile with status='pendente' -> /acesso-pendente
 const AuthCallback: React.FC = () => {
     const navigate = useNavigate();
     const [statusMsg, setStatusMsg] = useState('Verificando acesso...');
 
     useEffect(() => {
         const handleCallback = async () => {
-            // getSession picks up the tokens from the URL hash/query set by Supabase
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            const { data: { session }, error } = await supabase.auth.getSession();
 
-            if (sessionError || !session) {
-                console.error('Callback: sem sessão ou erro', sessionError);
+            if (error || !session) {
+                console.error('Callback: sem sessão ou erro', error);
                 navigate('/login');
                 return;
             }
 
             setStatusMsg('Carregando perfil...');
+            const userEmail = session.user.email;
+            const userId = session.user.id;
+            const userMeta = session.user.user_metadata;
 
-            const { data: profile, error: profileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-
-            if (profileError) {
-                console.error('Callback: erro ao buscar perfil', profileError);
+            if (!userEmail) {
+                console.error('Callback: e-mail ausente na sessão');
                 navigate('/login');
                 return;
             }
 
-            // New Google user — create pending profile
-            if (!profile) {
-                setStatusMsg('Registrando solicitação de acesso...');
-                const { error: insertError } = await supabase
-                    .from('profiles')
-                    .insert({
-                        id: session.user.id,
-                        email: session.user.email,
-                        full_name: session.user.user_metadata?.full_name ?? null,
-                        avatar_url: session.user.user_metadata?.avatar_url ?? null,
-                        status: 'pendente',
-                        provider: 'google',
-                        is_manager: false,
-                    });
+            // PASSO 1: Buscar perfil pelo EMAIL
+            const { data: profileByEmail } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('email', userEmail)
+                .maybeSingle();
 
-                if (insertError) {
-                    console.error('Callback: erro ao criar perfil pendente', insertError);
+            if (profileByEmail) {
+                if (profileByEmail.status === 'pendente') {
+                    await supabase.auth.signOut();
+                    navigate('/login?erro=acesso_pendente');
+                    return;
                 }
 
-                navigate('/acesso-pendente');
+                if (profileByEmail.status && profileByEmail.status !== 'ativo') {
+                    await supabase.auth.signOut();
+                    navigate('/login?erro=acesso_negado');
+                    return;
+                }
+
+                // Se o ID mudou (novo login Google para conta já cadastrada por email)
+                // atualizar o ID e dados do Google
+                if (profileByEmail.id !== userId) {
+                    await supabase
+                        .from('profiles')
+                        .update({
+                            id: userId,
+                            provider: 'google',
+                            avatar_url: userMeta?.avatar_url || profileByEmail.avatar_url,
+                            full_name: userMeta?.full_name || profileByEmail.full_name,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('email', userEmail);
+                } else if (!profileByEmail.avatar_url && userMeta?.avatar_url) {
+                    await supabase
+                        .from('profiles')
+                        .update({
+                            avatar_url: userMeta.avatar_url,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', userId);
+                }
+
+                navigate('/avisos');
                 return;
             }
 
-            // Profile exists but not active
-            if (profile.status !== 'ativo') {
-                await supabase.auth.signOut();
-                navigate('/login?erro=acesso_pendente');
+            // PASSO 2: Buscar perfil pelo ID
+            const { data: profileById } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle();
+
+            if (profileById) {
+                if (profileById.status && profileById.status !== 'ativo') {
+                    await supabase.auth.signOut();
+                    navigate('/login?erro=acesso_negado');
+                    return;
+                }
+                navigate('/avisos');
                 return;
             }
 
-            // Active user — sync avatar from Google if profile has none (Bloco 5)
-            if (
-                !profile.avatar_url &&
-                session.user.user_metadata?.avatar_url
-            ) {
-                await supabase
-                    .from('profiles')
-                    .update({ avatar_url: session.user.user_metadata.avatar_url })
-                    .eq('id', session.user.id);
-            }
+            // PASSO 3: Usuário completamente novo — criar perfil pendente
+            setStatusMsg('Registrando solicitação de acesso...');
+            await supabase
+                .from('profiles')
+                .insert({
+                    id: userId,
+                    email: userEmail,
+                    full_name: userMeta?.full_name ?? null,
+                    avatar_url: userMeta?.avatar_url ?? null,
+                    status: 'pendente',
+                    role: 'pendente',
+                    provider: 'google',
+                    is_manager: false,
+                    created_at: new Date().toISOString()
+                });
 
-            navigate('/avisos');
+            navigate('/acesso-pendente');
         };
 
         handleCallback();
