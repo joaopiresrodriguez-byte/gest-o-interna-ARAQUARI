@@ -556,19 +556,23 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
                 🔒 ACAUTELADO {item.cautela_info ? `— ${item.cautela_info}` : ''}
               </span>
             )}
-            {/* Indicador visual distinto para Falta Reposta ou Falta Normal */}
+            {/* Indicador visual distinto para Falta Reposta ou Ocorrências */}
             {isOcorrencia && (
               conf?.reposto_reserva ? (
                 <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: '9999px' }}>
-                  🔄 Falta — Reposto
+                  🔄 Falta — Reposto Reserva
+                </span>
+              ) : conf?.sub_tipo_avaria === 'devera_consertar' ? (
+                <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', padding: '2px 8px', borderRadius: '9999px' }}>
+                  🔧 Baixado para conserto
                 </span>
               ) : conf?.tipo_ocorrencia === 'falta' || conf?.status === 'nao_encontrado' ? (
                 <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '9999px' }}>
-                  ❌ Falta ({conf?.quantidade_falta || 1})
+                  🛒 Deverá comprar ou repor ({conf?.quantidade_falta || 1})
                 </span>
               ) : (
-                <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', padding: '2px 8px', borderRadius: '9999px' }}>
-                  ⚠️ {conf?.sub_tipo_avaria === 'sem_conserto_baixar' ? 'Avariado (Baixa)' : 'Avariado (Conserto)'}
+                <span style={{ fontSize: '10px', fontWeight: 'bold', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '2px 8px', borderRadius: '9999px' }}>
+                  ⚠️ EM processo de baixa
                 </span>
               )
             )}
