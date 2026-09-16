@@ -68,18 +68,18 @@ const SocialB5: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [postsData, occData, pData, pressData, pvData] = await Promise.all([
-        SupabaseService.getSocialPosts(),
-        SupabaseService.getOccurrences(),
-        SupabaseService.getPersonnel(),
-        SupabaseService.getPressContacts(),
-        SupabaseService.getPortaVozes(),
+      const [postsData, occData, pData, pressRes, pvRes] = await Promise.all([
+        SupabaseService.getSocialPosts().catch(err => { console.warn('Erro ao carregar social_posts:', err); return []; }),
+        SupabaseService.getOccurrences().catch(err => { console.warn('Erro ao carregar occurrences:', err); return []; }),
+        SupabaseService.getPersonnel().catch(err => { console.warn('Erro ao carregar personnel:', err); return []; }),
+        SupabaseService.getPressContacts().catch(err => { console.warn('Erro ao carregar press_contacts:', err); return []; }),
+        SupabaseService.getPortaVozes().catch(err => { console.warn('Erro ao carregar porta_vozes:', err); return []; }),
       ]);
-      setPosts(postsData);
-      setOccurrences(occData);
-      setPersonnel(pData);
-      setPressContacts(pressData);
-      setPortaVozes(pvData);
+      setPosts(postsData || []);
+      setOccurrences(occData || []);
+      setPersonnel(pData || []);
+      setPressContacts(pressRes || []);
+      setPortaVozes(pvRes || []);
     } catch (e) {
       console.error('Error loading B5 data:', e);
       toast.error('Erro ao carregar dados do B5.');
@@ -323,10 +323,36 @@ _Centro de Comunicação Social (B5) — CBMSC Araquari_`;
   const birthdayPersonnel = personnel
     .filter(p => {
       if (!p.birth_date) return false;
-      const [, month, day] = p.birth_date.split('-').map(Number);
+      let month: number | undefined;
+      let day: number | undefined;
+
+      if (p.birth_date.includes('-')) {
+        const parts = p.birth_date.split('T')[0].split('-').map(Number);
+        if (parts.length === 3) {
+          // YYYY-MM-DD
+          month = parts[1];
+          day = parts[2];
+        }
+      } else if (p.birth_date.includes('/')) {
+        const parts = p.birth_date.split('/').map(Number);
+        if (parts.length === 3) {
+          // DD/MM/YYYY
+          day = parts[0];
+          month = parts[1];
+        }
+      }
+
+      if (!month || !day) return false;
       return month === filterMonth && (filterDay === '' || day === filterDay);
     })
-    .sort((a, b) => Number(a.birth_date!.split('-')[2]) - Number(b.birth_date!.split('-')[2]));
+    .sort((a, b) => {
+      const getDay = (dateStr: string) => {
+        if (dateStr.includes('-')) return Number(dateStr.split('T')[0].split('-')[2]) || 0;
+        if (dateStr.includes('/')) return Number(dateStr.split('/')[0]) || 0;
+        return 0;
+      };
+      return getDay(a.birth_date!) - getDay(b.birth_date!);
+    });
 
   const formatDateTime = (dt: string) => {
     try {
@@ -862,7 +888,12 @@ _Centro de Comunicação Social (B5) — CBMSC Araquari_`;
 
                   <div className="space-y-2 max-h-[500px] overflow-y-auto">
                     {birthdayPersonnel.map(p => {
-                      const day = p.birth_date!.split('-')[2];
+                      let day = '01';
+                      if (p.birth_date?.includes('-')) {
+                        day = p.birth_date.split('T')[0].split('-')[2] || '01';
+                      } else if (p.birth_date?.includes('/')) {
+                        day = p.birth_date.split('/')[0] || '01';
+                      }
                       return (
                         <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-stone-50 transition-colors border border-transparent hover:border-stone-100">
                           <div className="w-11 h-11 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 font-black text-sm border border-amber-100">
