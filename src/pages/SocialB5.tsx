@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { SupabaseService, SocialPost, Personnel, Occurrence } from '../services/SupabaseService';
+import { SupabaseService, SocialPost, Personnel, Occurrence, PressContact, PortaVoz } from '../services/SupabaseService';
 import { toast } from 'sonner';
 
-type TabKey = 'DIVULGAÇÃO' | 'OCORRÊNCIAS' | 'ANIVERSARIANTES';
+type TabKey = 'DIVULGAÇÃO' | 'OCORRÊNCIAS' | 'IMPRENSA' | 'ANIVERSARIANTES';
 
 const OCCURRENCE_TYPES = ['Incêndio', 'Resgate', 'Salvamento', 'APH', 'Busca', 'Materiais Perigosos', 'Prevenção', 'Outros'];
 const POST_CATEGORIES = ['Institucional', 'Campanha', 'Operação', 'Evento', 'Treinamento', 'Comunicado'];
+const MEDIA_TYPES: ('TV' | 'Radio' | 'Jornal' | 'Portal' | 'Assessoria' | 'Outros')[] = ['TV', 'Radio', 'Jornal', 'Portal', 'Assessoria', 'Outros'];
 
 const SocialB5: React.FC = () => {
   const { profile } = useAuth();
@@ -21,6 +22,7 @@ const SocialB5: React.FC = () => {
   const [postImageUrl, setPostImageUrl] = useState('');
   const [postFilter, setPostFilter] = useState('');
   const [postCategoryFilter, setPostCategoryFilter] = useState('');
+  const [uploadingPostImage, setUploadingPostImage] = useState(false);
 
   // Occurrences state
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
@@ -30,9 +32,29 @@ const SocialB5: React.FC = () => {
   const [occUnits, setOccUnits] = useState('');
   const [occDescription, setOccDescription] = useState('');
   const [occOutcome, setOccOutcome] = useState('');
-  const [occVisibility, setOccVisibility] = useState<'public' | 'internal'>('internal');
+  const [occVisibility, setOccVisibility] = useState<'public' | 'internal'>('public');
+  const [occImageUrl, setOccImageUrl] = useState('');
   const [occFilterType, setOccFilterType] = useState('');
   const [occFilterVisibility, setOccFilterVisibility] = useState('');
+  const [uploadingOccImage, setUploadingOccImage] = useState(false);
+
+  // Press & Spokespersons state
+  const [pressContacts, setPressContacts] = useState<PressContact[]>([]);
+  const [portaVozes, setPortaVozes] = useState<PortaVoz[]>([]);
+  
+  // Press Contact Form State
+  const [contactName, setContactName] = useState('');
+  const [contactVehicle, setContactVehicle] = useState('');
+  const [contactType, setContactType] = useState<'TV' | 'Radio' | 'Jornal' | 'Portal' | 'Assessoria' | 'Outros'>('Portal');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactNotes, setContactNotes] = useState('');
+
+  // Spokesperson Form State
+  const [selectedPersonnelId, setSelectedPersonnelId] = useState<number | ''>('');
+
+  // Press Release Modal State
+  const [selectedReleaseOcc, setSelectedReleaseOcc] = useState<Occurrence | null>(null);
 
   // Birthday state
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -46,19 +68,50 @@ const SocialB5: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [postsData, occData, pData] = await Promise.all([
+      const [postsData, occData, pData, pressData, pvData] = await Promise.all([
         SupabaseService.getSocialPosts(),
         SupabaseService.getOccurrences(),
         SupabaseService.getPersonnel(),
+        SupabaseService.getPressContacts(),
+        SupabaseService.getPortaVozes(),
       ]);
       setPosts(postsData);
       setOccurrences(occData);
       setPersonnel(pData);
+      setPressContacts(pressData);
+      setPortaVozes(pvData);
     } catch (e) {
       console.error('Error loading B5 data:', e);
-      toast.error('Erro ao carregar dados.');
+      toast.error('Erro ao carregar dados do B5.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Upload handler to Storage
+  const handleUploadImage = async (file: File, type: 'post' | 'occurrence') => {
+    if (type === 'post') setUploadingPostImage(true);
+    else setUploadingOccImage(true);
+
+    try {
+      const fileName = `b5_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const path = `b5_midia/${fileName}`;
+      await SupabaseService.uploadFile('ssci-documentos-normativos', path, file);
+      const url = SupabaseService.getPublicUrl('ssci-documentos-normativos', path);
+
+      if (type === 'post') {
+        setPostImageUrl(url);
+        toast.success('Imagem da publicação carregada com sucesso!');
+      } else {
+        setOccImageUrl(url);
+        toast.success('Imagem da ocorrência carregada com sucesso!');
+      }
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast.error('Erro ao enviar imagem: ' + (err.message || 'Falha no upload'));
+    } finally {
+      if (type === 'post') setUploadingPostImage(false);
+      else setUploadingOccImage(false);
     }
   };
 
@@ -106,7 +159,7 @@ const SocialB5: React.FC = () => {
   // === OCCURRENCE HANDLERS ===
   const resetOccForm = () => {
     setOccType(''); setOccDate(''); setOccLocation(''); setOccUnits('');
-    setOccDescription(''); setOccOutcome(''); setOccVisibility('internal');
+    setOccDescription(''); setOccOutcome(''); setOccVisibility('public'); setOccImageUrl('');
   };
 
   const handleSaveOccurrence = async () => {
@@ -126,10 +179,9 @@ const SocialB5: React.FC = () => {
         outcome: occOutcome || undefined,
         visibility: occVisibility,
         status: 'registered',
+        image_url: occImageUrl || undefined,
       };
       await SupabaseService.addOccurrence(newOcc);
-      // Sync via Edge Function triggered automatically by DB webhook
-
       toast.success('Ocorrência registrada com sucesso!');
       resetOccForm();
       loadData();
@@ -150,6 +202,109 @@ const SocialB5: React.FC = () => {
     } catch {
       toast.error('Erro ao excluir.');
     }
+  };
+
+  // === PRESS CONTACT HANDLERS ===
+  const handleSavePressContact = async () => {
+    if (!contactName.trim() || !contactVehicle.trim()) return toast.error('Nome e Veículo são obrigatórios.');
+    setLoading(true);
+    try {
+      await SupabaseService.addPressContact({
+        name: contactName,
+        vehicle: contactVehicle,
+        type: contactType,
+        phone: contactPhone,
+        email: contactEmail || undefined,
+        notes: contactNotes || undefined,
+      });
+      toast.success('Contato de imprensa adicionado com sucesso!');
+      setContactName(''); setContactVehicle(''); setContactPhone(''); setContactEmail(''); setContactNotes('');
+      loadData();
+    } catch {
+      toast.error('Erro ao salvar contato.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletePressContact = async (id: string) => {
+    if (!confirm('Remover este contato de imprensa?')) return;
+    try {
+      await SupabaseService.deletePressContact(id);
+      toast.success('Contato removido.');
+      loadData();
+    } catch {
+      toast.error('Erro ao remover.');
+    }
+  };
+
+  // === SPOKESPERSON HANDLERS ===
+  const handleAddPortaVoz = async () => {
+    if (!selectedPersonnelId) return toast.error('Selecione um militar.');
+    const p = personnel.find(per => per.id === Number(selectedPersonnelId));
+    if (!p) return;
+
+    setLoading(true);
+    try {
+      await SupabaseService.addPortaVoz({
+        personnel_id: p.id,
+        name: p.war_name || p.name,
+        rank: p.rank || 'Militar',
+        phone: p.phone || 'Sem telefone registrado',
+        is_active: true,
+      });
+      toast.success('Porta-voz cadastrado com sucesso!');
+      setSelectedPersonnelId('');
+      loadData();
+    } catch {
+      toast.error('Erro ao cadastrar porta-voz.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletePortaVoz = async (id: string) => {
+    if (!confirm('Remover porta-voz?')) return;
+    try {
+      await SupabaseService.deletePortaVoz(id);
+      toast.success('Porta-voz removido.');
+      loadData();
+    } catch {
+      toast.error('Erro ao remover.');
+    }
+  };
+
+  // Press Release generator text
+  const generatePressReleaseText = (occ: Occurrence) => {
+    const dataFmt = occ.occurrence_date ? new Date(occ.occurrence_date).toLocaleDateString('pt-BR') : '';
+    const horaFmt = occ.occurrence_date ? new Date(occ.occurrence_date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const portaVozAtivo = portaVozes.find(pv => pv.is_active);
+    const portaVozTexto = portaVozAtivo 
+      ? `${portaVozAtivo.rank} ${portaVozAtivo.name} (${portaVozAtivo.phone})`
+      : 'B5 / Seção de Comunicação Social CBMSC Araquari';
+
+    return `🔥 *CORPO DE BOMBEIROS MILITAR DE SANTA CATARINA*
+🚒 *3º/1º/7º BBM — ARAQUARI/SC*
+📌 *NOTA À IMPRENSA — OCORRÊNCIA*
+
+*Tipo:* ${occ.occurrence_type}
+*Data/Hora:* ${dataFmt} às ${horaFmt}
+*Local:* ${occ.location}
+${occ.units_involved ? `*Viaturas:* ${occ.units_involved}\n` : ''}
+*HISTÓRICO:*
+${occ.description}
+
+${occ.outcome ? `*DESFECHO / RESULTADO:* \n${occ.outcome}\n` : ''}
+💬 *CONTATO DE IMPRENSA / PORTA-VOZ:*
+${portaVozTexto}
+${occ.image_url ? `\n📸 *Foto da Ocorrência:* ${occ.image_url}` : ''}
+_Centro de Comunicação Social (B5) — CBMSC Araquari_`;
+  };
+
+  const handleCopyReleaseToClipboard = (occ: Occurrence) => {
+    const text = generatePressReleaseText(occ);
+    navigator.clipboard.writeText(text);
+    toast.success('Release copiado para a área de transferência com sucesso! Pronto para colar no WhatsApp.');
   };
 
   // Filtered data
@@ -182,6 +337,7 @@ const SocialB5: React.FC = () => {
   const TABS: { key: TabKey; icon: string; label: string }[] = [
     { key: 'DIVULGAÇÃO', icon: 'campaign', label: 'Divulgação' },
     { key: 'OCORRÊNCIAS', icon: 'local_fire_department', label: 'Ocorrências' },
+    { key: 'IMPRENSA', icon: 'newspaper', label: 'Imprensa & Porta-Vozes' },
     { key: 'ANIVERSARIANTES', icon: 'cake', label: 'Aniversariantes' },
   ];
 
@@ -283,8 +439,15 @@ const SocialB5: React.FC = () => {
                       <textarea value={postContent} onChange={e => setPostContent(e.target.value)} className="w-full h-32 p-3 rounded-xl border border-rustic-border bg-stone-50 text-sm resize-none" placeholder="Escreva o conteúdo da publicação..." />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">URL da Imagem (opcional)</label>
-                      <input value={postImageUrl} onChange={e => setPostImageUrl(e.target.value)} className="w-full h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="https://..." />
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Foto da Publicação</label>
+                      <div className="flex gap-2 items-center">
+                        <input value={postImageUrl} onChange={e => setPostImageUrl(e.target.value)} className="flex-1 h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="https://... ou faça upload" />
+                        <label className="px-3 py-2 bg-stone-100 hover:bg-stone-200 border border-rustic-border rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1 transition-colors shrink-0">
+                          <span className="material-symbols-outlined text-[16px]">{uploadingPostImage ? 'sync' : 'upload'}</span>
+                          {uploadingPostImage ? 'Subindo...' : 'Upload'}
+                          <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleUploadImage(e.target.files[0], 'post')} />
+                        </label>
+                      </div>
                     </div>
 
                     {isEditor ? (
@@ -402,6 +565,17 @@ const SocialB5: React.FC = () => {
                       <textarea value={occOutcome} onChange={e => setOccOutcome(e.target.value)} className="w-full h-16 p-3 rounded-xl border border-rustic-border bg-stone-50 text-sm resize-none" placeholder="Resultado / ações tomadas" />
                     </div>
                     <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Foto da Ocorrência (opcional)</label>
+                      <div className="flex gap-2 items-center">
+                        <input value={occImageUrl} onChange={e => setOccImageUrl(e.target.value)} className="flex-1 h-10 px-3 rounded-xl border border-rustic-border bg-stone-50 text-sm" placeholder="https://... ou faça upload" />
+                        <label className="px-3 py-2 bg-stone-100 hover:bg-stone-200 border border-rustic-border rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1 transition-colors shrink-0">
+                          <span className="material-symbols-outlined text-[16px]">{uploadingOccImage ? 'sync' : 'upload'}</span>
+                          {uploadingOccImage ? 'Subindo...' : 'Upload'}
+                          <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleUploadImage(e.target.files[0], 'occurrence')} />
+                        </label>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
                       <label className="text-[11px] font-bold text-gray-500 uppercase ml-1">Visibilidade</label>
                       <div className="flex gap-2">
                         <button onClick={() => setOccVisibility('internal')} className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${occVisibility === 'internal' ? 'bg-stone-700 text-white border-stone-700' : 'bg-white text-gray-500 border-rustic-border hover:bg-gray-50'}`}>
@@ -470,14 +644,30 @@ const SocialB5: React.FC = () => {
                             </p>
                           </div>
                         </div>
-                        {isEditor && (
-                          <button onClick={() => handleDeleteOccurrence(occ.id!)} className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-md transition-colors" title="Excluir">
-                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setSelectedReleaseOcc(occ)}
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                            title="Gerar Release de Imprensa"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">newspaper</span>
+                            Gera Release
                           </button>
-                        )}
+                          {isEditor && (
+                            <button onClick={() => handleDeleteOccurrence(occ.id!)} className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-md transition-colors" title="Excluir">
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <p className="text-sm text-rustic-brown/80 mt-3 leading-relaxed">{occ.description}</p>
+
+                      {occ.image_url && (
+                        <div className="mt-3 rounded-lg overflow-hidden max-h-48 border border-stone-200">
+                          <img src={occ.image_url} alt="Foto da ocorrência" className="w-full h-full object-cover" />
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-rustic-border/50 text-[10px] text-gray-400">
                         {occ.units_involved && (
@@ -502,6 +692,140 @@ const SocialB5: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============ TAB: IMPRENSA & PORTA-VOZES ============ */}
+          {activeTab === 'IMPRENSA' && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              {/* Contatos de Imprensa */}
+              <div className="space-y-6">
+                <section className="bg-surface rounded-2xl border border-rustic-border shadow-sm overflow-hidden">
+                  <div className="bg-gradient-to-r from-blue-800 to-indigo-900 p-5 text-white flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                        <span className="material-symbols-outlined text-xl">contacts</span>
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold">Mailing de Imprensa</h2>
+                        <p className="text-white/70 text-xs">Jornalistas e veículos cadastrados</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold bg-white/20 px-2.5 py-1 rounded-full">{pressContacts.length} Contato(s)</span>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    {isEditor && (
+                      <div className="bg-stone-50 border border-stone-200 p-4 rounded-xl space-y-3">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-rustic-brown">Novo Contato de Imprensa</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <input value={contactName} onChange={e => setContactName(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border bg-white text-xs" placeholder="Nome do Jornalista *" />
+                          <input value={contactVehicle} onChange={e => setContactVehicle(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border bg-white text-xs" placeholder="Veículo (ex: NSC TV, Rádio 89FM) *" />
+                          <select value={contactType} onChange={e => setContactType(e.target.value as any)} className="h-9 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold">
+                            {MEDIA_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} className="h-9 px-3 rounded-lg border border-rustic-border bg-white text-xs" placeholder="WhatsApp / Telefone" />
+                        </div>
+                        <div className="flex gap-2">
+                          <input value={contactEmail} onChange={e => setContactEmail(e.target.value)} className="flex-1 h-9 px-3 rounded-lg border border-rustic-border bg-white text-xs" placeholder="E-mail de contato" />
+                          <button onClick={handleSavePressContact} disabled={loading} className="px-4 py-2 bg-blue-700 text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors shadow-xs">
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {pressContacts.map(c => (
+                        <div key={c.id} className="p-3 bg-white border border-rustic-border/60 rounded-xl flex items-center justify-between gap-3 hover:shadow-xs transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs flex items-center justify-center border border-blue-100">
+                              {c.type.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-xs text-[#2c1810]">{c.name}</h4>
+                                <span className="text-[9px] font-bold bg-stone-100 text-rustic-brown px-1.5 py-0.5 rounded">{c.vehicle}</span>
+                              </div>
+                              <p className="text-[10px] text-gray-500">{c.phone} {c.email ? `• ${c.email}` : ''}</p>
+                            </div>
+                          </div>
+                          {isEditor && (
+                            <button onClick={() => handleDeletePressContact(c.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded transition-colors">
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {pressContacts.length === 0 && (
+                        <div className="py-8 text-center text-gray-400 text-xs">
+                          Nenhum contato de imprensa cadastrado.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* Porta-Vozes Autorizados */}
+              <div className="space-y-6">
+                <section className="bg-surface rounded-2xl border border-rustic-border shadow-sm overflow-hidden">
+                  <div className="bg-gradient-to-r from-stone-800 to-stone-900 p-5 text-white flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                        <span className="material-symbols-outlined text-xl">record_voice_over</span>
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold">Porta-Vozes Oficiais</h2>
+                        <p className="text-white/70 text-xs">Militares credenciados para entrevistas</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold bg-white/20 px-2.5 py-1 rounded-full">{portaVozes.length} Habilitado(s)</span>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    {isEditor && (
+                      <div className="bg-stone-50 border border-stone-200 p-4 rounded-xl flex gap-2 items-center">
+                        <select value={selectedPersonnelId} onChange={e => setSelectedPersonnelId(e.target.value === '' ? '' : Number(e.target.value))} className="flex-1 h-10 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold">
+                          <option value="">Selecione o Militar (Efetivo B1)...</option>
+                          {personnel.map(p => (
+                            <option key={p.id} value={p.id}>{p.rank} {p.war_name || p.name}</option>
+                          ))}
+                        </select>
+                        <button onClick={handleAddPortaVoz} disabled={loading} className="px-4 py-2.5 bg-stone-800 text-white rounded-lg text-xs font-bold hover:bg-stone-900 transition-colors shadow-xs">
+                          Cadastrar
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {portaVozes.map(pv => (
+                        <div key={pv.id} className="p-3 bg-white border border-rustic-border/60 rounded-xl flex items-center justify-between gap-3 hover:shadow-xs transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center border border-emerald-100">
+                              <span className="material-symbols-outlined text-[18px]">verified</span>
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-xs text-[#2c1810]">{pv.rank} {pv.name}</h4>
+                              <p className="text-[10px] text-gray-500">{pv.phone}</p>
+                            </div>
+                          </div>
+                          {isEditor && (
+                            <button onClick={() => handleDeletePortaVoz(pv.id!)} className="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded transition-colors">
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {portaVozes.length === 0 && (
+                        <div className="py-8 text-center text-gray-400 text-xs">
+                          Nenhum porta-voz habilitado cadastrado.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
           )}
@@ -568,6 +892,41 @@ const SocialB5: React.FC = () => {
 
         </div>
       </div>
+
+      {/* MODAL PRESS RELEASE */}
+      {selectedReleaseOcc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedReleaseOcc(null)}>
+          <div className="bg-white border border-stone-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2 text-emerald-700">
+                <span className="material-symbols-outlined">newspaper</span>
+                <h3 className="font-black text-base">Press Release Oficial (WhatsApp)</h3>
+              </div>
+              <button onClick={() => setSelectedReleaseOcc(null)} className="text-gray-400 hover:text-gray-600 text-lg font-bold">×</button>
+            </div>
+
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 font-mono text-xs whitespace-pre-wrap leading-relaxed text-stone-800 max-h-96 overflow-y-auto">
+              {generatePressReleaseText(selectedReleaseOcc)}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => handleCopyReleaseToClipboard(selectedReleaseOcc)}
+                className="flex-1 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">content_copy</span>
+                Copiar Release (WhatsApp)
+              </button>
+              <button
+                onClick={() => setSelectedReleaseOcc(null)}
+                className="px-4 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl font-bold text-xs transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

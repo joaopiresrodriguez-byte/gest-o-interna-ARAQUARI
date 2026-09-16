@@ -335,6 +335,29 @@ export interface Occurrence {
     outcome?: string;
     visibility: 'public' | 'internal';
     status: 'registered' | 'closed';
+    image_url?: string;
+}
+
+export interface PressContact {
+    id?: string;
+    created_at?: string;
+    name: string;
+    vehicle: string; // Ex: NSC TV, Rádio 89FM, Jornal de Araquari
+    type: 'TV' | 'Radio' | 'Jornal' | 'Portal' | 'Assessoria' | 'Outros';
+    phone: string;
+    email?: string;
+    notes?: string;
+}
+
+export interface PortaVoz {
+    id?: string;
+    created_at?: string;
+    personnel_id: number;
+    name: string;
+    rank: string;
+    phone: string;
+    is_active: boolean;
+    notes?: string;
 }
 
 export interface ProductReceipt {
