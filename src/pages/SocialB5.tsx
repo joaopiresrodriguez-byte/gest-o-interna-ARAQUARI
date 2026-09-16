@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { SupabaseService, SocialPost, Personnel, Occurrence, PressContact, PortaVoz } from '../services/SupabaseService';
+import { GroqService } from '../services/GroqService';
 import { toast } from 'sonner';
 
 type TabKey = 'DIVULGAÇÃO' | 'OCORRÊNCIAS' | 'IMPRENSA' | 'ANIVERSARIANTES';
@@ -179,15 +180,15 @@ const SocialB5: React.FC = () => {
         outcome: occOutcome || undefined,
         visibility: occVisibility,
         status: 'registered',
-        image_url: occImageUrl || undefined,
+        ...(occImageUrl ? { image_url: occImageUrl } : {}),
       };
       await SupabaseService.addOccurrence(newOcc);
       toast.success('Ocorrência registrada com sucesso!');
       resetOccForm();
       loadData();
-    } catch (e) {
-      console.error(e);
-      toast.error('Erro ao registrar ocorrência.');
+    } catch (e: any) {
+      console.error('Erro ao salvar ocorrência:', e);
+      toast.error('Erro ao registrar ocorrência: ' + (e?.message || 'Verifique as permissões no banco.'));
     } finally {
       setLoading(false);
     }
@@ -274,8 +275,12 @@ const SocialB5: React.FC = () => {
     }
   };
 
-  // Press Release generator text
+  const [generatingAiRelease, setGeneratingAiRelease] = useState(false);
+  const [aiEnhancedReleaseText, setAiEnhancedReleaseText] = useState<string | null>(null);
+
   const generatePressReleaseText = (occ: Occurrence) => {
+    if (aiEnhancedReleaseText) return aiEnhancedReleaseText;
+
     const dataFmt = occ.occurrence_date ? new Date(occ.occurrence_date).toLocaleDateString('pt-BR') : '';
     const horaFmt = occ.occurrence_date ? new Date(occ.occurrence_date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
     const portaVozAtivo = portaVozes.find(pv => pv.is_active);
@@ -299,6 +304,35 @@ ${occ.outcome ? `*DESFECHO / RESULTADO:* \n${occ.outcome}\n` : ''}
 ${portaVozTexto}
 ${occ.image_url ? `\n📸 *Foto da Ocorrência:* ${occ.image_url}` : ''}
 _Centro de Comunicação Social (B5) — CBMSC Araquari_`;
+  };
+
+  const handleGenerateAiReleaseText = async (occ: Occurrence) => {
+    setGeneratingAiRelease(true);
+    try {
+      const prompt = `Você é o Chefe de Comunicação Social (B5) do Corpo de Bombeiros Militar de Santa Catarina (CBMSC) em Araquari/SC.
+Redija uma NOTA OFICIAL À IMPRENSA formatada em estilo jornalístico profissional e pronta para transmissão via WhatsApp.
+
+Dados da Ocorrência:
+- Tipo: ${occ.occurrence_type}
+- Data/Hora: ${occ.occurrence_date}
+- Local: ${occ.location}
+- Viaturas: ${occ.units_involved || 'Guarnição de Serviço'}
+- Descrição da Ocorrência: ${occ.description}
+- Desfecho: ${occ.outcome || 'Ocorrência finalizada'}
+
+Mantenha o padrão oficial com emojis, formatação em negrito para WhatsApp, tom profissional e conciso.`;
+
+      const result = await GroqService.chatNormativoGroq(prompt, [], [], false);
+      if (result?.ai_response) {
+        setAiEnhancedReleaseText(result.ai_response);
+        toast.success('Release aprimorado com sucesso pela Inteligência Artificial!');
+      }
+    } catch (err: any) {
+      console.error('Erro na IA:', err);
+      toast.error('Erro ao gerar release por IA: ' + (err.message || 'Falha na conexão com Groq API.'));
+    } finally {
+      setGeneratingAiRelease(false);
+    }
   };
 
   const handleCopyReleaseToClipboard = (occ: Occurrence) => {
@@ -926,17 +960,34 @@ _Centro de Comunicação Social (B5) — CBMSC Araquari_`;
 
       {/* MODAL PRESS RELEASE */}
       {selectedReleaseOcc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedReleaseOcc(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" onClick={() => { setSelectedReleaseOcc(null); setAiEnhancedReleaseText(null); }}>
           <div className="bg-white border border-stone-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2 text-emerald-700">
                 <span className="material-symbols-outlined">newspaper</span>
                 <h3 className="font-black text-base">Press Release Oficial (WhatsApp)</h3>
               </div>
-              <button onClick={() => setSelectedReleaseOcc(null)} className="text-gray-400 hover:text-gray-600 text-lg font-bold">×</button>
+              <button onClick={() => { setSelectedReleaseOcc(null); setAiEnhancedReleaseText(null); }} className="text-gray-400 hover:text-gray-600 text-lg font-bold">×</button>
             </div>
 
-            <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 font-mono text-xs whitespace-pre-wrap leading-relaxed text-stone-800 max-h-96 overflow-y-auto">
+            <div className="flex justify-between items-center bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                <span className="material-symbols-outlined text-emerald-600">auto_awesome</span>
+                <span>Inteligência Artificial (Groq)</span>
+              </div>
+              <button
+                onClick={() => handleGenerateAiReleaseText(selectedReleaseOcc)}
+                disabled={generatingAiRelease}
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+              >
+                <span className={`material-symbols-outlined text-[14px] ${generatingAiRelease ? 'animate-spin' : ''}`}>
+                  {generatingAiRelease ? 'sync' : 'auto_awesome'}
+                </span>
+                {generatingAiRelease ? 'Redigindo...' : 'Aprimorar com IA'}
+              </button>
+            </div>
+
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 font-mono text-xs whitespace-pre-wrap leading-relaxed text-stone-800 max-h-80 overflow-y-auto">
               {generatePressReleaseText(selectedReleaseOcc)}
             </div>
 
@@ -949,7 +1000,7 @@ _Centro de Comunicação Social (B5) — CBMSC Araquari_`;
                 Copiar Release (WhatsApp)
               </button>
               <button
-                onClick={() => setSelectedReleaseOcc(null)}
+                onClick={() => { setSelectedReleaseOcc(null); setAiEnhancedReleaseText(null); }}
                 className="px-4 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl font-bold text-xs transition-colors"
               >
                 Fechar
