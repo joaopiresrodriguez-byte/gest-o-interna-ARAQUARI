@@ -227,8 +227,8 @@ const PessoalB1: React.FC = () => {
   const [sigrhExports, setSigrhExports] = useState<SigrhExport[]>([]);
 
   // New modules state
-  const [courses, setCourses] = useState<B1Course[]>([]);
-  const [epiDeliveries, setEpiDeliveries] = useState<EpiDelivery[]>([]);
+  const [_courses, setCourses] = useState<B1Course[]>([]);
+  const [_epiDeliveries, setEpiDeliveries] = useState<EpiDelivery[]>([]);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [escalas, setEscalas] = useState<Escala[]>([]);
 
@@ -491,7 +491,7 @@ const PessoalB1: React.FC = () => {
   };
 
   // Handle Swap
-  const handleSaveSwap = async () => {
+  const _handleSaveSwap = async () => {
     if (!swapPersonId || !swapOrigDate || !swapNewDate || !swapReason) return toast.error('Preencha todos os campos!');
     const monthRef = swapOrigDate.substring(0, 7);
     const count = await PersonnelService.getSwapCountThisMonth(swapPersonId as number, monthRef);
