@@ -59,6 +59,7 @@ const Detail: React.FC<{ label: string; value?: string; icon?: string }> = ({ la
 interface ItemCardProps {
   item: Vehicle;
   notices: PendingNotice[];
+  pendenciasB4?: any[];
   profile: any;
   onSelect: (item: Vehicle) => void;
   onEdit?: (item: Vehicle) => void;
@@ -71,6 +72,7 @@ interface ItemCardProps {
 const ItemCard: React.FC<ItemCardProps> = ({
   item,
   notices,
+  pendenciasB4 = [],
   profile,
   onSelect,
   onEdit,
@@ -80,17 +82,26 @@ const ItemCard: React.FC<ItemCardProps> = ({
   onVisualizarViatura,
 }) => {
   const itemNotices = notices.filter(n => n.status === 'pendente' && (n.viatura_id === item.id || (n.description && item.name && n.description.includes(item.name))));
+  
+  // Buscar pendências ativas de conferência diária B4 para este item/viatura
+  const itemPendenciasB4 = pendenciasB4.filter(p => 
+    p.item_id === item.id || 
+    (p.item_nome && item.name && p.item_nome.toLowerCase().trim() === item.name.toLowerCase().trim()) ||
+    (item.type === 'Viatura' && p.viatura_nome && p.viatura_nome.toLowerCase().includes(item.name.toLowerCase()))
+  );
 
   return (
     <div
-      className="bg-white rounded-xl border border-rustic-border p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative group"
+      className={`bg-white rounded-xl border p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative group ${
+        itemPendenciasB4.length > 0 ? 'border-red-400 ring-1 ring-red-300' : 'border-rustic-border'
+      }`}
       onClick={() => onSelect(item)}
     >
       {/* Click hint */}
       <span className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity material-symbols-outlined text-rustic-brown/30 text-[18px]">open_in_full</span>
 
       <div className="flex justify-between items-start mb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
             item.status === 'cautelado' || item.is_cautelado
               ? 'bg-blue-600 text-white shadow-xs'
@@ -100,6 +111,11 @@ const ItemCard: React.FC<ItemCardProps> = ({
           }`}>
             {item.status === 'cautelado' || item.is_cautelado ? '🔒 CAUTELADO' : item.status === 'active' ? 'Ativo' : 'Inativo'}
           </span>
+          {itemPendenciasB4.length > 0 && (
+            <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded shadow-xs flex items-center gap-1 animate-pulse">
+              ⚠️ OCORRÊNCIA NA CONFERÊNCIA
+            </span>
+          )}
           {item.quantidade && item.quantidade > 1 && (
             <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded">
               (x{item.quantidade})
@@ -174,6 +190,31 @@ const ItemCard: React.FC<ItemCardProps> = ({
         )}
         {item.year && <span className="text-[9px] font-bold bg-stone-100 text-gray-500 px-2 py-0.5 rounded">{item.year}</span>}
       </div>
+
+      {/* Ocorrências B4 ativas registradas na conferência */}
+      {itemPendenciasB4.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {itemPendenciasB4.map(pend => (
+            <div key={pend.id} className="bg-red-50 border border-red-300 rounded-lg p-2.5">
+              <div className="flex items-start gap-2">
+                <span className="material-symbols-outlined text-red-600 text-[16px] mt-0.5">report_problem</span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase text-red-700">
+                      Ocorrência em {pend.data_conferencia || 'Conferência'}
+                    </span>
+                    <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
+                      {pend.status_conferencia === 'nao_encontrado' ? 'Não Encontrado' : 'Avariado'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-bold text-red-900 mt-0.5">{pend.observacao || 'Sem observação registrada'}</p>
+                  <p className="text-[9px] text-red-700 mt-0.5">Reportado por: {pend.conferido_por_nome || 'Militar'}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Alerts */}
       {itemNotices.length > 0 && (
@@ -455,17 +496,20 @@ const PatrimonioB4: React.FC = () => {
     supabase.from('compartimentos_viatura').select('*').eq('ativo', true).then(({ data }) => setAllCompartimentos(data || []));
   }, []);
 
+  const [pendenciasB4, setPendenciasB4] = useState<any[]>([]);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [fleetData, noticesData, purchasesData, missionsData, personnelData, checklistsData, trainingsData] = await Promise.all([
+      const [fleetData, noticesData, purchasesData, missionsData, personnelData, checklistsData, trainingsData, histB4Res] = await Promise.all([
         SupabaseService.getFleet(),
         SupabaseService.getPendingNotices(),
         SupabaseService.getPurchases(),
         SupabaseService.getDailyMissions(),
         SupabaseService.getPersonnel(),
         SupabaseService.getDailyChecklists(),
-        SupabaseService.getTrainings()
+        SupabaseService.getTrainings(),
+        supabase.from('historico_conferencias_b4').select('*').eq('resolvido', false)
       ]);
       setFleet(fleetData);
       setInitialNotices(noticesData);
@@ -474,6 +518,7 @@ const PatrimonioB4: React.FC = () => {
       setPersonnel(personnelData);
       setDailyChecklists(checklistsData);
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
+      setPendenciasB4(histB4Res.data || []);
     } catch (error) {
       console.error("Error loading B4 data:", error);
     } finally {
@@ -1194,8 +1239,15 @@ const PatrimonioB4: React.FC = () => {
                                 item.local_id === local.id ||
                                 (!item.local_id && item.location?.toLowerCase() === local.nome.toLowerCase())
                               ).length;
+                              const ocoCount = pendenciasB4.filter(p =>
+                                (p.local_nome && p.local_nome.toLowerCase().includes(local.nome.toLowerCase())) ||
+                                (p.item_nome && fleet.some(f => (f.local_id === local.id || f.location?.toLowerCase() === local.nome.toLowerCase()) && f.name.toLowerCase().trim() === p.item_nome.toLowerCase().trim()))
+                              ).length;
+
                               return (
-                                <div key={local.id} className="flex items-center justify-between p-3 rounded-xl border border-rustic-border bg-white hover:border-green-400 hover:shadow-sm transition-all group">
+                                <div key={local.id} className={`flex items-center justify-between p-3 rounded-xl border bg-white hover:shadow-sm transition-all group ${
+                                  ocoCount > 0 ? 'border-red-400 ring-1 ring-red-300' : 'border-rustic-border hover:border-green-400'
+                                }`}>
                                   <button
                                     onClick={() => setExtratoLocal(local)}
                                     className="flex items-center gap-2 text-left flex-1 min-w-0"
@@ -1204,7 +1256,14 @@ const PatrimonioB4: React.FC = () => {
                                       {local.tipo === 'viatura' ? 'local_shipping' : 'location_city'}
                                     </span>
                                     <div className="truncate">
-                                      <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800 block truncate">{local.nome}</span>
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        <span className="text-xs font-bold text-rustic-brown group-hover:text-green-800 truncate">{local.nome}</span>
+                                        {ocoCount > 0 && (
+                                          <span className="text-[9px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                            ⚠️ {ocoCount}
+                                          </span>
+                                        )}
+                                      </div>
                                       <span className="text-[10px] text-gray-500 font-semibold">{count} item(ns)</span>
                                     </div>
                                   </button>
@@ -1249,6 +1308,11 @@ const PatrimonioB4: React.FC = () => {
                                 item.local_id === vtr.id ||
                                 item.location?.toLowerCase() === vtr.name.toLowerCase()
                               ).length;
+                              const ocoCount = pendenciasB4.filter(p =>
+                                (p.viatura_nome && p.viatura_nome.toLowerCase().includes(vtr.name.toLowerCase())) ||
+                                p.item_id === vtr.id ||
+                                (p.item_nome && p.item_nome.toLowerCase().trim() === vtr.name.toLowerCase().trim())
+                              ).length;
 
                               const vtrLocalObj: LocalEquipamento = {
                                 id: vtr.id,
@@ -1258,7 +1322,9 @@ const PatrimonioB4: React.FC = () => {
                               };
 
                               return (
-                                <div key={`vtr-${vtr.id}`} className="flex items-center justify-between p-3 rounded-xl border border-blue-200 bg-white hover:border-blue-400 hover:shadow-sm transition-all group">
+                                <div key={`vtr-${vtr.id}`} className={`flex items-center justify-between p-3 rounded-xl border bg-white hover:shadow-sm transition-all group ${
+                                  ocoCount > 0 ? 'border-red-400 ring-1 ring-red-300' : 'border-blue-200 hover:border-blue-400'
+                                }`}>
                                   <button
                                     onClick={() => setExtratoLocal(vtrLocalObj)}
                                     className="flex items-center gap-2 text-left flex-1 min-w-0"
@@ -1267,7 +1333,14 @@ const PatrimonioB4: React.FC = () => {
                                       local_shipping
                                     </span>
                                     <div className="truncate">
-                                      <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950 block truncate">{vtr.name}</span>
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950 truncate">{vtr.name}</span>
+                                        {ocoCount > 0 && (
+                                          <span className="text-[9px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                            ⚠️ {ocoCount}
+                                          </span>
+                                        )}
+                                      </div>
                                       <span className="text-[10px] text-blue-600 font-semibold">{count} item(ns)</span>
                                     </div>
                                   </button>
@@ -1309,6 +1382,7 @@ const PatrimonioB4: React.FC = () => {
                                   key={item.id}
                                   item={item}
                                   notices={notices}
+                                  pendenciasB4={pendenciasB4}
                                   profile={profile}
                                   onSelect={setSelectedItem}
                                   onEdit={abrirEdicaoFleetItem}
@@ -1355,6 +1429,7 @@ const PatrimonioB4: React.FC = () => {
                                   key={item.id}
                                   item={item}
                                   notices={notices}
+                                  pendenciasB4={pendenciasB4}
                                   profile={profile}
                                   onSelect={setSelectedItem}
                                   onEdit={abrirEdicaoFleetItem}
