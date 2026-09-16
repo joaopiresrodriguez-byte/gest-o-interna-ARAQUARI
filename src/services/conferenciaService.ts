@@ -49,20 +49,44 @@ function setLocalConferenciaItem(itemId: string, itemConf: any) {
   }
 }
 
-// Buscar conferência do dia atual:
+// Buscar conferência do dia atual (incluindo pendências ativas não resolvidas):
 export async function buscarConferenciaDia(): Promise<Record<string, any>> {
   const localMap = getLocalConferencias();
   const hoje = new Date().toISOString().split('T')[0];
 
   try {
-    // 1. Tentar buscar da tabela conferencia_itens se ela existir
+    const mapa: Record<string, any> = { ...localMap };
+
+    // 1. Carregar todas as pendências em aberto (resolvido = false) de historico_conferencias_b4
+    const { data: pendenciasData } = await supabase
+      .from('historico_conferencias_b4')
+      .select('*')
+      .eq('resolvido', false);
+
+    if (pendenciasData && pendenciasData.length > 0) {
+      for (const pend of pendenciasData) {
+        if (pend.item_id) {
+          mapa[pend.item_id] = {
+            id: pend.item_id,
+            status: pend.status_conferencia || 'avariado',
+            observacao: pend.observacao || '',
+            observacao_ocorrencia: pend.observacao || '',
+            conferido_por_nome: pend.conferido_por_nome || 'Militar',
+            conferido_em: pend.conferido_em || pend.created_at,
+            data_conferencia: pend.data_conferencia,
+            origem_pendencia: true,
+          };
+        }
+      }
+    }
+
+    // 2. Buscar registros específicos da conferência do dia atual em conferencia_itens
     const { data: dbData, error: dbError } = await supabase
       .from('conferencia_itens')
       .select('*')
       .eq('data_conferencia', hoje);
 
     if (!dbError && dbData && dbData.length > 0) {
-      const mapa: Record<string, any> = { ...localMap };
       for (const item of dbData) {
         const chave = item.fleet_item_id || item.equipamento_id || item.material_id || item.viatura_id;
         if (chave) mapa[chave] = item;
@@ -70,13 +94,12 @@ export async function buscarConferenciaDia(): Promise<Record<string, any>> {
       return mapa;
     }
 
-    // 2. Se conferencia_itens não existir no Supabase, carregar dos dados persistidos da tabela fleet
+    // 3. Fallback: carregar dos dados persistidos da tabela fleet se conferencia_itens não retornar itens do dia
     const { data: fleetData, error: fleetError } = await supabase
       .from('fleet')
       .select('id, details');
 
     if (!fleetError && fleetData) {
-      const mapa: Record<string, any> = { ...localMap };
       for (const f of fleetData) {
         if (f.details) {
           try {
@@ -95,12 +118,11 @@ export async function buscarConferenciaDia(): Promise<Record<string, any>> {
           }
         }
       }
-      return mapa;
     }
 
-    return localMap;
+    return mapa;
   } catch (e) {
-    console.error('Erro ao buscar conferência do dia:', e);
+    console.error('Erro ao buscar conferência do dia com pendências:', e);
     return localMap;
   }
 }

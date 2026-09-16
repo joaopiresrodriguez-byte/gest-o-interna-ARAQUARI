@@ -102,6 +102,7 @@ interface N1Props {
   titulo: string;
   icone: string;
   totalItens: number;
+  totalOcorrencias?: number;
   abertos: Record<string, boolean>;
   toggle: (id: string) => void;
   conferenciaMap: Record<string, any>;
@@ -111,7 +112,7 @@ interface N1Props {
   children: React.ReactNode;
 }
 
-function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMap, onAtualizar, isViatura, viaturaCtx, children }: N1Props) {
+function NivelUm({ id, titulo, icone, totalItens, totalOcorrencias = 0, abertos, toggle, conferenciaMap, onAtualizar, isViatura, viaturaCtx, children }: N1Props) {
   const aberto = abertos[id];
   const confViatura = conferenciaMap[id];
   const isOk = confViatura?.status === 'ok';
@@ -186,7 +187,7 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
           padding: '14px 16px',
           background: aberto ? '#f1f5f9' : 'white',
           cursor: 'pointer',
-          borderLeft: '4px solid #1d4ed8',
+          borderLeft: isOcorrencia || totalOcorrencias > 0 ? '4px solid #dc2626' : '4px solid #1d4ed8',
         }}
       >
         <div>
@@ -243,6 +244,13 @@ function NivelUm({ id, titulo, icone, totalItens, abertos, toggle, conferenciaMa
               </button>
             </div>
           )}
+
+          {totalOcorrencias > 0 && (
+            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '999px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              ⚠️ {totalOcorrencias} alteraçõ{totalOcorrencias > 1 ? 'es' : 'ão'}
+            </span>
+          )}
+
           <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 10px', borderRadius: '999px' }}>
             {totalItens} itens
           </span>
@@ -1355,6 +1363,10 @@ const ConferenciaDiaria: React.FC = () => {
           i.local_id === v.id
         );
         const totalVtr = itensVtr.length;
+        const totalOcorrenciasVtr = itensVtr.filter(i => {
+          const conf = conferenciaMap[i.id];
+          return conf?.status && conf.status !== 'ok';
+        }).length;
 
         return (
           <NivelUm
@@ -1363,6 +1375,7 @@ const ConferenciaDiaria: React.FC = () => {
             titulo={`${v.name}${v.plate ? ` — ${v.plate}` : ''}`}
             icone="🚒"
             totalItens={totalVtr}
+            totalOcorrencias={totalOcorrenciasVtr}
             abertos={abertos}
             toggle={toggle}
             conferenciaMap={conferenciaMap}
@@ -1401,6 +1414,11 @@ const ConferenciaDiaria: React.FC = () => {
       {dados.locais.map(local => {
         const itensLocal = dados.itens.filter(i => i.local_id === local.id);
         if (itensLocal.length === 0) return null;
+        const totalOcorrenciasLocal = itensLocal.filter(i => {
+          const conf = conferenciaMap[i.id];
+          return conf?.status && conf.status !== 'ok';
+        }).length;
+
         return (
           <NivelUm
             key={local.id}
@@ -1408,6 +1426,7 @@ const ConferenciaDiaria: React.FC = () => {
             titulo={local.nome}
             icone="🏠"
             totalItens={itensLocal.length}
+            totalOcorrencias={totalOcorrenciasLocal}
             abertos={abertos}
             toggle={toggle}
             conferenciaMap={conferenciaMap}
