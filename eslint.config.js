@@ -17,6 +17,7 @@ export default [
         ...globals.browser,
         ...globals.node,
         ...globals.es2022,
+        Deno: 'readonly',
       },
       parserOptions: {
         ecmaFeatures: {
@@ -74,6 +75,8 @@ export default [
       'dist/**',
       'node_modules/**',
       'scripts/**',
+      'supabase/functions/**',
+      'src/test/**',
       '*.config.js',
       '*.config.ts',
     ],
