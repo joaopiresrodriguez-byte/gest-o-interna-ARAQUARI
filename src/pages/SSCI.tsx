@@ -321,24 +321,24 @@ const SSCI: React.FC = () => {
             )}
 
             {/* Header */}
-            <header className="px-6 py-4 bg-[#1a1c1e] border-b border-[#2d2f31] shadow-xl flex flex-wrap justify-between items-center gap-3">
+            <header className="px-4 md:px-6 py-3 md:py-4 bg-[#1a1c1e] border-b border-[#2d2f31] shadow-xl flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
                 <div className="flex flex-col">
                     <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-black tracking-tight text-white">Módulo SSCI</h1>
+                        <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">Módulo SSCI</h1>
                         <span className="px-2.5 py-0.5 bg-primary/20 text-primary text-[10px] font-black rounded-full border border-primary/30">v2.1</span>
                     </div>
                     <p className="text-xs text-gray-400 font-medium">Análise Estratégica & Inteligência Normativa</p>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <button onClick={() => setShowSettings(true)} className="p-2 bg-[#2d2f31] border border-[#3d3f41] rounded-lg text-gray-400 hover:text-white hover:bg-[#3d3f41] transition-all" title="Configurações de API">
-                        <span className="material-symbols-outlined text-[20px]">settings</span>
+                        <span className="material-symbols-outlined text-[18px] sm:text-[20px]">settings</span>
                     </button>
-                    <div className="flex bg-[#2d2f31] p-1 rounded-xl border border-[#3d3f41]">
+                    <div className="flex bg-[#2d2f31] p-1 rounded-xl border border-[#3d3f41] tabs-mobile-scroll">
                         {(['ANALISE', 'PESQUISA', 'CONHECIMENTO'] as const).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shrink-0 whitespace-nowrap ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
                             >
                                 {tab === 'ANALISE' ? '📄 Análise' : tab === 'PESQUISA' ? '💬 Chat' : '📚 Base'}
                             </button>
@@ -347,7 +347,7 @@ const SSCI: React.FC = () => {
                 </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-8">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8">
                 <div className="max-w-[1400px] mx-auto h-full">
 
                     {/* --- SECTION 1: TECHNICAL ANALYSIS --- */}

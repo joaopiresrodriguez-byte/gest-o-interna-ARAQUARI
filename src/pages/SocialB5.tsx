@@ -214,29 +214,29 @@ const SocialB5: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-background-light overflow-hidden relative">
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 md:p-10 max-w-[1400px] mx-auto space-y-8">
+        <div className="p-3 sm:p-6 md:p-10 max-w-[1400px] mx-auto space-y-6 md:space-y-8">
 
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-rustic-border">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 pb-4 md:pb-6 border-b border-rustic-border">
             <div>
-              <h1 className="text-4xl font-black text-[#2c1810] tracking-tight">Comunicação Social</h1>
-              <p className="text-rustic-brown/70 mt-2 text-lg">Divulgação Institucional, Ocorrências e Relações Públicas</p>
+              <h1 className="text-xl sm:text-2xl md:text-4xl font-black text-[#2c1810] tracking-tight">Comunicação Social</h1>
+              <p className="text-rustic-brown/70 mt-1 md:mt-2 text-xs sm:text-sm md:text-lg">Divulgação Institucional, Ocorrências e Relações Públicas</p>
             </div>
             <div className="flex gap-3">
-              <button onClick={loadData} className="flex items-center gap-2 px-4 py-2 border border-rustic-border bg-white rounded-lg hover:bg-gray-50 shadow-sm transition-colors">
-                <span className="material-symbols-outlined">refresh</span>
+              <button onClick={loadData} className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-rustic-border bg-white rounded-lg hover:bg-gray-50 shadow-sm transition-colors">
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
                 Atualizar
               </button>
             </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl border border-rustic-border">
+          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl border border-rustic-border tabs-mobile-scroll">
             {TABS.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === tab.key
+                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all shrink-0 whitespace-nowrap ${activeTab === tab.key
                     ? 'bg-white text-primary shadow-sm border border-rustic-border/50'
                     : 'text-rustic-brown/60 hover:text-rustic-brown hover:bg-white/50'
                   }`}

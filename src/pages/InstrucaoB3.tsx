@@ -456,37 +456,37 @@ const InstrucaoB3: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#F9F7F5] relative font-sans text-[#4A443F]">
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-[#E5E1DA] bg-white/80 backdrop-blur-md px-8 py-6 flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      <header className="sticky top-0 z-20 border-b border-[#E5E1DA] bg-white/80 backdrop-blur-md px-4 sm:px-6 md:px-8 py-4 sm:py-6 flex flex-col gap-3 sm:gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-2 sm:gap-4">
           <div className="flex flex-col gap-1">
-            <h2 className="text-3xl font-black tracking-tight text-[#2D2926]">Instrução e Treinamento (B3)</h2>
-            <p className="text-[#8C8379] text-base">Portal de materiais didáticos e cronograma de instrução do CBMSC.</p>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-[#2D2926]">Instrução e Treinamento (B3)</h2>
+            <p className="text-[#8C8379] text-xs sm:text-sm md:text-base">Portal de materiais didáticos e cronograma de instrução do CBMSC.</p>
           </div>
-          <button onClick={loadData} className="flex items-center gap-2 rounded-lg border border-[#D6CFC7] bg-white px-5 py-2.5 text-sm font-bold text-[#4A443F] hover:bg-[#F2EFE9] transition-all shadow-sm active:scale-95">
-            <span className={`material-symbols-outlined text-[20px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
-            Atualizar Base
+          <button onClick={loadData} className="flex items-center gap-2 rounded-lg border border-[#D6CFC7] bg-white px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-[#4A443F] hover:bg-[#F2EFE9] transition-all shadow-sm active:scale-95">
+            <span className={`material-symbols-outlined text-[18px] sm:text-[20px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
+            <span className="hidden sm:inline">Atualizar Base</span>
           </button>
         </div>
 
         {/* Main Tabs */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-[#F2EFE9] pt-3">
+        <div className="flex items-center gap-2 border-t border-[#F2EFE9] pt-3 tabs-mobile-scroll">
           <button 
             onClick={() => setMainTab('acervo')} 
-            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${mainTab === 'acervo' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+            className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer shrink-0 whitespace-nowrap ${mainTab === 'acervo' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
           >
             <span className="material-symbols-outlined text-base">auto_stories</span>
             Acervo e Cronograma
           </button>
           <button 
             onClick={() => setMainTab('formacao')} 
-            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${mainTab === 'formacao' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+            className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer shrink-0 whitespace-nowrap ${mainTab === 'formacao' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
           >
             <span className="material-symbols-outlined text-base">school</span>
             Formação e Treinamentos
           </button>
           <button 
             onClick={() => setMainTab('whatsapp')} 
-            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${mainTab === 'whatsapp' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+            className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer shrink-0 whitespace-nowrap ${mainTab === 'whatsapp' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
           >
             <span className="material-symbols-outlined text-base">send_to_mobile</span>
             Cadastro WhatsApp
@@ -494,7 +494,7 @@ const InstrucaoB3: React.FC = () => {
           {isGestorB3 && (
             <button 
               onClick={() => setMainTab('solicitacoes')} 
-              className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all relative cursor-pointer ${mainTab === 'solicitacoes' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+              className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black uppercase transition-all relative cursor-pointer shrink-0 whitespace-nowrap ${mainTab === 'solicitacoes' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
             >
               <span className="material-symbols-outlined text-base">inbox_customize</span>
               Solicitações de Apoio
@@ -517,7 +517,7 @@ const InstrucaoB3: React.FC = () => {
         </div>
       )}
 
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-3 sm:p-6 md:p-8">
         {mainTab === 'whatsapp' && (
           <div className="mx-auto max-w-[1600px]">
             <SubmoduloCadastroWhatsapp />

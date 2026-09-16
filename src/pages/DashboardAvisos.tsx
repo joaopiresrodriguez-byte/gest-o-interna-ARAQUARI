@@ -428,15 +428,15 @@ const DashboardAvisos: React.FC = () => {
     <div className="flex-1 flex flex-col h-full bg-background-light overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 bg-surface border-b border-rustic-border shadow-sm z-30">
-        <div className="py-4 px-8 flex justify-between items-center">
+        <div className="py-3 px-4 md:py-4 md:px-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
           <div>
-            <h1 className="text-2xl font-black text-[#2e1a16] tracking-tight">Painel de Avisos</h1>
-            <p className="text-rustic-brown/60 text-sm">
+            <h1 className="text-xl md:text-2xl font-black text-[#2e1a16] tracking-tight">Painel de Avisos</h1>
+            <p className="text-rustic-brown/60 text-xs md:text-sm">
               {getDayLabel(selectedDate)}, {formatDateBR(selectedDate)} — Passagem de Plantão
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Quick Stats */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick Stats — desktop only */}
             <div className="hidden md:flex items-center gap-2">
               <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg">
                 <span className="material-symbols-outlined text-[14px]">directions_car</span>
@@ -455,6 +455,19 @@ const DashboardAvisos: React.FC = () => {
                 </div>
               )}
             </div>
+            {/* Stats compactos — apenas mobile */}
+            <div className="flex items-center gap-1.5 md:hidden">
+              <span className="flex items-center gap-1 bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold px-2 py-1 rounded-lg">
+                <span className="material-symbols-outlined text-[13px]">directions_car</span>
+                {activeFleet}
+              </span>
+              {urgentMissions > 0 && (
+                <span className="flex items-center gap-1 bg-orange-50 border border-orange-200 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-lg animate-pulse">
+                  <span className="material-symbols-outlined text-[13px]">priority_high</span>
+                  {urgentMissions}
+                </span>
+              )}
+            </div>
             <div className="flex items-center bg-white border border-rustic-border rounded-lg px-3 py-1.5 shadow-sm">
               <span className="material-symbols-outlined text-rustic-brown/50 mr-2 text-[20px]">calendar_today</span>
               <input
@@ -469,6 +482,7 @@ const DashboardAvisos: React.FC = () => {
             </button>
           </div>
         </div>
+
 
         <DefesaCivilTicker />
       </header>

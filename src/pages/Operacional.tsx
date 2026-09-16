@@ -750,11 +750,11 @@ const Operacional: React.FC = () => {
   return (
     <div className="bg-background-light h-full w-full flex flex-col overflow-y-auto">
       {/* Header */}
-      <header className="bg-white border-b border-rustic-border px-8 py-5 sticky top-0 z-20 shadow-sm/50">
-        <div className="max-w-7xl mx-auto w-full flex flex-wrap justify-between items-end gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-[#181111] text-3xl font-black leading-tight tracking-[-0.033em]">Módulo Operacional</h1>
-            <p className="text-[#886363] text-sm font-normal">Controle de Missões, Conferência e Recebimento</p>
+      <header className="bg-white border-b border-rustic-border px-4 md:px-8 py-3 md:py-5 sticky top-0 z-20 shadow-sm/50">
+        <div className="max-w-7xl mx-auto w-full flex flex-wrap justify-between items-end gap-2 md:gap-4">
+          <div className="flex flex-col gap-0.5 md:gap-1">
+            <h1 className="text-[#181111] text-xl md:text-3xl font-black leading-tight tracking-[-0.033em]">Módulo Operacional</h1>
+            <p className="text-[#886363] text-xs md:text-sm font-normal hidden sm:block">Controle de Missões, Conferência e Recebimento</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="px-3 py-1 bg-secondary-green/10 text-secondary-green rounded-full text-xs font-bold uppercase tracking-wider border border-secondary-green/20">
@@ -766,8 +766,9 @@ const Operacional: React.FC = () => {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="max-w-7xl mx-auto w-full mt-4 flex gap-1 overflow-x-auto pb-1">
+        {/* Tab Navigation — scroll horizontal no mobile */}
+        <div className="tabs-mobile-scroll max-w-7xl mx-auto w-full mt-3 md:mt-4 pb-1">
+          <div className="flex gap-1 w-max md:w-auto">
           {TABS.map(tab => (
             <button
               key={tab.key}
@@ -785,10 +786,11 @@ const Operacional: React.FC = () => {
               )}
             </button>
           ))}
+          </div>
         </div>
       </header>
 
-      <div className="p-8 max-w-7xl mx-auto w-full flex-1">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto w-full flex-1">
 
         {/* ========== TAB: MISSÕES DO DIA ========== */}
         {activeTab === 'missoes' && (

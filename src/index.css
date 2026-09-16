@@ -153,6 +153,16 @@ body {
     }
 }
 
+/* Tab bars: scroll horizontal suave no mobile sem scrollbar visível */
+.tabs-mobile-scroll {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.tabs-mobile-scroll::-webkit-scrollbar {
+    display: none;
+}
+
 /* Prevent iOS font-size zoom on input focus (minimum 16px) */
 @media (max-width: 767px) {
     input,

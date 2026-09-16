@@ -857,20 +857,20 @@ const PatrimonioB4: React.FC = () => {
         />
       )}
 
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1200px] mx-auto flex flex-col gap-8">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8">
+        <div className="max-w-[1200px] mx-auto flex flex-col gap-4 sm:gap-6 md:gap-8">
 
           {/* Page Heading */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-[#3e2723]">Gestão Patrimonial</h1>
-              <p className="text-rustic-brown/70 mt-1 max-w-2xl">Visualização de ativos, pendências operacionais e logística de compras.</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-[#3e2723]">Gestão Patrimonial</h1>
+              <p className="text-rustic-brown/70 mt-1 text-xs sm:text-sm max-w-2xl">Visualização de ativos, pendências operacionais e logística de compras.</p>
             </div>
           </div>
 
           {/* Tabs */}
           <div className="bg-surface rounded-xl shadow-sm border border-rustic-border overflow-hidden">
-            <div className="border-b border-rustic-border bg-stone-50/50 px-6 pt-4 flex gap-8 overflow-x-auto">
+            <div className="border-b border-rustic-border bg-stone-50/50 px-3 md:px-6 pt-3 md:pt-4 flex gap-4 md:gap-8 tabs-mobile-scroll">
               {(['missoes', 'listagem', 'cautelas', 'cadastro', 'compras', 'conferencias', 'baixa_patrimonio', 'relatorios'] as const)
                 .filter(tab => {
                   // Abas 'compras', 'conferencias' e 'baixa_patrimonio' acessadas apenas por gestores
@@ -883,7 +883,7 @@ const PatrimonioB4: React.FC = () => {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
+                  className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
                 >
                   <span className="material-symbols-outlined">
                     {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cautelas' ? 'folder_shared' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'baixa_patrimonio' ? 'delete_forever' : tab === 'relatorios' ? 'analytics' : 'checklist'}

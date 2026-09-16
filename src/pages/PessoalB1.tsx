@@ -959,38 +959,45 @@ const PessoalB1: React.FC = () => {
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gray-100 relative text-rustic-brown">
       {/* Header - Fixed at top */}
-      <div className="p-6 flex-shrink-0">
-        <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined text-primary text-2xl">military_tech</span></div>
+      <div className="p-3 md:p-6 flex-shrink-0">
+        <div className="bg-white p-3 md:p-6 rounded-2xl border border-rustic-border shadow-sm">
+          <div className="flex items-center justify-between mb-3 md:mb-4">
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="w-9 h-9 md:w-12 md:h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0"><span className="material-symbols-outlined text-primary text-xl md:text-2xl">military_tech</span></div>
               <div>
-                <h1 className="text-2xl font-black">Seção B1 — Pessoal</h1>
-                <p className="text-xs text-gray-400">Gestão completa de efetivo, escalas, documentos e exportações</p>
+                <h1 className="text-lg md:text-2xl font-black leading-tight">Seção B1 — Pessoal</h1>
+                <p className="text-xs text-gray-400 hidden sm:block">Gestão completa de efetivo, escalas, documentos e exportações</p>
               </div>
             </div>
-            <div className="flex items-center gap-4 text-xs">
+            <div className="hidden sm:flex items-center gap-4 text-xs">
               <div className="text-center"><span className="text-2xl font-black text-primary block">{personnelList.length}</span><span className="text-gray-400">Total</span></div>
               <div className="text-center"><span className="text-2xl font-black text-green-600 block">{personnelList.filter(p => p.status === 'Ativo').length}</span><span className="text-gray-400">Ativos</span></div>
               {alerts.filter(a => a.severity === 'critical').length > 0 && <div className="text-center"><span className="text-2xl font-black text-gray-600 block">{alerts.filter(a => a.severity === 'critical').length}</span><span className="text-gray-400">⚠ Alertas</span></div>}
             </div>
+            {/* Stats compactos mobile */}
+            <div className="flex sm:hidden items-center gap-2 text-xs">
+              <div className="text-center"><span className="text-lg font-black text-primary block">{personnelList.length}</span><span className="text-gray-400 text-[10px]">Total</span></div>
+              <div className="text-center"><span className="text-lg font-black text-green-600 block">{personnelList.filter(p => p.status === 'Ativo').length}</span><span className="text-gray-400 text-[10px]">Ativos</span></div>
+            </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex flex-wrap gap-1 border-t border-rustic-border pt-4">
-            {(['DASHBOARD', 'EFETIVO', 'DOCUMENTOS', 'ESCALA', 'BC_ESCALA', 'FERIAS', 'DISCIPLINA', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
-              <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
-                <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('BC_ESCALA', 'ESCALA BC').replace('FERIAS', 'FÉRIAS').replace('DASHBOARD', 'DASHBOARD')}
-                {t === 'DASHBOARD' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
-              </button>
-            ))}
+          {/* Tabs — scroll horizontal no mobile */}
+          <div className="tabs-mobile-scroll border-t border-rustic-border pt-3 md:pt-4">
+            <div className="flex gap-1 w-max md:w-auto md:flex-wrap">
+              {(['DASHBOARD', 'EFETIVO', 'DOCUMENTOS', 'ESCALA', 'BC_ESCALA', 'FERIAS', 'DISCIPLINA', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
+                <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap flex-shrink-0 ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
+                  <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('BC_ESCALA', 'ESCALA BC').replace('FERIAS', 'FÉRIAS').replace('DASHBOARD', 'DASHBOARD')}
+                  {t === 'DASHBOARD' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
+                </button>
+              ))}
+            </div>
           </div>
 
         </div>
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto px-6 pb-8">
+      <div className="flex-1 overflow-y-auto px-3 md:px-6 pb-8">
         <div className="max-w-[1400px] mx-auto">
           {loading && (
             <div className="space-y-6 animate-pulse py-4">
@@ -1064,7 +1071,8 @@ const PessoalB1: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="overflow-x-auto">
+                  {/* Tabela de efetivo — visível apenas no desktop */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm"><thead className="bg-stone-50"><tr className="text-[10px] font-black uppercase text-gray-400"><th className="px-4 py-3 text-left">Efetivo</th><th className="px-4 py-3">Graduação</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">E-mail</th><th className="px-4 py-3">CVE Val.</th><th className="px-4 py-3">CNH Val.</th><th className="px-4 py-3">Ações</th></tr></thead>
                       <tbody className="divide-y">
                         {/* Militares Regulares */}
@@ -1173,8 +1181,87 @@ const PessoalB1: React.FC = () => {
                     </table>
                     {(regularPersonnel.length === 0 && bcPersonnel.length === 0) && <p className="text-center py-12 text-gray-300">Nenhum efetivo encontrado.</p>}
                   </div>
+
+                  {/* Lista de cards — apenas no mobile */}
+                  <div className="md:hidden space-y-2 pt-2">
+                    {/* Militares Regulares */}
+                    {regularPersonnel.map(p => {
+                      const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-teal-100 text-teal-700' };
+                      const grad = p.graduation || p.rank || '—';
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => handleViewProfile(p)}
+                          className="bg-white rounded-xl border border-rustic-border shadow-sm p-3 flex items-center gap-3 active:bg-stone-50 cursor-pointer"
+                        >
+                          <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            {p.image ? (
+                              <img src={p.image} alt={p.name} className="w-full h-full rounded-lg object-cover" />
+                            ) : (
+                              <span className="material-symbols-outlined text-primary text-[18px]">person</span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-gray-900 truncate">{p.war_name || p.name}</p>
+                            <p className="text-[10px] text-gray-500 truncate">{p.name}</p>
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-700">{grad}</span>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span>
+                            <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                              <ActionButton variant="alteration" size="sm" onClick={() => abrirEdicaoMilitar(p)} title="Alterar dados" />
+                              <ActionButton variant="edit" size="sm" onClick={() => handleEdit(p)} title="Editar perfil" />
+                              <ActionButton variant="delete" size="sm" onClick={() => handleDeletePersonnel(p.id!)} title="Excluir" />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Bombeiros Comunitários */}
+                    {bcPersonnel.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-orange-900 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 mt-3">
+                        <span className="material-symbols-outlined text-base">volunteer_activism</span>
+                        Bombeiros Comunitários ({bcPersonnel.length})
+                      </div>
+                    )}
+                    {bcPersonnel.map(p => {
+                      const statusColors: Record<string, string> = { Ativo: 'bg-green-100 text-green-700', Férias: 'bg-blue-100 text-blue-700', Licença: 'bg-amber-100 text-amber-700', Afastado: 'bg-orange-100 text-orange-700', Cedido: 'bg-teal-100 text-teal-700' };
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => handleViewProfile(p)}
+                          className="bg-stone-50/50 rounded-xl border border-orange-100 shadow-sm p-3 flex items-center gap-3 active:bg-orange-50/30 cursor-pointer"
+                        >
+                          <div className="w-11 h-11 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                            {p.image ? (
+                              <img src={p.image} alt={p.name} className="w-full h-full rounded-lg object-cover" />
+                            ) : (
+                              <span className="material-symbols-outlined text-orange-700 text-[18px]">person</span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-gray-900 truncate">{p.war_name || p.name}</p>
+                            <p className="text-[10px] text-gray-500 truncate">{p.name}</p>
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-900 border border-orange-200">{p.graduation || p.rank || 'BC'}</span>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColors[p.status] || 'bg-gray-100'}`}>{p.status}</span>
+                            <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                              <ActionButton variant="alteration" size="sm" onClick={() => abrirEdicaoMilitar(p)} title="Alterar dados" />
+                              <ActionButton variant="edit" size="sm" onClick={() => handleEdit(p)} title="Editar perfil" />
+                              <ActionButton variant="delete" size="sm" onClick={() => handleDeletePersonnel(p.id!)} title="Excluir" />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(regularPersonnel.length === 0 && bcPersonnel.length === 0) && (
+                      <p className="text-center py-12 text-gray-300">Nenhum efetivo encontrado.</p>
+                    )}
+                  </div>
                 </div>
               )}
+
 
               {/* TAB: CADASTRO */}
               {tab === 'CADASTRO' && (
