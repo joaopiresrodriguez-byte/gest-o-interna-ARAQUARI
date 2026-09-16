@@ -309,13 +309,22 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                     {escaladosNoDia.slice(0, 4).map((p, idx) => (
                                                         <div
                                                             key={idx}
-                                                            className="text-[10px] font-bold text-stone-700 bg-stone-100 hover:bg-stone-200/80 px-1.5 py-0.5 rounded truncate border border-stone-200 flex items-center justify-between"
-                                                            title={`${p?.graduation || ''} ${p?.name}`}
+                                                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate border flex items-center justify-between ${
+                                                                dayEscala?.manual_override
+                                                                    ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                                                    : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200/80'
+                                                            }`}
+                                                            title={dayEscala?.manual_override ? `Troca / Alteração de Escala: ${dayEscala.override_reason || ''}` : `${p?.graduation || ''} ${p?.name}`}
                                                         >
                                                             <span className="truncate">
                                                                 <strong className="text-stone-900 mr-1">{p?.graduation || ''}</strong>
                                                                 {p?.war_name || p?.name.split(' ')[0]}
                                                             </span>
+                                                            {dayEscala?.manual_override && (
+                                                                <span className="text-[8px] font-black uppercase text-amber-600 ml-1 px-1 bg-amber-100 rounded" title={dayEscala.override_reason}>
+                                                                    TROCA
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     ))}
                                                     {escaladosNoDia.length > 4 && (

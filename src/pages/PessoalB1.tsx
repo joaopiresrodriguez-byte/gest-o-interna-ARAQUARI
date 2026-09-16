@@ -660,6 +660,10 @@ const PessoalB1: React.FC = () => {
 
       const allEntries: Omit<Escala, 'id' | 'created_at'>[] = [];
 
+      // Buscar alterações e trocas registradas para reaplicar sobre a escala publicada
+      const { data: alteracoesData } = await supabase.from('escala_alteracoes').select('*');
+      const { data: swapsData } = await supabase.from('service_swaps').select('*').eq('approval_status', 'Aprovado');
+
       for (const target of targetMonths) {
         const { mes, ano } = target;
         const daysInMonth = new Date(ano, mes, 0).getDate();
@@ -675,13 +679,72 @@ const PessoalB1: React.FC = () => {
             return g.codigo === codigos[servicoIdx];
           }) || guarnicoesFormatadas[servicoIdx % guarnicoesFormatadas.length];
 
+          let diaMilitars = [...(guarnicaoDaVez.membrosIds || [])];
+          let manualOverride = false;
+          let overrideReason = undefined;
+
+          // Reaplicar trocas de escala_alteracoes
+          if (alteracoesData && alteracoesData.length > 0) {
+            alteracoesData.forEach(alt => {
+              if (alt.tipo_alteracao === 'troca_militares') {
+                if (alt.dia_original_a === dStr) {
+                  diaMilitars = diaMilitars.map(id => id === Number(alt.militar_a_id) ? Number(alt.militar_b_id) : id);
+                  manualOverride = true;
+                  overrideReason = alt.detalhes || 'Troca Mútua';
+                } else if (alt.dia_original_b === dStr) {
+                  diaMilitars = diaMilitars.map(id => id === Number(alt.militar_b_id) ? Number(alt.militar_a_id) : id);
+                  manualOverride = true;
+                  overrideReason = alt.detalhes || 'Troca Mútua';
+                }
+              } else if (alt.tipo_alteracao === 'troca_individual') {
+                if (alt.dia_original_a === dStr) {
+                  diaMilitars = diaMilitars.filter(id => id !== Number(alt.militar_a_id));
+                  manualOverride = true;
+                  overrideReason = alt.detalhes || 'Troca Individual (Saída)';
+                }
+                if (alt.dia_original_b === dStr) {
+                  if (alt.militar_b_id) {
+                    diaMilitars = diaMilitars.map(id => id === Number(alt.militar_b_id) ? Number(alt.militar_a_id) : id);
+                  } else if (!diaMilitars.includes(Number(alt.militar_a_id))) {
+                    diaMilitars.push(Number(alt.militar_a_id));
+                  }
+                  manualOverride = true;
+                  overrideReason = alt.detalhes || 'Troca Individual (Entrada)';
+                }
+              }
+            });
+          }
+
+          // Reaplicar service_swaps
+          if (swapsData && swapsData.length > 0) {
+            swapsData.forEach(swap => {
+              if (swap.date_a_gives_to_b === dStr) {
+                diaMilitars = diaMilitars.filter(id => id !== Number(swap.personnel_id));
+                if (swap.swap_with_personnel_id && !diaMilitars.includes(Number(swap.swap_with_personnel_id))) {
+                  diaMilitars.push(Number(swap.swap_with_personnel_id));
+                }
+                manualOverride = true;
+                overrideReason = `Troca: ${swap.reason}`;
+              }
+              if (swap.date_b_gives_to_a === dStr) {
+                diaMilitars = diaMilitars.filter(id => id !== Number(swap.swap_with_personnel_id));
+                if (!diaMilitars.includes(Number(swap.personnel_id))) {
+                  diaMilitars.push(Number(swap.personnel_id));
+                }
+                manualOverride = true;
+                overrideReason = `Troca: ${swap.reason}`;
+              }
+            });
+          }
+
           allEntries.push({
             data: dStr,
             equipe: `Turma ${guarnicaoDaVez.codigo}`,
-            militares: guarnicaoDaVez.membrosIds,
+            militares: diaMilitars,
             shift_type: _shiftType as "24x72" | "12x36" | "administrative" | undefined,
             is_folga: false,
-            manual_override: false,
+            manual_override: manualOverride,
+            override_reason: overrideReason,
             turma: guarnicaoDaVez.codigo
           });
         }
