@@ -1112,22 +1112,25 @@ const Operacional: React.FC = () => {
           setMissionToEdit(null);
         }}
         onSave={async (missionData) => {
+          const list = Array.isArray(missionData) ? missionData : [missionData];
           if (missionToEdit?.id) {
             // Edição
             await SupabaseService.updateDailyMission(missionToEdit.id, {
-              ...missionData,
+              ...list[0],
               editado_por_nome: (profile as any)?.name || (profile as any)?.war_name || user?.email || 'Usuário Operacional',
               editado_por_id: user?.id || undefined,
               editado_em: new Date().toISOString(),
             });
             toast.success('Missão atualizada!');
           } else {
-            // Criação
-            await SupabaseService.addDailyMission({
-              ...missionData,
-              created_by: user?.email || 'N/A',
-            });
-            toast.success('Missão cadastrada!');
+            // Criação (individual ou em lote)
+            for (const item of list) {
+              await SupabaseService.addDailyMission({
+                ...item,
+                created_by: user?.email || 'N/A',
+              });
+            }
+            toast.success(list.length > 1 ? `${list.length} missões cadastradas!` : 'Missão cadastrada!');
           }
           setShowMissionForm(false);
           setMissionToEdit(null);

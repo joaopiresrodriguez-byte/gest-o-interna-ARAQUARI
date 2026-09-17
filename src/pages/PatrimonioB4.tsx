@@ -2337,20 +2337,23 @@ const PatrimonioB4: React.FC = () => {
           setMissionToEdit(null);
         }}
         onSave={async (missionData) => {
+          const list = Array.isArray(missionData) ? missionData : [missionData];
           if (missionToEdit?.id) {
             await SupabaseService.updateDailyMission(missionToEdit.id, {
-              ...missionData,
+              ...list[0],
               editado_por_nome: profile?.nome_completo || profile?.nome_guerra || profile?.email || 'Administrador B4',
               editado_por_id: profile?.id || undefined,
               editado_em: new Date().toISOString(),
             });
             toast.success('Missão atualizada com sucesso!');
           } else {
-            await SupabaseService.addDailyMission({
-              ...missionData,
-              created_by: profile?.email || 'Administrador B4'
-            });
-            toast.success('Missão criada com sucesso!');
+            for (const item of list) {
+              await SupabaseService.addDailyMission({
+                ...item,
+                created_by: profile?.email || 'Administrador B4'
+              });
+            }
+            toast.success(list.length > 1 ? `${list.length} missões criadas com sucesso!` : 'Missão criada com sucesso!');
           }
           setIsNewMissionModalOpen(false);
           setMissionToEdit(null);

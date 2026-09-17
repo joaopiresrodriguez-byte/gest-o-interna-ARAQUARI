@@ -1219,7 +1219,10 @@ const DashboardAvisos: React.FC = () => {
         isOpen={isNewMissionModalOpen}
         onClose={() => setIsNewMissionModalOpen(false)}
         onSave={async (missionData) => {
-          await SupabaseService.addDailyMission(missionData);
+          const list = Array.isArray(missionData) ? missionData : [missionData];
+          for (const item of list) {
+            await SupabaseService.addDailyMission(item);
+          }
           loadData();
         }}
       />
