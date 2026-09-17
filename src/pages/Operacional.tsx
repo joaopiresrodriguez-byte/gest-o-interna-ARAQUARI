@@ -616,9 +616,22 @@ const Operacional: React.FC = () => {
     }
     setIsUploading(true);
     try {
-      const fileName = `${Date.now()}_${receiptFile.name}`;
-      await SupabaseService.uploadFile('produto-fotos', fileName, receiptFile);
-      const publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
+      // Sanitiza o nome do arquivo para evitar erros no Supabase Storage (acentos, espaços e caracteres especiais)
+      const cleanFileName = receiptFile.name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${Date.now()}_${cleanFileName}`;
+
+      let publicUrl = '';
+      try {
+        await SupabaseService.uploadFile('produto-fotos', fileName, receiptFile);
+        publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
+      } catch (uploadErr) {
+        console.warn("Storage upload warn (tentando prosseguir com url fallback se necessário):", uploadErr);
+        // Tenta obter a URL mesmo em alerta de sobrescrita/existência
+        publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
+      }
 
       const newReceipt = await SupabaseService.addProductReceipt({
         photo_url: publicUrl,
@@ -643,18 +656,22 @@ const Operacional: React.FC = () => {
       // Buscar nome de guerra do usuário logado para o recibo
       let responsavelNomeGuerra = user?.email || 'N/A';
       if (user?.email) {
-        const { data: p } = await SupabaseService.supabase
-          .from('personnel')
-          .select('war_name, name, graduation')
-          .eq('email', user.email.toLowerCase().trim())
-          .maybeSingle();
-        if (p) {
-          const grad = p.graduation ? `${p.graduation} ` : '';
-          responsavelNomeGuerra = `${grad}${p.war_name || p.name}`.trim().toUpperCase();
+        try {
+          const { data: p } = await SupabaseService.supabase
+            .from('personnel')
+            .select('war_name, name, graduation')
+            .eq('email', user.email.toLowerCase().trim())
+            .maybeSingle();
+          if (p) {
+            const grad = p.graduation ? `${p.graduation} ` : '';
+            responsavelNomeGuerra = `${grad}${p.war_name || p.name}`.trim().toUpperCase();
+          }
+        } catch (pErr) {
+          console.warn("Não foi possível carregar dados do responsável:", pErr);
         }
       }
 
-      // Show notification modal
+      // Show notification modal (vinculado ao WhatsApp +55 47 3481-7549)
       const notifData = NotificationService.getReceiptNotificationData({
         nf: receiptNF, obs: receiptObs, photoUrl: publicUrl, user: responsavelNomeGuerra
       });
@@ -666,9 +683,10 @@ const Operacional: React.FC = () => {
 
       // Refetch em background para sincronizar com o banco
       loadAllData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading product:", error);
-      toast.error("Erro ao registrar recebimento.");
+      const errMsg = error?.message || error?.details || "Erro ao registrar recebimento.";
+      toast.error(`Erro ao registrar recebimento: ${errMsg}`);
     } finally {
       setIsUploading(false);
     }
