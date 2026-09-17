@@ -21,6 +21,7 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
 
   // Form Retirada State
   const [retiradaSearch, setRetiradaSearch] = useState<string>('');
+  const [retiradaCategoriaFiltro, setRetiradaCategoriaFiltro] = useState<string>('todos');
   const [selectedItem, setSelectedItem] = useState<Vehicle | null>(null);
   const [dataRetirada, setDataRetirada] = useState<string>(new Date().toISOString().slice(0, 16));
   const [dataPrevista, setDataPrevista] = useState<string>('');
@@ -115,12 +116,55 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
 
   // Itens filtrados para a busca de Nova Retirada
   const itensCatalogoFiltrados = useMemo(() => {
-    if (!retiradaSearch.trim()) return catalogo;
+    let list = catalogo;
+    if (retiradaCategoriaFiltro !== 'todos') {
+      list = list.filter(item => {
+        if (retiradaCategoriaFiltro === 'Viatura') return item.type === 'Viatura';
+        if (retiradaCategoriaFiltro === 'Equipamento') return item.type === 'Equipamento';
+        if (retiradaCategoriaFiltro === 'Material') return item.type === 'Material';
+        if (item.atividades && item.atividades.length > 0) {
+          return item.atividades.includes(retiradaCategoriaFiltro);
+        }
+        return item.type === retiradaCategoriaFiltro;
+      });
+    }
+
+    if (!retiradaSearch.trim()) return list;
     const term = retiradaSearch.toLowerCase();
-    return catalogo.filter(
-      item => item.name.toLowerCase().includes(term) || item.type.toLowerCase().includes(term) || item.details?.toLowerCase().includes(term)
+    return list.filter(
+      item =>
+        item.name.toLowerCase().includes(term) ||
+        item.type.toLowerCase().includes(term) ||
+        item.details?.toLowerCase().includes(term) ||
+        item.patrimonio_number?.toLowerCase().includes(term) ||
+        (item.atividades && item.atividades.some(a => a.toLowerCase().includes(term)))
     );
-  }, [catalogo, retiradaSearch]);
+  }, [catalogo, retiradaSearch, retiradaCategoriaFiltro]);
+
+  // Agrupamento de itens por Atividade / Tipo para optgroup no select
+  const itensAgrupadosPorAtividade = useMemo(() => {
+    const grupos: Record<string, Vehicle[]> = {};
+
+    itensCatalogoFiltrados.forEach(item => {
+      let grupoName = '📋 OUTROS ITENS DO CATÁLOGO';
+      if (item.atividades && item.atividades.length > 0) {
+        grupoName = `🎯 ATIVIDADE: ${item.atividades[0].toUpperCase()}`;
+      } else if (item.type === 'Viatura') {
+        grupoName = '🚒 VIATURAS OPERACIONAIS';
+      } else if (item.type === 'Equipamento') {
+        grupoName = '🛠️ EQUIPAMENTOS E FERRAMENTAS';
+      } else if (item.type === 'Material') {
+        grupoName = '📦 MATERIAIS DE CONSUMO E RESGATE';
+      }
+
+      if (!grupos[grupoName]) {
+        grupos[grupoName] = [];
+      }
+      grupos[grupoName].push(item);
+    });
+
+    return grupos;
+  }, [itensCatalogoFiltrados]);
 
   // Handler Nova Retirada
   const handleNovaRetirada = async (e: React.FormEvent) => {
@@ -588,8 +632,55 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
               {/* Seleção do Item */}
               <div>
                 <label className="block text-xs font-black uppercase text-rustic-brown/70 mb-1">
-                  Selecionar Item do Catálogo B4 * (Menu Suspenso)
+                  Selecionar Item do Catálogo B4 * (Menu Suspenso por Atividade)
                 </label>
+
+                {/* Filtro auxiliar no topo por texto/letra */}
+                <div className="relative mb-2">
+                  <span className="material-symbols-outlined absolute left-3 top-2.5 text-rustic-brown/50 text-sm">search</span>
+                  <input
+                    type="text"
+                    placeholder="🔍 Digite qualquer letra ou nome do equipamento para ir direto ao item..."
+                    value={retiradaSearch}
+                    onChange={e => setRetiradaSearch(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 border-2 border-rustic-border/80 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary focus:border-primary bg-stone-50 text-rustic-brown placeholder:text-stone-400 shadow-xs"
+                  />
+                  {retiradaSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setRetiradaSearch('')}
+                      className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-700"
+                      title="Limpar busca"
+                    >
+                      <span className="material-symbols-outlined text-sm">cancel</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Filtro rápido por categoria/atividade */}
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {[
+                    { id: 'todos', label: '🌐 Todos' },
+                    { id: 'Viatura', label: '🚒 Viaturas' },
+                    { id: 'Equipamento', label: '🛠️ Equipamentos' },
+                    { id: 'Material', label: '📦 Materiais' },
+                  ].map(cat => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setRetiradaCategoriaFiltro(cat.id)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                        retiradaCategoriaFiltro === cat.id
+                          ? 'bg-rustic-brown text-white shadow-xs'
+                          : 'bg-stone-100 text-rustic-brown/80 hover:bg-stone-200 border border-rustic-border/60'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Menu Suspenso agrupado por optgroup */}
                 <select
                   value={selectedItem?.id || ''}
                   onChange={e => {
@@ -605,30 +696,25 @@ export const SecaoCautelasOperacional: React.FC<Props> = ({ isEditor = true }) =
                   }}
                   className="w-full px-3 py-2.5 border-2 border-rustic-border rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary focus:border-primary bg-white text-rustic-brown mb-2 shadow-xs"
                 >
-                  <option value="">-- Selecione um item do catálogo ({catalogo.length} cadastrados) --</option>
-                  {itensCatalogoFiltrados.map(item => {
-                    const isCautelado = item.status === 'cautelado' || item.is_cautelado;
-                    return (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                        disabled={isCautelado}
-                        className={isCautelado ? 'text-red-600 bg-red-50 font-semibold' : 'text-stone-900 font-bold'}
-                      >
-                        {isCautelado ? `🔒 [CAUTELADO] ${item.name} (${item.type})` : `✅ ${item.name} (${item.type}) — Disponível`}
-                      </option>
-                    );
-                  })}
+                  <option value="">-- Selecione um item do catálogo ({itensCatalogoFiltrados.length} disponíveis/filtrados) --</option>
+                  {Object.entries(itensAgrupadosPorAtividade).map(([grupoLabel, itensDoGrupo]) => (
+                    <optgroup key={grupoLabel} label={grupoLabel} className="font-black text-stone-700 bg-stone-100">
+                      {itensDoGrupo.map(item => {
+                        const isCautelado = item.status === 'cautelado' || item.is_cautelado;
+                        return (
+                          <option
+                            key={item.id}
+                            value={item.id}
+                            disabled={isCautelado}
+                            className={isCautelado ? 'text-red-600 bg-red-50 font-semibold' : 'text-stone-900 font-bold bg-white'}
+                          >
+                            {isCautelado ? `🔒 [CAUTELADO] ${item.name} (${item.type})` : `✅ ${item.name} (${item.type}) — Disponível`}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ))}
                 </select>
-
-                {/* Filtro auxiliar */}
-                <input
-                  type="text"
-                  placeholder="Ou digite o nome do equipamento para filtrar as opções acima..."
-                  value={retiradaSearch}
-                  onChange={e => setRetiradaSearch(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-rustic-border/80 rounded-lg text-xs font-medium focus:ring-1 focus:ring-primary bg-stone-50 mb-2"
-                />
 
                 {/* Card de confirmação do Item Selecionado */}
                 {selectedItem ? (
