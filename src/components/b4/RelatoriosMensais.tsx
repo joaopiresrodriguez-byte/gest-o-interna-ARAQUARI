@@ -60,6 +60,27 @@ const RelatoriosMensais: React.FC = () => {
   const [missoesGuarnicao, setMissoesGuarnicao] = useState<ItemMissaoInstrucaoGuarnicao[]>([]);
   const [filtroGuarnicao, setFiltroGuarnicao] = useState<string>('todos');
 
+  const itemPertenceGuarnicao = (guarnicaoItem: string, filtroId: string): boolean => {
+    if (filtroId === 'todos') return true;
+    const gNorm = guarnicaoItem.toLowerCase();
+    const term = filtroId.toLowerCase();
+    if (term === 'alfa') return gNorm.includes('alfa') || gNorm.includes('turma a') || gNorm.includes('equipe a') || gNorm.endsWith(' a');
+    if (term === 'bravo') return gNorm.includes('bravo') || gNorm.includes('turma b') || gNorm.includes('equipe b') || gNorm.endsWith(' b');
+    if (term === 'charlie') return gNorm.includes('charlie') || gNorm.includes('turma c') || gNorm.includes('equipe c') || gNorm.endsWith(' c');
+    if (term === 'delta') return gNorm.includes('delta') || gNorm.includes('turma d') || gNorm.includes('equipe d') || gNorm.endsWith(' d');
+    return gNorm.includes(term);
+  };
+
+  const getGuarnicaoBadgeStyle = (guarnicaoName: string): string => {
+    const gNorm = guarnicaoName.toLowerCase();
+    if (gNorm.includes('alfa') || gNorm.endsWith('a')) return 'bg-blue-50 text-blue-800 border-blue-200';
+    if (gNorm.includes('bravo') || gNorm.endsWith('b')) return 'bg-rose-50 text-rose-800 border-rose-200';
+    if (gNorm.includes('charlie') || gNorm.endsWith('c')) return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (gNorm.includes('delta') || gNorm.endsWith('d')) return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    return 'bg-stone-100 text-stone-800 border-stone-300';
+  };
+
+
   const carregarInventario = useCallback(async (local: string) => {
     try {
       const data = await buscarInventarioConsolidado(local);
@@ -521,75 +542,162 @@ const RelatoriosMensais: React.FC = () => {
             </table>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-stone-50 text-[10px] font-black uppercase tracking-wider text-rustic-brown/60 border-b border-rustic-border">
-                  <th className="py-3 px-4">Tipo</th>
-                  <th className="py-3 px-4">Título / Atividade</th>
-                  <th className="py-3 px-4">Data e Horário</th>
-                  <th className="py-3 px-4">Guarnição Escalada</th>
-                  <th className="py-3 px-4">Responsável / Instrutor</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-rustic-border/30">
-                {missoesGuarnicao.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-stone-400 italic">
-                      Nenhuma missão ou instrução encontrada para o filtro de guarnição selecionado neste mês.
-                    </td>
-                  </tr>
-                ) : (
-                  missoesGuarnicao.map((item, idx) => {
-                    const isMissao = item.tipo === 'missao';
+          <div className="space-y-6">
+            {/* Dashboard Sub-Header & Garrison Quick Pills */}
+            <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 text-white rounded-2xl p-5 shadow-lg border border-stone-700">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 text-red-400 text-xs font-black uppercase tracking-widest">
+                    <span className="material-symbols-outlined text-[16px]">monitoring</span>
+                    Painel Operacional das Guarnições
+                  </div>
+                  <h4 className="text-lg font-black text-white mt-1">
+                    Missões & Treinamentos — {MESES[mes - 1]}/{ano}
+                  </h4>
+                  <p className="text-xs text-stone-300">
+                    Selecione uma guarnição para filtrar instantaneamente as atividades executadas no plantão.
+                  </p>
+                </div>
+
+                {/* Garrison Pills Selector */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { id: 'todos', label: 'Todas Guarnições', color: 'bg-stone-700 text-white hover:bg-stone-600', active: 'bg-white text-stone-900 ring-2 ring-red-500' },
+                    { id: 'Alfa', label: 'Guarnição Alfa', color: 'bg-blue-950/80 text-blue-200 border-blue-800 hover:bg-blue-900', active: 'bg-blue-600 text-white ring-2 ring-blue-400' },
+                    { id: 'Bravo', label: 'Guarnição Bravo', color: 'bg-rose-950/80 text-rose-200 border-rose-800 hover:bg-rose-900', active: 'bg-rose-600 text-white ring-2 ring-rose-400' },
+                    { id: 'Charlie', label: 'Guarnição Charlie', color: 'bg-amber-950/80 text-amber-200 border-amber-800 hover:bg-amber-900', active: 'bg-amber-600 text-white ring-2 ring-amber-400' },
+                    { id: 'Delta', label: 'Guarnição Delta', color: 'bg-emerald-950/80 text-emerald-200 border-emerald-800 hover:bg-emerald-900', active: 'bg-emerald-600 text-white ring-2 ring-emerald-400' },
+                  ].map(g => {
+                    const isActive = filtroGuarnicao === g.id;
+                    const count = g.id === 'todos'
+                      ? missoesGuarnicao.length
+                      : missoesGuarnicao.filter(i => itemPertenceGuarnicao(i.guarnicao, g.id)).length;
+
                     return (
-                      <tr key={item.id || idx} className="hover:bg-stone-50/70 transition-colors">
-                        <td className="py-3 px-4 text-xs">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase inline-flex items-center gap-1 ${
-                            isMissao ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
-                          }`}>
-                            <span className="material-symbols-outlined text-[12px]">
-                              {isMissao ? 'flag' : 'school'}
-                            </span>
-                            {isMissao ? 'Missão' : 'Instrução'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-bold text-rustic-brown">
-                          <div>{item.titulo}</div>
-                          {item.detalhes && (
-                            <div className="text-[11px] text-stone-500 font-normal line-clamp-1">{item.detalhes}</div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-xs text-rustic-brown/80 font-medium">
-                          <div>{new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
-                          {item.horario && <div className="text-[10px] text-stone-400 font-mono">{item.horario}</div>}
-                        </td>
-                        <td className="py-3 px-4 text-xs font-bold">
-                          <span className="px-2.5 py-1 rounded-md bg-stone-100 text-rustic-brown border border-rustic-border/60">
-                            Guarnição {item.guarnicao}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-rustic-brown font-medium">
-                          {item.responsavelOuInstrutor}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                            item.status === 'Concluída'
-                              ? 'bg-green-100 text-green-700 border border-green-300'
-                              : item.status === 'Em Andamento'
-                              ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                              : 'bg-stone-100 text-stone-600 border border-stone-300'
-                          }`}>
-                            {item.status}
-                          </span>
-                        </td>
-                      </tr>
+                      <button
+                        key={g.id}
+                        onClick={() => setFiltroGuarnicao(g.id)}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border shadow-sm flex items-center gap-2 ${
+                          isActive ? g.active : `${g.color} border-transparent`
+                        }`}
+                      >
+                        <span>{g.label}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                          isActive ? 'bg-black/20 text-current' : 'bg-stone-800 text-stone-300'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </div>
+              </div>
+
+              {/* KPI Mini Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-stone-700/60">
+                <div className="bg-stone-800/80 border border-stone-700 p-3 rounded-xl">
+                  <span className="text-[10px] uppercase font-bold text-stone-400">Total Atividades</span>
+                  <div className="text-xl font-black text-white">{missoesGuarnicao.length}</div>
+                </div>
+                <div className="bg-stone-800/80 border border-stone-700 p-3 rounded-xl">
+                  <span className="text-[10px] uppercase font-bold text-amber-400">Missões Diárias</span>
+                  <div className="text-xl font-black text-amber-300">
+                    {missoesGuarnicao.filter(i => i.tipo === 'missao').length}
+                  </div>
+                </div>
+                <div className="bg-stone-800/80 border border-stone-700 p-3 rounded-xl">
+                  <span className="text-[10px] uppercase font-bold text-blue-400">Instruções / Aulas</span>
+                  <div className="text-xl font-black text-blue-300">
+                    {missoesGuarnicao.filter(i => i.tipo === 'instrucao').length}
+                  </div>
+                </div>
+                <div className="bg-stone-800/80 border border-stone-700 p-3 rounded-xl">
+                  <span className="text-[10px] uppercase font-bold text-emerald-400">Concluídas</span>
+                  <div className="text-xl font-black text-emerald-300">
+                    {missoesGuarnicao.filter(i => i.status === 'Concluída').length}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Data Table */}
+            <div className="overflow-x-auto rounded-xl border border-rustic-border">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="bg-stone-100 text-[10px] font-black uppercase tracking-wider text-rustic-brown/70 border-b border-rustic-border">
+                    <th className="py-3 px-4">Tipo</th>
+                    <th className="py-3 px-4">Título / Atividade</th>
+                    <th className="py-3 px-4">Data e Horário</th>
+                    <th className="py-3 px-4">Guarnição Escalada</th>
+                    <th className="py-3 px-4">Responsável / Instrutor</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rustic-border/30">
+                  {missoesGuarnicao.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-stone-400 italic bg-stone-50/40">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <span className="material-symbols-outlined text-4xl text-stone-300">event_busy</span>
+                          <span>Nenhuma missão ou instrução encontrada para o filtro selecionado neste mês.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    missoesGuarnicao.map((item, idx) => {
+                      const isMissao = item.tipo === 'missao';
+                      const colorGuarnicao = getGuarnicaoBadgeStyle(item.guarnicao);
+
+                      return (
+                        <tr key={item.id || idx} className="hover:bg-stone-50/80 transition-colors">
+                          <td className="py-3.5 px-4 text-xs">
+                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase inline-flex items-center gap-1 shadow-sm ${
+                              isMissao ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
+                            }`}>
+                              <span className="material-symbols-outlined text-[14px]">
+                                {isMissao ? 'flag' : 'school'}
+                              </span>
+                              {isMissao ? 'Missão' : 'Instrução'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-rustic-brown">
+                            <div className="text-sm font-black text-stone-900">{item.titulo}</div>
+                            {item.detalhes && (
+                              <div className="text-[11px] text-stone-500 font-normal line-clamp-1 mt-0.5">{item.detalhes}</div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-xs text-rustic-brown/80 font-medium">
+                            <div className="font-bold text-stone-800">{new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+                            {item.horario && <div className="text-[10px] text-stone-500 font-mono font-bold mt-0.5">{item.horario}</div>}
+                          </td>
+                          <td className="py-3.5 px-4 text-xs font-bold">
+                            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black inline-flex items-center gap-1 border shadow-xs ${colorGuarnicao}`}>
+                              <span className="material-symbols-outlined text-[13px]">shield</span>
+                              {item.guarnicao}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-xs font-bold text-stone-700">
+                            {item.responsavelOuInstrutor}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 shadow-xs ${
+                              item.status === 'Concluída'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : item.status === 'Em Andamento'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                : 'bg-stone-100 text-stone-700 border border-stone-300'
+                            }`}>
+                              {item.status === 'Concluída' && <span className="material-symbols-outlined text-[12px]">check_circle</span>}
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
