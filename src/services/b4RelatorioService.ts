@@ -331,16 +331,31 @@ export async function buscarMissoesEInstrucoesGuarnicao(
   // Mapeamento de data (YYYY-MM-DD) -> Guarnição/Equipe (ex: "Alfa", "Bravo")
   const escalaMap: Record<string, string> = {};
   escalasData.forEach((esc: any) => {
-    if (esc.data && esc.equipe) {
-      escalaMap[esc.data] = esc.equipe;
+    if (esc.data && (esc.equipe || esc.turma)) {
+      escalaMap[esc.data] = esc.equipe || esc.turma;
     }
   });
+
+  // Data âncora para cálculo do ciclo de 24x72 caso a escala não esteja publicada no banco
+  // Ex: 2026-03-01 foi Guarnição Alfa (A)
+  const anchorUtc = Date.UTC(2026, 2, 1);
+  const codigos = ['Alfa', 'Bravo', 'Charlie', 'Delta'];
+
+  const getGuarnicaoDoDia = (dataStr: string): string => {
+    if (escalaMap[dataStr]) return escalaMap[dataStr];
+    const [y, m, d] = dataStr.split('-').map(Number);
+    if (!y || !m || !d) return 'Não Escalada';
+    const targetUtc = Date.UTC(y, m - 1, d);
+    const diffDays = Math.floor((targetUtc - anchorUtc) / (1000 * 60 * 60 * 24));
+    const idx = ((diffDays % 4) + 4) % 4;
+    return `Guarnição ${codigos[idx]}`;
+  };
 
   const resultado: ItemMissaoInstrucaoGuarnicao[] = [];
 
   // 1. Mapear Missões Diárias
   missoesData.forEach((m: any) => {
-    const guarnicaoDia = escalaMap[m.mission_date] || 'Não Escalada';
+    const guarnicaoDia = getGuarnicaoDoDia(m.mission_date);
     resultado.push({
       id: m.id || `m-${Math.random()}`,
       tipo: 'missao',
@@ -357,7 +372,7 @@ export async function buscarMissoesEInstrucoesGuarnicao(
   // 2. Mapear Instruções / Treinamentos
   instrucoesData.forEach((t: any) => {
     const materia = materiasData.find((mat: any) => mat.id === t.materia_id);
-    const guarnicaoDia = escalaMap[t.date] || 'Não Escalada';
+    const guarnicaoDia = getGuarnicaoDoDia(t.date);
     const statusInstrucao = t.status === 'Completed' || t.status === 'Concluído' ? 'Concluída' : t.status === 'Canceled' || t.status === 'Cancelado' ? 'Cancelada' : 'Agendada/Realizada';
 
     resultado.push({
@@ -377,7 +392,15 @@ export async function buscarMissoesEInstrucoesGuarnicao(
   resultado.sort((a, b) => b.data.localeCompare(a.data));
 
   if (guarnicaoFiltro && guarnicaoFiltro !== 'todos') {
-    return resultado.filter(item => item.guarnicao.toLowerCase().includes(guarnicaoFiltro.toLowerCase()));
+    const term = guarnicaoFiltro.toLowerCase().replace('guarnição', '').replace('turma', '').trim();
+    return resultado.filter(item => {
+      const gNorm = item.guarnicao.toLowerCase();
+      if (term === 'alfa' || term === 'a') return gNorm.includes('alfa') || gNorm.includes('turma a') || gNorm.includes('equipe a') || gNorm.endsWith(' a');
+      if (term === 'bravo' || term === 'b') return gNorm.includes('bravo') || gNorm.includes('turma b') || gNorm.includes('equipe b') || gNorm.endsWith(' b');
+      if (term === 'charlie' || term === 'c') return gNorm.includes('charlie') || gNorm.includes('turma c') || gNorm.includes('equipe c') || gNorm.endsWith(' c');
+      if (term === 'delta' || term === 'd') return gNorm.includes('delta') || gNorm.includes('turma d') || gNorm.includes('equipe d') || gNorm.endsWith(' d');
+      return gNorm.includes(term);
+    });
   }
 
   return resultado;
