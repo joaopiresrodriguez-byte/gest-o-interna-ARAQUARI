@@ -277,3 +277,110 @@ export async function buscarInventarioConsolidado(localFiltro: string = 'todos')
   return inventario;
 }
 
+export interface ItemMissaoInstrucaoGuarnicao {
+  id: string;
+  tipo: 'missao' | 'instrucao';
+  titulo: string;
+  data: string;
+  horario?: string;
+  guarnicao: string;
+  status: string;
+  responsavelOuInstrutor?: string;
+  detalhes?: string;
+}
+
+export async function buscarMissoesEInstrucoesGuarnicao(
+  mes: number,
+  ano: number,
+  guarnicaoFiltro: string = 'todos'
+): Promise<ItemMissaoInstrucaoGuarnicao[]> {
+  const padMonth = String(mes).padStart(2, '0');
+  const inicioMes = `${ano}-${padMonth}-01`;
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  const fimMes = `${ano}-${padMonth}-${String(ultimoDia).padStart(2, '0')}`;
+
+  const [missoesRes, instrucoesRes, materiasRes, escalasRes] = await Promise.allSettled([
+    supabase
+      .from('daily_missions')
+      .select('*')
+      .gte('mission_date', inicioMes)
+      .lte('mission_date', fimMes),
+
+    supabase
+      .from('training_schedule')
+      .select('*')
+      .gte('date', inicioMes)
+      .lte('date', fimMes),
+
+    supabase
+      .from('materias_instrucao')
+      .select('*'),
+
+    supabase
+      .from('escalas')
+      .select('*')
+      .gte('data', inicioMes)
+      .lte('data', fimMes)
+  ]);
+
+  const missoesData = missoesRes.status === 'fulfilled' && missoesRes.value.data ? missoesRes.value.data : [];
+  const instrucoesData = instrucoesRes.status === 'fulfilled' && instrucoesRes.value.data ? instrucoesRes.value.data : [];
+  const materiasData = materiasRes.status === 'fulfilled' && materiasRes.value.data ? materiasRes.value.data : [];
+  const escalasData = escalasRes.status === 'fulfilled' && escalasRes.value.data ? escalasRes.value.data : [];
+
+  // Mapeamento de data (YYYY-MM-DD) -> Guarnição/Equipe (ex: "Alfa", "Bravo")
+  const escalaMap: Record<string, string> = {};
+  escalasData.forEach((esc: any) => {
+    if (esc.data && esc.equipe) {
+      escalaMap[esc.data] = esc.equipe;
+    }
+  });
+
+  const resultado: ItemMissaoInstrucaoGuarnicao[] = [];
+
+  // 1. Mapear Missões Diárias
+  missoesData.forEach((m: any) => {
+    const guarnicaoDia = escalaMap[m.mission_date] || 'Não Escalada';
+    resultado.push({
+      id: m.id || `m-${Math.random()}`,
+      tipo: 'missao',
+      titulo: m.title || 'Missão Operacional',
+      data: m.mission_date,
+      horario: m.start_time ? `${m.start_time}${m.end_time ? ' - ' + m.end_time : ''}` : undefined,
+      guarnicao: guarnicaoDia,
+      status: m.status === 'concluida' ? 'Concluída' : m.status === 'em_andamento' ? 'Em Andamento' : m.status || 'Agendada',
+      responsavelOuInstrutor: m.responsible_name || m.chefe_socorro_nome || m.created_by || 'N/A',
+      detalhes: m.description || m.observacoes || ''
+    });
+  });
+
+  // 2. Mapear Instruções / Treinamentos
+  instrucoesData.forEach((t: any) => {
+    const materia = materiasData.find((mat: any) => mat.id === t.materia_id);
+    const guarnicaoDia = escalaMap[t.date] || 'Não Escalada';
+    const statusInstrucao = t.status === 'Completed' || t.status === 'Concluído' ? 'Concluída' : t.status === 'Canceled' || t.status === 'Cancelado' ? 'Cancelada' : 'Agendada/Realizada';
+
+    resultado.push({
+      id: t.id || `t-${Math.random()}`,
+      tipo: 'instrucao',
+      titulo: materia?.name || t.tema || 'Instrução B3',
+      data: t.date,
+      horario: t.time ? `${t.time}${t.end_time ? ' - ' + t.end_time : ''}` : undefined,
+      guarnicao: guarnicaoDia,
+      status: statusInstrucao,
+      responsavelOuInstrutor: t.instructor || materia?.instructor || 'N/A',
+      detalhes: materia?.description || t.location ? `Local: ${t.location}` : ''
+    });
+  });
+
+  // Ordenar por data (decrescente) e tipo
+  resultado.sort((a, b) => b.data.localeCompare(a.data));
+
+  if (guarnicaoFiltro && guarnicaoFiltro !== 'todos') {
+    return resultado.filter(item => item.guarnicao.toLowerCase().includes(guarnicaoFiltro.toLowerCase()));
+  }
+
+  return resultado;
+}
+
+

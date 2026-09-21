@@ -7,7 +7,9 @@ import {
   RelatorioMensal,
   RelatorioSalvo,
   buscarInventarioConsolidado,
-  InventarioItem
+  InventarioItem,
+  buscarMissoesEInstrucoesGuarnicao,
+  ItemMissaoInstrucaoGuarnicao
 } from '../../services/b4RelatorioService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -47,9 +49,16 @@ const RelatoriosMensais: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [viewingReport, setViewingReport] = useState<RelatorioSalvo | null>(null);
 
+  // Aba ativa de relatório: 'inventario' ou 'guarnicao_missoes'
+  const [abaAtiva, setAbaAtiva] = useState<'inventario' | 'guarnicao_missoes'>('inventario');
+
   // Inventário das 3 tabelas (b4_vehicles, b4_compartimentos_viaturas, b4_locais_equipamentos/checklist_itens)
   const [inventario, setInventario] = useState<InventarioItem[]>([]);
   const [filtroLocal, setFiltroLocal] = useState<string>('todos');
+
+  // Missões e Instruções da Guarnição
+  const [missoesGuarnicao, setMissoesGuarnicao] = useState<ItemMissaoInstrucaoGuarnicao[]>([]);
+  const [filtroGuarnicao, setFiltroGuarnicao] = useState<string>('todos');
 
   const carregarInventario = useCallback(async (local: string) => {
     try {
@@ -57,6 +66,15 @@ const RelatoriosMensais: React.FC = () => {
       setInventario(data);
     } catch (err: any) {
       console.error('Erro ao carregar inventário:', err);
+    }
+  }, []);
+
+  const carregarMissoesGuarnicao = useCallback(async (m: number, a: number, guarnicao: string) => {
+    try {
+      const data = await buscarMissoesEInstrucoesGuarnicao(m, a, guarnicao);
+      setMissoesGuarnicao(data);
+    } catch (err: any) {
+      console.error('Erro ao carregar missões/instruções da guarnição:', err);
     }
   }, []);
 
@@ -72,7 +90,9 @@ const RelatoriosMensais: React.FC = () => {
   useEffect(() => {
     loadHistorico();
     carregarInventario(filtroLocal);
-  }, [loadHistorico, carregarInventario, filtroLocal]);
+    carregarMissoesGuarnicao(mes, ano, filtroGuarnicao);
+  }, [loadHistorico, carregarInventario, filtroLocal, carregarMissoesGuarnicao, mes, ano, filtroGuarnicao]);
+
 
   const handleGerar = async () => {
     setLoading(true);
@@ -113,84 +133,138 @@ const RelatoriosMensais: React.FC = () => {
     doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 105, 47, { align: 'center' });
 
     // Table of Inventory with alerts in RED
-    const tableBody = inventario.map(item => [
-      item.nome,
-      item.tomboPatrimonio,
-      item.tipo,
-      item.localViatura + (item.compartimento ? ` (${item.compartimento})` : ''),
-      item.quantidade.toString(),
-      item.estadoConservacao
-    ]);
+    if (abaAtiva === 'inventario') {
+      const tableBody = inventario.map(item => [
+        item.nome,
+        item.tomboPatrimonio,
+        item.tipo,
+        item.localViatura + (item.compartimento ? ` (${item.compartimento})` : ''),
+        item.quantidade.toString(),
+        item.estadoConservacao
+      ]);
 
-    autoTable(doc, {
-      startY: 54,
-      head: [['Item / Equipamento', 'Tombo/Placa', 'Tipo', 'Local / Viatura / Compartimento', 'Qtd', 'Estado']],
-      body: tableBody,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [30, 41, 59], textColor: 255 },
-      didParseCell: (data) => {
-        if (data.section === 'body') {
-          const itemIndex = data.row.index;
-          const item = inventario[itemIndex];
-          if (item && item.statusAlerta !== 'normal') {
-            // Destacar linha com problema em vermelho no PDF
-            data.cell.styles.textColor = [185, 28, 28]; // Red 700
-            data.cell.styles.fontStyle = 'bold';
+      autoTable(doc, {
+        startY: 54,
+        head: [['Item / Equipamento', 'Tombo/Placa', 'Tipo', 'Local / Viatura / Compartimento', 'Qtd', 'Estado']],
+        body: tableBody,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            const itemIndex = data.row.index;
+            const item = inventario[itemIndex];
+            if (item && item.statusAlerta !== 'normal') {
+              data.cell.styles.textColor = [185, 28, 28];
+              data.cell.styles.fontStyle = 'bold';
+            }
           }
         }
-      }
-    });
+      });
+      doc.save(`INVENTARIO_PATRIMONIAL_B4_${MESES[rel.mes - 1].toLowerCase()}_${rel.ano}.pdf`);
+      toast.success('PDF do Inventário exportado!');
+    } else {
+      const tableBody = missoesGuarnicao.map(item => [
+        item.tipo === 'missao' ? 'Missão' : 'Instrução',
+        item.titulo,
+        `${new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}${item.horario ? ' (' + item.horario + ')' : ''}`,
+        `Guarnição ${item.guarnicao}`,
+        item.responsavelOuInstrutor || 'N/A',
+        item.status
+      ]);
+
+      autoTable(doc, {
+        startY: 54,
+        head: [['Tipo', 'Título / Atividade', 'Data (Horário)', 'Guarnição Escalada', 'Responsável / Instrutor', 'Status']],
+        body: tableBody,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [185, 28, 28], textColor: 255 }
+      });
+      doc.save(`MISSOES_INSTRUCOES_GUARNICAO_${filtroGuarnicao.toUpperCase()}_${MESES[rel.mes - 1].toLowerCase()}_${rel.ano}.pdf`);
+      toast.success('PDF de Missões e Instruções exportado!');
+    }
 
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8);
     doc.setTextColor(150);
     doc.text(
-      'Documento de Inventário Oficial — Sistema de Gestão Interna CBMSC Araquari',
+      'Documento de Relatório Oficial — Sistema de Gestão Interna CBMSC Araquari',
       105, pageHeight - 10, { align: 'center' }
     );
-
-    doc.save(`INVENTARIO_PATRIMONIAL_B4_${MESES[rel.mes - 1].toLowerCase()}_${rel.ano}.pdf`);
-    toast.success('PDF do Inventário exportado!');
   };
 
   const exportarTSV = async () => {
     try {
-      const items = await buscarInventarioConsolidado(filtroLocal);
+      if (abaAtiva === 'inventario') {
+        const items = await buscarInventarioConsolidado(filtroLocal);
+        const headers = [
+          'ID',
+          'Nome do Item / Equipamento',
+          'Tombo / Patrimônio / Placa',
+          'Tipo',
+          'Local ou Viatura',
+          'Compartimento',
+          'Quantidade',
+          'Estado de Conservação / Condição',
+          'Status Alerta',
+          'Detalhes / Observações'
+        ];
 
-      const headers = [
-        'ID',
-        'Nome do Item / Equipamento',
-        'Tombo / Patrimônio / Placa',
-        'Tipo',
-        'Local ou Viatura',
-        'Compartimento',
-        'Quantidade',
-        'Estado de Conservação / Condição',
-        'Status Alerta',
-        'Detalhes / Observações'
-      ];
+        const lines: string[] = items.map(item => [
+          item.id,
+          item.nome,
+          item.tomboPatrimonio,
+          item.tipo,
+          item.localViatura,
+          item.compartimento || 'N/A',
+          item.quantidade,
+          item.estadoConservacao,
+          item.statusAlerta !== 'normal' ? `[ALERTA: ${item.statusAlerta.toUpperCase()}]` : 'OK',
+          item.detalhes || ''
+        ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
 
-      const lines: string[] = items.map(item => [
-        item.id,
-        item.nome,
-        item.tomboPatrimonio,
-        item.tipo,
-        item.localViatura,
-        item.compartimento || 'N/A',
-        item.quantidade,
-        item.estadoConservacao,
-        item.statusAlerta !== 'normal' ? `[ALERTA: ${item.statusAlerta.toUpperCase()}]` : 'OK',
-        item.detalhes || ''
-      ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
+        const blob = new Blob([['\uFEFF' + headers.join('\t'), ...lines].join('\n')], { type: 'text/tab-separated-values;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `INVENTARIO_PATRIMONIAL_B4_${filtroLocal.toUpperCase()}_${new Date().toISOString().split('T')[0]}.tsv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Inventário TSV exportado com sucesso!');
+      } else {
+        const items = await buscarMissoesEInstrucoesGuarnicao(mes, ano, filtroGuarnicao);
+        const headers = [
+          'ID',
+          'Tipo',
+          'Título / Atividade',
+          'Data',
+          'Horário',
+          'Guarnição Escalada',
+          'Responsável / Instrutor',
+          'Status',
+          'Detalhes'
+        ];
 
-      const blob = new Blob([['\uFEFF' + headers.join('\t'), ...lines].join('\n')], { type: 'text/tab-separated-values;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `INVENTARIO_PATRIMONIAL_B4_${filtroLocal.toUpperCase()}_${new Date().toISOString().split('T')[0]}.tsv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Inventário TSV exportado com sucesso!');
+        const lines: string[] = items.map(item => [
+          item.id,
+          item.tipo === 'missao' ? 'Missão' : 'Instrução',
+          item.titulo,
+          item.data,
+          item.horario || 'N/A',
+          `Guarnição ${item.guarnicao}`,
+          item.responsavelOuInstrutor || 'N/A',
+          item.status,
+          item.detalhes || ''
+        ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
+
+        const blob = new Blob([['\uFEFF' + headers.join('\t'), ...lines].join('\n')], { type: 'text/tab-separated-values;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `MISSOES_INSTRUCOES_GUARNICAO_${filtroGuarnicao.toUpperCase()}_${MESES[mes - 1].toUpperCase()}_${ano}.tsv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Relatório de Guarnição TSV exportado!');
+      }
     } catch (err: any) {
       toast.error('Erro ao exportar TSV: ' + err.message);
     }
@@ -312,105 +386,214 @@ const RelatoriosMensais: React.FC = () => {
         </div>
       )}
 
-      {/* Tabela do Inventário Consolidado (Tabelas: Fleet, Compartimentos, Equipamentos/Checklist) */}
+      {/* Tabela de Relatório com Alternância de Abas */}
       <div className="bg-white border border-rustic-border rounded-xl p-6 shadow-sm space-y-4">
+        {/* Tab Headers and Filter Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rustic-border/40 pb-4">
-          <div>
-            <h3 className="text-lg font-black text-[#3e2723] flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">inventory</span>
-              Inventário Geral Consolidado de Bens
-            </h3>
-            <p className="text-xs text-rustic-brown/60">
-              Cruza dados de <strong className="text-rustic-brown">Viaturas</strong>, <strong className="text-rustic-brown">Compartimentos</strong> e <strong className="text-rustic-brown">Checklist de Itens</strong>.
-            </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAbaAtiva('inventario')}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+                abaAtiva === 'inventario'
+                  ? 'bg-rustic-brown text-white shadow-md'
+                  : 'bg-stone-100 text-rustic-brown/70 hover:bg-stone-200'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">inventory</span>
+              Inventário Consolidado
+            </button>
+            <button
+              onClick={() => setAbaAtiva('guarnicao_missoes')}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+                abaAtiva === 'guarnicao_missoes'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-stone-100 text-rustic-brown/70 hover:bg-stone-200'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">assignment_turned_in</span>
+              Missões e Instruções por Guarnição
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
-              <span className="material-symbols-outlined text-stone-400 text-[18px]">filter_alt</span>
-              <label className="text-xs font-bold text-rustic-brown">Filtrar Local/Viatura:</label>
-              <select
-                value={filtroLocal}
-                onChange={e => setFiltroLocal(e.target.value)}
-                className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer"
-              >
-                <option value="todos">Visão Geral (Todos)</option>
-                {locsUnicos.map(loc => (
-                  <option key={loc} value={loc}>{loc}</option>
-                ))}
-              </select>
-            </div>
+            {abaAtiva === 'inventario' ? (
+              <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
+                <span className="material-symbols-outlined text-stone-400 text-[18px]">filter_alt</span>
+                <label className="text-xs font-bold text-rustic-brown">Filtrar Local/Viatura:</label>
+                <select
+                  value={filtroLocal}
+                  onChange={e => setFiltroLocal(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer"
+                >
+                  <option value="todos">Visão Geral (Todos)</option>
+                  {locsUnicos.map(loc => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
+                <span className="material-symbols-outlined text-stone-400 text-[18px]">groups</span>
+                <label className="text-xs font-bold text-rustic-brown">Filtrar Guarnição:</label>
+                <select
+                  value={filtroGuarnicao}
+                  onChange={e => setFiltroGuarnicao(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer"
+                >
+                  <option value="todos">Todas as Guarnições</option>
+                  <option value="Alfa">Guarnição Alfa</option>
+                  <option value="Bravo">Guarnição Bravo</option>
+                  <option value="Charlie">Guarnição Charlie</option>
+                  <option value="Delta">Guarnição Delta</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-stone-50 text-[10px] font-black uppercase tracking-wider text-rustic-brown/60 border-b border-rustic-border">
-                <th className="py-3 px-4">Item / Equipamento</th>
-                <th className="py-3 px-4">Tombo / Placa</th>
-                <th className="py-3 px-4">Tipo</th>
-                <th className="py-3 px-4">Local / Viatura (Compartimento)</th>
-                <th className="py-3 px-4 text-center">Qtd</th>
-                <th className="py-3 px-4 text-center">Estado / Alerta</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-rustic-border/30">
-              {inventario.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-stone-400 italic">
-                    Nenhum bem patrimonial encontrado para o filtro selecionado.
-                  </td>
+        {/* Content based on Active Tab */}
+        {abaAtiva === 'inventario' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="bg-stone-50 text-[10px] font-black uppercase tracking-wider text-rustic-brown/60 border-b border-rustic-border">
+                  <th className="py-3 px-4">Item / Equipamento</th>
+                  <th className="py-3 px-4">Tombo / Placa</th>
+                  <th className="py-3 px-4">Tipo</th>
+                  <th className="py-3 px-4">Local / Viatura (Compartimento)</th>
+                  <th className="py-3 px-4 text-center">Qtd</th>
+                  <th className="py-3 px-4 text-center">Estado / Alerta</th>
                 </tr>
-              ) : (
-                inventario.map((item, idx) => {
-                  const hasAlert = item.statusAlerta !== 'normal';
-                  return (
-                    <tr
-                      key={item.id || idx}
-                      className={`hover:bg-stone-50/70 transition-colors ${hasAlert ? 'bg-red-50/50' : ''}`}
-                    >
-                      <td className="py-3 px-4 font-bold text-rustic-brown">
-                        <div className="flex items-center gap-2">
-                          <span className={`material-symbols-outlined text-[16px] ${hasAlert ? 'text-red-600' : 'text-stone-400'}`}>
-                            {item.tipo === 'Viatura' ? 'local_shipping' : item.tipo === 'Compartimento' ? 'grid_view' : 'build'}
+              </thead>
+              <tbody className="divide-y divide-rustic-border/30">
+                {inventario.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-stone-400 italic">
+                      Nenhum bem patrimonial encontrado para o filtro selecionado.
+                    </td>
+                  </tr>
+                ) : (
+                  inventario.map((item, idx) => {
+                    const hasAlert = item.statusAlerta !== 'normal';
+                    return (
+                      <tr
+                        key={item.id || idx}
+                        className={`hover:bg-stone-50/70 transition-colors ${hasAlert ? 'bg-red-50/50' : ''}`}
+                      >
+                        <td className="py-3 px-4 font-bold text-rustic-brown">
+                          <div className="flex items-center gap-2">
+                            <span className={`material-symbols-outlined text-[16px] ${hasAlert ? 'text-red-600' : 'text-stone-400'}`}>
+                              {item.tipo === 'Viatura' ? 'local_shipping' : item.tipo === 'Compartimento' ? 'grid_view' : 'build'}
+                            </span>
+                            <span>{item.nome}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-xs font-mono font-bold text-rustic-brown/70">{item.tomboPatrimonio}</td>
+                        <td className="py-3 px-4 text-xs">
+                          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-stone-100 text-rustic-brown border border-rustic-border/40">
+                            {item.tipo}
                           </span>
-                          <span>{item.nome}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-xs font-mono font-bold text-rustic-brown/70">{item.tomboPatrimonio}</td>
-                      <td className="py-3 px-4 text-xs">
-                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-stone-100 text-rustic-brown border border-rustic-border/40">
-                          {item.tipo}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-rustic-brown font-medium">
-                        {item.localViatura}
-                        {item.compartimento && (
-                          <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-200">
-                            {item.compartimento}
+                        </td>
+                        <td className="py-3 px-4 text-xs text-rustic-brown font-medium">
+                          {item.localViatura}
+                          {item.compartimento && (
+                            <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-200">
+                              {item.compartimento}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-xs font-black text-center">{item.quantidade}</td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 ${
+                            hasAlert
+                              ? 'bg-red-100 text-red-700 border border-red-300 shadow-sm'
+                              : 'bg-green-100 text-green-700 border border-green-200'
+                          }`}>
+                            {hasAlert && <span className="material-symbols-outlined text-[12px]">error</span>}
+                            {item.estadoConservacao}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-xs font-black text-center">{item.quantidade}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 ${
-                          hasAlert
-                            ? 'bg-red-100 text-red-700 border border-red-300 shadow-sm'
-                            : 'bg-green-100 text-green-700 border border-green-200'
-                        }`}>
-                          {hasAlert && <span className="material-symbols-outlined text-[12px]">error</span>}
-                          {item.estadoConservacao}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="bg-stone-50 text-[10px] font-black uppercase tracking-wider text-rustic-brown/60 border-b border-rustic-border">
+                  <th className="py-3 px-4">Tipo</th>
+                  <th className="py-3 px-4">Título / Atividade</th>
+                  <th className="py-3 px-4">Data e Horário</th>
+                  <th className="py-3 px-4">Guarnição Escalada</th>
+                  <th className="py-3 px-4">Responsável / Instrutor</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-rustic-border/30">
+                {missoesGuarnicao.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-stone-400 italic">
+                      Nenhuma missão ou instrução encontrada para o filtro de guarnição selecionado neste mês.
+                    </td>
+                  </tr>
+                ) : (
+                  missoesGuarnicao.map((item, idx) => {
+                    const isMissao = item.tipo === 'missao';
+                    return (
+                      <tr key={item.id || idx} className="hover:bg-stone-50/70 transition-colors">
+                        <td className="py-3 px-4 text-xs">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase inline-flex items-center gap-1 ${
+                            isMissao ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                          }`}>
+                            <span className="material-symbols-outlined text-[12px]">
+                              {isMissao ? 'flag' : 'school'}
+                            </span>
+                            {isMissao ? 'Missão' : 'Instrução'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-rustic-brown">
+                          <div>{item.titulo}</div>
+                          {item.detalhes && (
+                            <div className="text-[11px] text-stone-500 font-normal line-clamp-1">{item.detalhes}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-xs text-rustic-brown/80 font-medium">
+                          <div>{new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+                          {item.horario && <div className="text-[10px] text-stone-400 font-mono">{item.horario}</div>}
+                        </td>
+                        <td className="py-3 px-4 text-xs font-bold">
+                          <span className="px-2.5 py-1 rounded-md bg-stone-100 text-rustic-brown border border-rustic-border/60">
+                            Guarnição {item.guarnicao}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-rustic-brown font-medium">
+                          {item.responsavelOuInstrutor}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                            item.status === 'Concluída'
+                              ? 'bg-green-100 text-green-700 border border-green-300'
+                              : item.status === 'Em Andamento'
+                              ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                              : 'bg-stone-100 text-stone-600 border border-stone-300'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
 
       {/* Report History Table */}
       <div className="bg-white border border-rustic-border rounded-xl p-6">
