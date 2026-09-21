@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
-  salvarConferencia,
-  buscarConferenciaDia,
   formatarMensagemWhatsAppConferencia,
   enviarConferenciaWhatsApp,
   NUMERO_CHEFE_SOCORRO
@@ -62,54 +60,6 @@ export function ExtratoPublico() {
   const [falhaEnvio, setFalhaEnvio] = useState(false);
   const [mensagemCache, setMensagemCache] = useState('');
 
-  // Carregar dados de conferência existente do dia
-  const recarregarConferencias = async () => {
-    try {
-      const mapa = await buscarConferenciaDia();
-      const novoMapa: Record<string, { status: 'ok' | 'ocorrencia'; observacao?: string; conferido_por_nome?: string; conferido_em?: string }> = {};
-      const novasObs: Record<string, string> = {};
-
-      Object.entries(mapa).forEach(([itemId, record]: [string, any]) => {
-        const st = record.status === 'ok' ? 'ok' : 'ocorrencia';
-        novoMapa[itemId] = {
-          status: st,
-          observacao: record.observacao || '',
-          conferido_por_nome: record.conferido_por_nome,
-          conferido_em: record.conferido_em,
-        };
-        if (record.observacao) {
-          novasObs[itemId] = record.observacao;
-        }
-      });
-
-      setConferenciaMap(novoMapa);
-      setObservacoesLocal(prev => ({ ...novasObs, ...prev }));
-    } catch (e) {
-      console.error('Erro ao buscar conferências do dia:', e);
-    }
-  };
-
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (user?.email) {
-        const userEmail = user.email.toLowerCase().trim();
-        const { data: p } = await supabase
-          .from('personnel')
-          .select('war_name, name, graduation')
-          .eq('email', userEmail)
-          .maybeSingle();
-
-        if (p) {
-          const grad = p.graduation ? `${p.graduation} ` : '';
-          const nomeGuerra = p.war_name || p.name;
-          setNomeConferente(`${grad}${nomeGuerra}`.trim().toUpperCase());
-        } else {
-          setNomeConferente(user.email.split('@')[0].toUpperCase());
-        }
-      }
-    });
-  }, []);
-
   useEffect(() => {
     async function buscar() {
       try {
@@ -118,8 +68,6 @@ export function ExtratoPublico() {
           setCarregando(false);
           return;
         }
-
-        await recarregarConferencias();
 
         // Carregar cautelas ativas para mapear itens acautelados
         const { data: cautelasAtivasData } = await supabase
@@ -353,58 +301,28 @@ export function ExtratoPublico() {
   }, [tipo, id]);
 
   // Ações de Marcação (OK e OCORRÊNCIA) por item
-  const marcarOk = async (item: ItemExtrato) => {
+  const marcarOk = (item: ItemExtrato) => {
     setConferenciaMap(prev => ({
       ...prev,
       [item.id]: { status: 'ok', observacao: '' }
     }));
     setObservacoesLocal(prev => ({ ...prev, [item.id]: '' }));
-
-    await salvarConferencia({
-      fleet_item_id: item.id,
-      equipamento_id: item.id,
-      status: 'ok',
-      observacao: '',
-      item_nome: item.name,
-      viatura_nome: titulo,
-      compartimento_nome: item.compartimento_nome,
-    });
   };
 
-  const marcarOcorrencia = async (item: ItemExtrato) => {
+  const marcarOcorrencia = (item: ItemExtrato) => {
     const obsAtual = observacoesLocal[item.id] || '';
     setConferenciaMap(prev => ({
       ...prev,
       [item.id]: { status: 'ocorrencia', observacao: obsAtual }
     }));
-
-    await salvarConferencia({
-      fleet_item_id: item.id,
-      equipamento_id: item.id,
-      status: 'avariado',
-      observacao: obsAtual,
-      item_nome: item.name,
-      viatura_nome: titulo,
-      compartimento_nome: item.compartimento_nome,
-    });
   };
 
-  const salvarObservacao = async (item: ItemExtrato, texto: string) => {
+  const salvarObservacao = (item: ItemExtrato, texto: string) => {
     setObservacoesLocal(prev => ({ ...prev, [item.id]: texto }));
     setConferenciaMap(prev => ({
       ...prev,
       [item.id]: { status: 'ocorrencia', observacao: texto }
     }));
-
-    await salvarConferencia({
-      fleet_item_id: item.id,
-      equipamento_id: item.id,
-      status: 'avariado',
-      observacao: texto,
-      item_nome: item.name,
-      viatura_nome: titulo,
-      compartimento_nome: item.compartimento_nome,
-    });
   };
 
   // Cálculo dos totais
