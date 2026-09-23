@@ -28,9 +28,9 @@ import ModalEdicaoFerias from '../components/b1/ModalEdicaoFerias';
 import { SecaoAlteracoesEscala } from '../components/b1/SecaoAlteracoesEscala';
 import { PainelRevisaoEscalaBC } from '../components/b1/PainelRevisaoEscalaBC';
 
-type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'BC_ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PERFIL' | 'EXPORTAR' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
+type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'BC_ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PERFIL' | 'EXTRATOS' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
 
-const tabIcons: Record<Tab, string> = { EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', BC_ESCALA: 'volunteer_activism', FERIAS: 'beach_access', DISCIPLINA: 'gavel', PERFIL: 'badge', EXPORTAR: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DASHBOARD: 'dashboard' };
+const tabIcons: Record<Tab, string> = { EFETIVO: 'groups', CADASTRO: 'person_add', ESCALA: 'calendar_month', BC_ESCALA: 'volunteer_activism', FERIAS: 'beach_access', DISCIPLINA: 'gavel', PERFIL: 'badge', EXTRATOS: 'upload_file', DOCUMENTOS: 'folder', CURSOS: 'school', DASHBOARD: 'dashboard' };
 
 
 const RANKS_BM = ['Sd', 'Cb', '3º Sgt', '2º Sgt', '1º Sgt', 'Sub Ten', 'Asp Of', '2º Ten', '1º Ten', 'Cap', 'Maj', 'Ten Cel', 'Cel'];
@@ -365,7 +365,7 @@ const PessoalB1: React.FC = () => {
 
   useEffect(() => {
     if (tab === 'DISCIPLINA') loadDisciplinary();
-    if (tab === 'EXPORTAR') loadExports();
+    if (tab === 'EXTRATOS') loadExports();
   }, [tab]);
 
   // ===== CRUD Handlers =====
@@ -984,7 +984,7 @@ const PessoalB1: React.FC = () => {
           {/* Tabs — scroll horizontal no mobile */}
           <div className="tabs-mobile-scroll border-t border-rustic-border pt-3 md:pt-4">
             <div className="flex gap-1 w-max md:w-auto md:flex-wrap">
-              {(['DASHBOARD', 'EFETIVO', 'DOCUMENTOS', 'ESCALA', 'BC_ESCALA', 'FERIAS', 'DISCIPLINA', 'EXPORTAR', 'CURSOS'] as Tab[]).map(t => (
+              {(['DASHBOARD', 'EFETIVO', 'DOCUMENTOS', 'ESCALA', 'BC_ESCALA', 'FERIAS', 'DISCIPLINA', 'EXTRATOS', 'CURSOS'] as Tab[]).map(t => (
                 <button key={t} onClick={() => setTab(t)} className={`flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap flex-shrink-0 ${tab === t ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:bg-stone-50'}`}>
                   <span className="material-symbols-outlined text-[16px]">{tabIcons[t]}</span>{t.replace('BC_ESCALA', 'ESCALA BC').replace('FERIAS', 'FÉRIAS').replace('DASHBOARD', 'DASHBOARD')}
                   {t === 'DASHBOARD' && (alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length) > 0 && <span className="w-5 h-5 rounded-full bg-gray-600 text-white text-[9px] flex items-center justify-center ml-1">{alerts.filter(a => a.severity === 'critical').length + notifications.filter(n => !n.is_read).length}</span>}
@@ -1934,8 +1934,8 @@ const PessoalB1: React.FC = () => {
               )}
               {tab === 'PERFIL' && !profilePerson && <div className="text-center py-12 text-gray-300"><p>Selecione um militar na aba Efetivo para ver o perfil completo.</p></div>}
 
-              {/* TAB: EXPORTAR */}
-              {tab === 'EXPORTAR' && (
+              {/* TAB: EXTRATOS */}
+              {tab === 'EXTRATOS' && (
                 <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
               )}
 

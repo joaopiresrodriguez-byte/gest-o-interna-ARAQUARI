@@ -4,6 +4,8 @@ import { formatLocalDate } from '../../utils/dateUtils';
 import { toast } from 'sonner';
 import { supabase } from '../../services/supabase';
 
+import { ExtratoMensalB1 } from './ExtratoMensalB1';
+
 interface Props {
     personnelList: Personnel[];
     vacations: Vacation[];
@@ -25,7 +27,7 @@ const ExportSection: React.FC<Props> = ({
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
-    const [activeSubTab, setActiveSubTab] = useState<'sigrh' | 'sgpe' | 'csv_escalas'>('sigrh');
+    const [activeSubTab, setActiveSubTab] = useState<'extrato_mensal' | 'sigrh' | 'sgpe' | 'csv_escalas'>('extrato_mensal');
     const [selectedPersonnelId, setSelectedPersonnelId] = useState<string>('');
     const [escalaDate, setEscalaDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [csvMonthBM, setCsvMonthBM] = useState<string>(currentMonth);
@@ -797,16 +799,17 @@ const ExportSection: React.FC<Props> = ({
     return (
         <div className="space-y-6">
             {/* Navigation Sub-Tabs */}
-            <div className="flex gap-2 border-b border-stone-200 pb-3">
+            <div className="flex gap-2 border-b border-stone-200 pb-3 overflow-x-auto">
                 {[
-                    { id: 'sigrh', label: 'SIGRH (Extrato Completo)', icon: 'table_view' },
+                    { id: 'extrato_mensal', label: 'Extrato Mensal B1 (Alterações SIGRH)', icon: 'published_with_changes' },
+                    { id: 'sigrh', label: 'SIGRH (Ficha & Extrato Unificado)', icon: 'table_view' },
                     { id: 'sgpe', label: 'SGP-e (Ficha Frequência & Escala 24x72)', icon: 'description' },
-                    { id: 'csv_escalas', label: 'Exportar Escalas (CSV)', icon: 'csv' }
+                    { id: 'csv_escalas', label: 'Escalas de Serviço (CSV)', icon: 'csv' }
                 ].map(t => (
                     <button
                         key={t.id}
                         onClick={() => setActiveSubTab(t.id as any)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
                             activeSubTab === t.id ? 'bg-primary text-white shadow-md' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                         }`}
                     >
@@ -815,6 +818,11 @@ const ExportSection: React.FC<Props> = ({
                     </button>
                 ))}
             </div>
+
+            {/* TAB: EXTRATO MENSAL B1 */}
+            {activeSubTab === 'extrato_mensal' && (
+                <ExtratoMensalB1 personnelList={personnelList} vacations={vacations} />
+            )}
 
             {/* TAB: SIGRH */}
             {activeSubTab === 'sigrh' && (
