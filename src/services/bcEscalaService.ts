@@ -441,23 +441,13 @@ export const bcEscalaService = {
       personnel: personnelMap.get(String(item.bombeiro_id)) || null,
     }));
 
-    // 3. Buscar configurações de vagas/horas do ciclo e exceções diárias
-    const { data: ciclo } = await supabase
-      .from('bc_ciclos')
-      .select('*')
-      .eq('mes_referencia', mesRef)
-      .maybeSingle();
-
-    const horasPadraoDia = ciclo?.horas_padrao_dia || 36;
-
-    const { data: excecoesVagas } = await supabase
-      .from('bc_config_vagas')
-      .select('*')
-      .eq('mes_referencia', mesRef);
+    // 3. Buscar configurações de vagas/horas do ciclo e exceções diárias via obterConfigVagas
+    const cfgVagas = await bcEscalaService.obterConfigVagas(mesRef);
+    const horasPadraoDia = cfgVagas.horasPadraoDia;
 
     const excecoesMap = new Map<string, number>();
-    (excecoesVagas || []).forEach(ev => {
-      excecoesMap.set(ev.dia, ev.horas_disponiveis);
+    Object.entries(cfgVagas.excecoes).forEach(([dia, h]) => {
+      excecoesMap.set(dia, h);
     });
 
     // 4. Limpar seleções anteriores do mês (re-processamento seguro)
@@ -647,6 +637,14 @@ export const bcEscalaService = {
   obterConfigVagas: async (mesRef: string): Promise<{ horasPadraoDia: number; excecoes: Record<string, number> }> => {
     let horasPadraoDia = 36;
 
+    // Verificar se há salvo em localStorage primeiro como fallback rápido
+    try {
+      const cached = localStorage.getItem(`bc_horas_padrao_${mesRef}`);
+      if (cached && !isNaN(Number(cached))) {
+        horasPadraoDia = Number(cached);
+      }
+    } catch (_) {}
+
     try {
       const { data: ciclo } = await supabase
         .from('bc_ciclos')
@@ -654,8 +652,8 @@ export const bcEscalaService = {
         .eq('mes_referencia', mesRef)
         .maybeSingle();
 
-      if (ciclo && (ciclo as any).horas_padrao_dia !== undefined) {
-        horasPadraoDia = (ciclo as any).horas_padrao_dia || 36;
+      if (ciclo && (ciclo as any).horas_padrao_dia !== undefined && (ciclo as any).horas_padrao_dia !== null) {
+        horasPadraoDia = Number((ciclo as any).horas_padrao_dia) || horasPadraoDia;
       }
     } catch (e) {
       console.warn('Coluna horas_padrao_dia ainda não migrada na tabela bc_ciclos:', e);
@@ -682,6 +680,11 @@ export const bcEscalaService = {
     horasPadraoDia: number,
     excecoes: Record<string, number>
   ) => {
+    // 0. Salvar em localStorage para persistência garantida no frontend
+    try {
+      localStorage.setItem(`bc_horas_padrao_${mesRef}`, String(horasPadraoDia));
+    } catch (_) {}
+
     // 1. Garantir que o ciclo exista
     const cicloObj = await bcEscalaService.obterOuCriarCiclo(mesRef);
 
@@ -693,12 +696,9 @@ export const bcEscalaService = {
         .eq('id', cicloObj.id);
 
       if (errCiclo && !errCiclo.message?.includes('horas_padrao_dia')) {
-        throw errCiclo;
+        console.warn('Aviso ao atualizar horas_padrao_dia no Supabase:', errCiclo.message);
       }
     } catch (e: any) {
-      if (!e?.message?.includes('horas_padrao_dia')) {
-        throw e;
-      }
       console.warn('Alerta: Coluna horas_padrao_dia pendente de execução de migration no banco remoto Supabase.', e);
     }
 
