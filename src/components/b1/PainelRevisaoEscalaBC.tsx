@@ -20,7 +20,9 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
   const [intencoes, setIntencoes] = useState<BcIntencao[]>([]);
   const [selecionados, setSelecionados] = useState<(BcSelecionado & { personnel?: Personnel })[]>([]);
 
-  // Modais de Gestão
+  // Modais de Gestão e Visão de Intenções
+  const [abaAtiva, setAbaAtiva] = useState<'escala' | 'intencoes'>('escala');
+  const [modalIntencoesDia, setModalIntencoesDia] = useState<{ aberto: boolean; dia: string }>({ aberto: false, dia: '' });
   const [modalSubstituir, setModalSubstituir] = useState<{ aberto: boolean; selecionadoId: string | null; militarAtualNome: string }>({
     aberto: false,
     selecionadoId: null,
@@ -259,6 +261,28 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
   const diasOrdenados = Object.keys(selecionadosPorDia).sort();
 
+  // Agrupar intenções salvas por bombeiro
+  const intencoesPorBombeiro = (intencoes || []).reduce((acc, intencao) => {
+    const bId = intencao.bombeiro_id;
+    if (!acc[bId]) {
+      const bc = bcsAtivos.find(b => b.id === bId) || (intencao as any).personnel;
+      acc[bId] = {
+        bombeiro: bc || { name: `ID #${bId}` },
+        lista: [],
+      };
+    }
+    acc[bId].lista.push(intencao);
+    return acc;
+  }, {} as Record<number, { bombeiro: Personnel | { name: string; war_name?: string }; lista: BcIntencao[] }>);
+
+  // Agrupar intenções salvas por dia
+  const intencoesPorDia = (intencoes || []).reduce((acc, intencao) => {
+    if (!acc[intencao.dia]) acc[intencao.dia] = [];
+    const bc = bcsAtivos.find(b => b.id === intencao.bombeiro_id) || (intencao as any).personnel;
+    acc[intencao.dia].push({ ...intencao, bombeiro: bc });
+    return acc;
+  }, {} as Record<string, Array<BcIntencao & { bombeiro?: Personnel | { name: string; war_name?: string } }>>);
+
   return (
     <div className="space-y-6">
       {/* PAINEL DE CONTROLE SUPERIOR */}
@@ -386,144 +410,313 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
         </div>
       )}
 
-      {/* BOTÃO ADICIONAR EXCEÇÃO MANUAL */}
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-          <span>📅</span> Escala Diária Selecionada pelo Motor
-        </h3>
+      {/* BARRA DE NAVEGAÇÃO ENTRE ABAS DO PAINEL */}
+      <div className="flex border-b border-slate-800 gap-2">
         <button
-          onClick={() => { setAddDia(`${mesRef}-01`); setModalAdicionar(true); }}
-          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1"
+          onClick={() => setAbaAtiva('escala')}
+          className={`px-5 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            abaAtiva === 'escala'
+              ? 'border-red-500 text-white bg-slate-900/60 rounded-t-xl'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
         >
-          <span>➕</span> Adicionar Exceção (Fora da Intenção)
+          <span>🎯</span> Escala Selecionada ({selecionados.length})
+        </button>
+
+        <button
+          onClick={() => setAbaAtiva('intencoes')}
+          className={`px-5 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            abaAtiva === 'intencoes'
+              ? 'border-blue-500 text-white bg-slate-900/60 rounded-t-xl'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <span>📋</span> Intenções Salvas BC ({Object.keys(intencoesPorBombeiro).length} BCs · {intencoes.length} opções)
         </button>
       </div>
 
-      {/* LISTA POR DIA */}
-      {loading ? (
-        <div className="p-8 text-center text-slate-400 font-medium">Carregando painel de escala...</div>
-      ) : diasOrdenados.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
-          <p className="text-base font-semibold mb-1">Nenhum bombeiro selecionado para este mês.</p>
-          <p className="text-xs text-slate-500">Clique em "Dia 26: Rodar Motor" para processar as intenções recebidas.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {diasOrdenados.map(dia => {
-            const listaDia = selecionadosPorDia[dia];
-            const [ano, mes, diaNum] = dia.split('-');
+      {abaAtiva === 'escala' ? (
+        <>
+          {/* BOTÃO ADICIONAR EXCEÇÃO MANUAL */}
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>📅</span> Escala Diária Selecionada pelo Motor
+            </h3>
+            <button
+              onClick={() => { setAddDia(`${mesRef}-01`); setModalAdicionar(true); }}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1"
+            >
+              <span>➕</span> Adicionar Exceção (Fora da Intenção)
+            </button>
+          </div>
 
-            return (
-              <div key={dia} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 mb-4 gap-2">
-                  <div className="flex items-center gap-3">
-                    <span className="w-10 h-10 bg-red-950/80 border border-red-800/80 rounded-xl text-red-400 font-black flex items-center justify-center text-lg">
-                      {diaNum}
-                    </span>
-                    <div>
-                      <h4 className="font-bold text-white text-base">Dia {diaNum}/{mes}/{ano}</h4>
-                      <span className="text-xs text-slate-400">{listaDia.length} bombeiro(s) escalado(s)</span>
-                    </div>
-                  </div>
+          {/* LISTA POR DIA */}
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 font-medium">Carregando painel de escala...</div>
+          ) : diasOrdenados.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+              <p className="text-base font-semibold mb-1">Nenhum bombeiro selecionado para este mês.</p>
+              <p className="text-xs text-slate-500">Clique em "Dia 26: Rodar Motor" para processar as intenções recebidas.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {diasOrdenados.map(dia => {
+                const listaDia = selecionadosPorDia[dia];
+                const [ano, mes, diaNum] = dia.split('-');
+                const totalIntencoesNoDia = (intencoesPorDia[dia] || []).length;
 
-                  {/* INDICADOR DE CAPACIDADE DE HORAS */}
-                  {(() => {
-                    const totalHorasAlocadas = listaDia.reduce((acc, s) => acc + (s.total_horas || 12), 0);
-                    const limiteHoras = excecoesVagas[dia] ?? horasPadraoInput;
-                    const pct = Math.min(100, Math.round((totalHorasAlocadas / limiteHoras) * 100));
-
-                    return (
-                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 px-4 min-w-[200px]">
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-slate-400 font-medium">Vagas / Horas:</span>
-                          <strong className={`font-bold ${pct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {totalHorasAlocadas}h / {limiteHoras}h ({pct}%)
-                          </strong>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all ${pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                            style={{ width: `${pct}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {listaDia.map((s, idx) => (
-                    <div
-                      key={s.id || idx}
-                      className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
-                        s.substituido_por_gestor ? 'bg-amber-950/20 border-amber-800/60' : 'bg-slate-950/80 border-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
+                return (
+                  <div key={dia} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 mb-4 gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="w-10 h-10 bg-red-950/80 border border-red-800/80 rounded-xl text-red-400 font-black flex items-center justify-center text-lg">
+                          {diaNum}
+                        </span>
                         <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded-md uppercase">
-                              #{s.posicao_ranking}º Lugar
-                            </span>
-                            <strong className="text-white text-sm">{s.personnel?.name || `ID #${s.bombeiro_id}`}</strong>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-white text-base">Dia {diaNum}/{mes}/{ano}</h4>
+                            {totalIntencoesNoDia > 0 && (
+                              <button
+                                onClick={() => setModalIntencoesDia({ aberto: true, dia })}
+                                className="px-2 py-0.5 bg-blue-950/80 hover:bg-blue-900 border border-blue-800/80 text-blue-300 rounded text-[11px] font-semibold transition"
+                                title="Ver todos os BCs que demonstraram interesse neste dia"
+                              >
+                                📋 {totalIntencoesNoDia} intenção(ões)
+                              </button>
+                            )}
                           </div>
-                          <p className="text-xs text-slate-400">
-                            Horário: <span className="text-emerald-400 font-semibold">{s.horario_inicio} às {s.horario_fim}</span> ({s.total_horas}h)
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => {
-                              setModalSubstituir({
-                                aberto: true,
-                                selecionadoId: s.id!,
-                                militarAtualNome: s.personnel?.name || '',
-                              });
-                            }}
-                            className="p-1.5 hover:bg-slate-800 rounded-lg text-xs text-slate-400 hover:text-amber-400 transition"
-                            title="Substituir bombeiro"
-                          >
-                            🔄
-                          </button>
-                          <button
-                            onClick={() => handleRemover(s.id!)}
-                            className="p-1.5 hover:bg-slate-800 rounded-lg text-xs text-slate-400 hover:text-red-400 transition"
-                            title="Remover da escala"
-                          >
-                            🗑️
-                          </button>
+                          <span className="text-xs text-slate-400">{listaDia.length} bombeiro(s) escalado(s)</span>
                         </div>
                       </div>
 
-                      {/* DETALHE DO CRITÉRIO APLICADO */}
+                      {/* INDICADOR DE CAPACIDADE DE HORAS */}
                       {(() => {
-                        const c = s.criterio_aplicado || '';
-                        const criterioNum = c.match(/Critério (\d)/)?.[1];
-                        const badgeColor =
-                          criterioNum === '1' ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400' :
-                          criterioNum === '2' ? 'bg-blue-950/60 border-blue-800/60 text-blue-400' :
-                          criterioNum === '3' ? 'bg-cyan-950/60 border-cyan-800/60 text-cyan-400' :
-                          criterioNum === '4' ? 'bg-yellow-950/60 border-yellow-700/60 text-yellow-400' :
-                          criterioNum === '5' ? 'bg-orange-950/60 border-orange-800/60 text-orange-400' :
-                          criterioNum === '6' ? 'bg-rose-950/60 border-rose-800/60 text-rose-400' :
-                          s.substituido_por_gestor ? 'bg-amber-950/60 border-amber-800/60 text-amber-400' :
-                          'bg-slate-900/90 border-slate-800/80 text-slate-400';
+                        const totalHorasAlocadas = listaDia.reduce((acc, s) => acc + (s.total_horas || 12), 0);
+                        const limiteHoras = excecoesVagas[dia] ?? horasPadraoInput;
+                        const pct = Math.min(100, Math.round((totalHorasAlocadas / limiteHoras) * 100));
+
                         return (
-                          <div className={`${badgeColor} border rounded-lg p-2 text-[11px] flex items-center justify-between gap-2`}>
-                            <span className="truncate">🎯 {c || 'N/I'}</span>
-                            {s.substituido_por_gestor && (
-                              <span className="text-amber-400 font-semibold shrink-0">⚠️ Gestor</span>
-                            )}
+                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 px-4 min-w-[200px]">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-slate-400 font-medium">Vagas / Horas:</span>
+                              <strong className={`font-bold ${pct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {totalHorasAlocadas}h / {limiteHoras}h ({pct}%)
+                              </strong>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all ${pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                style={{ width: `${pct}%` }}
+                              ></div>
+                            </div>
                           </div>
                         );
                       })()}
                     </div>
-                  ))}
-                </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {listaDia.map((s, idx) => (
+                        <div
+                          key={s.id || idx}
+                          className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+                            s.substituido_por_gestor ? 'bg-amber-950/20 border-amber-800/60' : 'bg-slate-950/80 border-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded-md uppercase">
+                                  #{s.posicao_ranking}º Lugar
+                                </span>
+                                <strong className="text-white text-sm">{s.personnel?.name || `ID #${s.bombeiro_id}`}</strong>
+                              </div>
+                              <p className="text-xs text-slate-400">
+                                Horário: <span className="text-emerald-400 font-semibold">{s.horario_inicio} às {s.horario_fim}</span> ({s.total_horas}h)
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setModalSubstituir({
+                                    aberto: true,
+                                    selecionadoId: s.id!,
+                                    militarAtualNome: s.personnel?.name || '',
+                                  });
+                                }}
+                                className="p-1.5 hover:bg-slate-800 rounded-lg text-xs text-slate-400 hover:text-amber-400 transition"
+                                title="Substituir bombeiro"
+                              >
+                                🔄
+                              </button>
+                              <button
+                                onClick={() => handleRemover(s.id!)}
+                                className="p-1.5 hover:bg-slate-800 rounded-lg text-xs text-slate-400 hover:text-red-400 transition"
+                                title="Remover da escala"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* DETALHE DO CRITÉRIO APLICADO */}
+                          {(() => {
+                            const c = s.criterio_aplicado || '';
+                            const criterioNum = c.match(/Critério (\d)/)?.[1];
+                            const badgeColor =
+                              criterioNum === '1' ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400' :
+                              criterioNum === '2' ? 'bg-blue-950/60 border-blue-800/60 text-blue-400' :
+                              criterioNum === '3' ? 'bg-cyan-950/60 border-cyan-800/60 text-cyan-400' :
+                              criterioNum === '4' ? 'bg-yellow-950/60 border-yellow-700/60 text-yellow-400' :
+                              criterioNum === '5' ? 'bg-orange-950/60 border-orange-800/60 text-orange-400' :
+                              criterioNum === '6' ? 'bg-rose-950/60 border-rose-800/60 text-rose-400' :
+                              s.substituido_por_gestor ? 'bg-amber-950/60 border-amber-800/60 text-amber-400' :
+                              'bg-slate-900/90 border-slate-800/80 text-slate-400';
+                            return (
+                              <div className={`${badgeColor} border rounded-lg p-2 text-[11px] flex items-center justify-between gap-2`}>
+                                <span className="truncate">🎯 {c || 'N/I'}</span>
+                                {s.substituido_por_gestor && (
+                                  <span className="text-amber-400 font-semibold shrink-0">⚠️ Gestor</span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        /* ABA INTENÇÕES SALVAS PELOS BOMBEIROS COMUNITÁRIOS */
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+              <span>📋</span> Intenções Salvas e Opções de Interesse dos BCs
+            </h3>
+            <p className="text-xs text-slate-400">
+              Abaixo estão os Bombeiros Comunitários que já submeteram suas escolhas para o mês de referência <strong className="text-white">{mesRef}</strong>.
+            </p>
+          </div>
+
+          {Object.keys(intencoesPorBombeiro).length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+              <p className="text-base font-semibold mb-1">Nenhuma intenção salva encontrada para este mês.</p>
+              <p className="text-xs text-slate-500">
+                Certifique-se de que o ciclo esteja aberto e os links tenham sido enviados aos Bombeiros Comunitários.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(intencoesPorBombeiro).map(([bIdStr, item]) => {
+                const totalHorasBc = item.lista.reduce((acc, curr) => acc + (curr.total_horas || 0), 0);
+                const diasComIntencao = Array.from(new Set(item.lista.map(i => i.dia))).sort();
+
+                return (
+                  <div key={bIdStr} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between border-b border-slate-800 pb-3 mb-4">
+                        <div>
+                          <span className="px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800/80 text-[10px] font-bold rounded-md uppercase mb-1 inline-block">
+                            ✅ Intenção Registrada
+                          </span>
+                          <h4 className="font-bold text-white text-base">{item.bombeiro.name}</h4>
+                          {item.bombeiro.war_name && (
+                            <span className="text-xs text-slate-400">Nome de guerra: {item.bombeiro.war_name}</span>
+                          )}
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-xs text-slate-400 block">Total Pretendido</span>
+                          <strong className="text-emerald-400 text-sm">{totalHorasBc}h ({item.lista.length} opção/ões)</strong>
+                        </div>
+                      </div>
+
+                      {/* LISTA DE OPÇÕES DE INTERESSE */}
+                      <div className="space-y-2">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
+                          Opções de Interesse Selecionadas ({diasComIntencao.length} dia(s)):
+                        </span>
+
+                        <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                          {item.lista.map((opt, idx) => {
+                            const [anoOpt, mesOpt, diaOpt] = opt.dia.split('-');
+                            return (
+                              <div key={opt.id || idx} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 px-3 flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 bg-red-950/80 border border-red-800/80 text-red-400 font-black rounded">
+                                    Dia {diaOpt}/{mesOpt}
+                                  </span>
+                                  <span className="text-slate-200 font-semibold">
+                                    {opt.horario_inicio} às {opt.horario_fim}
+                                  </span>
+                                </div>
+                                <span className="text-slate-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                                  {opt.total_horas}h
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL INTENÇÕES DETALHADAS DO DIA */}
+      {modalIntencoesDia.aberto && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Intenções Recebidas no Dia</h3>
+                <p className="text-xs text-slate-400">Data: <strong className="text-white">{modalIntencoesDia.dia}</strong></p>
               </div>
-            );
-          })}
+              <button
+                onClick={() => setModalIntencoesDia({ aberto: false, dia: '' })}
+                className="text-slate-400 hover:text-white text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {!(intencoesPorDia[modalIntencoesDia.dia] && intencoesPorDia[modalIntencoesDia.dia].length > 0) ? (
+                <p className="text-xs text-slate-400 text-center py-4">Nenhum bombeiro registrou intenção para este dia.</p>
+              ) : (
+                intencoesPorDia[modalIntencoesDia.dia].map((intencao, i) => (
+                  <div key={intencao.id || i} className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                    <div>
+                      <strong className="text-white text-sm block">{intencao.bombeiro?.name || `ID #${intencao.bombeiro_id}`}</strong>
+                      <span className="text-xs text-slate-400">
+                        Horário Pretendido: <span className="text-emerald-400 font-semibold">{intencao.horario_inicio} às {intencao.horario_fim}</span>
+                      </span>
+                    </div>
+                    <span className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-slate-300 font-bold rounded-lg text-xs">
+                      {intencao.total_horas}h
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-800 text-right">
+              <button
+                onClick={() => setModalIntencoesDia({ aberto: false, dia: '' })}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
