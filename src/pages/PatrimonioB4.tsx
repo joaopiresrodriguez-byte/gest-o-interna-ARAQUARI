@@ -116,11 +116,10 @@ const ItemCard: React.FC<ItemCardProps> = ({
               ⚠️ OCORRÊNCIA NA CONFERÊNCIA
             </span>
           )}
-          {item.quantidade && item.quantidade > 1 && (
-            <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded">
-              (x{item.quantidade})
-            </span>
-          )}
+          <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded flex items-center gap-1">
+            <span className="material-symbols-outlined text-[12px]">inventory_2</span>
+            Qtd: {item.quantidade ?? 1}
+          </span>
         </div>
         <div className="flex gap-2 items-center">
           <span className="text-[10px] font-bold text-rustic-brown/30 font-mono">{item.type}</span>
@@ -1540,6 +1539,7 @@ const PatrimonioB4: React.FC = () => {
                             </h4>
                             <div className="grid grid-cols-2 gap-3">
                               <Detail label="Tipo" value={selectedItem.type} />
+                              <Detail label="Quantidade" value={String(selectedItem.quantidade ?? 1)} icon="inventory_2" />
                               {selectedItem.brand && <Detail label="Marca" value={selectedItem.brand} />}
                               {selectedItem.plate && <Detail label="Placa" value={selectedItem.plate} icon="directions_car" />}
                               {selectedItem.year && <Detail label="Ano" value={selectedItem.year} />}
