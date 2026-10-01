@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { ATIVIDADES_B4 } from '../../config/atividadesB4';
 import { Vehicle, CompartimentoViatura, LocalEquipamento } from '../../services/types';
 import { supabase } from '../../services/supabase';
 import { SupabaseService } from '../../services/SupabaseService';
 import { toast } from 'sonner';
 
-const ATIVIDADES_LIST = [
-  'Incêndio Urbano', 'Incêndio Florestal', 'Salvamento Terrestre',
-  'Salvamento em Altura', 'Salvamento Aquático', 'APH',
-  'Produtos Perigosos', 'Corte de Árvore', 'Defesa Civil', 'Administrativo',
-  'TI', 'Viaturas administrativas', 'Viaturas operacionais',
-  'Produtos de limpeza', 'SPCI', 'Motomecanizado',
-];
+const ATIVIDADES_LIST = [...ATIVIDADES_B4];
+
 
 interface ModalEditarItemB4Props {
   item: Vehicle | null;

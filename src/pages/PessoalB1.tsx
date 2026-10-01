@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ATIVIDADES_B4 } from '../config/atividadesB4';
 import { toast } from 'sonner';
 import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
@@ -79,6 +80,7 @@ const emptyForm = (): Partial<Personnel> => ({
   emergency_phone: '', emergency_contact_name: '', cve_active: '', cve_issue_date: '', cve_expiry_date: '',
   toxicological_date: '', toxicological_expiry_date: '', graduation: '',
   matricula: '', cidade_residencia: '', data_inclusao: '', data_ultima_promocao: '',
+  atividades_responsavel: [],
 });
 
 interface CursoLocal {
@@ -1420,6 +1422,59 @@ const PessoalB1: React.FC = () => {
                   )}
 
 
+
+                  {/* ── Atividades B4 Responsáveis ── */}
+                  <div className="mb-6 p-4 bg-red-50/60 rounded-xl border border-red-200/80">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-black text-sm uppercase text-red-900 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-base">local_fire_department</span>
+                        Responsabilidades B4 — Atividades Operacionais
+                      </h3>
+                      {(formData.atividades_responsavel?.length ?? 0) > 0 && (
+                        <span className="text-[11px] font-bold bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 rounded-full">
+                          {formData.atividades_responsavel!.length} atribuída{formData.atividades_responsavel!.length > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-red-700/70 mb-3">
+                      Selecione as atividades operacionais pelas quais este militar é responsável no módulo B4.
+                      Os itens dessas atividades aparecerão em destaque quando ele acessar a listagem.
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
+                      {ATIVIDADES_B4.map(at => {
+                        const selected = (formData.atividades_responsavel || []).includes(at);
+                        return (
+                          <button
+                            key={at}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                atividades_responsavel: selected
+                                  ? (prev.atividades_responsavel || []).filter(x => x !== at)
+                                  : [...(prev.atividades_responsavel || []), at],
+                              }));
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold text-left transition-all ${
+                              selected
+                                ? 'bg-red-700 text-white border-red-700 shadow-sm'
+                                : 'bg-white text-stone-600 border-stone-300 hover:border-red-400 hover:bg-red-50'
+                            }`}
+                          >
+                            <span className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                              selected ? 'bg-white border-white' : 'border-stone-400'
+                            }`}>
+                              {selected && <span className="text-red-700 text-[9px] font-black">✓</span>}
+                            </span>
+                            {at}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {(formData.atividades_responsavel?.length ?? 0) === 0 && (
+                      <p className="text-[11px] text-stone-400 text-center py-2 mt-1">Nenhuma atividade atribuída</p>
+                    )}
+                  </div>
 
                   <div className="flex gap-3 pt-4 border-t">
                     <button onClick={handleSavePersonnel} className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:brightness-110">{editId ? 'ATUALIZAR' : 'CADASTRAR'}</button>

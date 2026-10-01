@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { ATIVIDADES_B4 } from '../config/atividadesB4';
 import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist, LocalEquipamento, CompartimentoViatura, Training } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
@@ -769,13 +770,8 @@ const PatrimonioB4: React.FC = () => {
     }
   };
 
-  const ATIVIDADES_LIST = [
-    'Incêndio Urbano', 'Incêndio Florestal', 'Salvamento Terrestre',
-    'Salvamento em Altura', 'Salvamento Aquático', 'APH',
-    'Produtos Perigosos', 'Corte de Árvore', 'Defesa Civil', 'Administrativo',
-    'TI', 'Viaturas administrativas', 'Viaturas operacionais',
-    'Produtos de limpeza', 'SPCI', 'Motomecanizado'
-  ];
+  // Usa a lista canônica centralizada (mesma do B1 e ModalEditarItemB4)
+  const ATIVIDADES_LIST = [...ATIVIDADES_B4];
 
   const uniqueLocations = Array.from(
     new Set(fleet.map(i => i.location).filter(Boolean) as string[])
@@ -793,6 +789,26 @@ const PatrimonioB4: React.FC = () => {
       (item.location && item.location === filterLocation);
     return matchSearch && matchAtividade && matchLocation;
   });
+
+  // Identifica o militar logado e suas atividades de responsabilidade
+  const militarLogado = useMemo(() => {
+    if (!profile?.email) return null;
+    return personnel.find(p => p.email?.toLowerCase() === profile.email!.toLowerCase()) || null;
+  }, [personnel, profile]);
+
+  const atividadesResponsavel: string[] = militarLogado?.atividades_responsavel || [];
+
+  // Divide filteredFleet em: itens das atividades do logado vs demais
+  const meusItens = useMemo(() =>
+    atividadesResponsavel.length === 0
+      ? []
+: filteredFleet.filter(item =>
+          item.atividades && item.atividades.some(at => atividadesResponsavel.includes(at))
+      )
+  , [filteredFleet, atividadesResponsavel]);
+
+  const meusItensIds = useMemo(() => new Set(meusItens.map(i => i.id)), [meusItens]);
+  const demaisItens = useMemo(() => filteredFleet.filter(i => !meusItensIds.has(i.id)), [filteredFleet, meusItensIds]);
 
   // Group items by atividade
   const groupedFleet: Record<string, Vehicle[]> = {};
@@ -1417,13 +1433,61 @@ const PatrimonioB4: React.FC = () => {
                     </div>
                   ) : (
                     <div>
+                      {/* — Bloco: Meus Itens (atividades de responsabilidade) — */}
+                      {meusItens.length > 0 && !groupByAtividade && (
+                        <div className="mb-8">
+                          <div className="flex items-center gap-3 mb-4">
+                            <span className="material-symbols-outlined text-red-600">shield_person</span>
+                            <h3 className="font-black text-sm uppercase tracking-widest text-red-800">
+                              Meus Itens
+                            </h3>
+                            <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
+                              {meusItens.length} item{meusItens.length > 1 ? 'ns' : ''}
+                            </span>
+                            <div className="flex-1 h-px bg-red-200/60" />
+                            <span className="text-[10px] text-red-600/70 font-semibold">Suas atividades de responsabilidade</span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {meusItens.map(item => (
+                              <div key={item.id} className="ring-2 ring-red-400/50 ring-offset-2 rounded-2xl">
+                                <ItemCard
+                                  item={item}
+                                  notices={notices}
+                                  pendenciasB4={pendenciasB4}
+                                  profile={profile}
+                                  onSelect={setSelectedItem}
+                                  onEdit={abrirEdicaoFleetItem}
+                                  onDelete={handleDeleteItem}
+                                  onResolve={handleResolveNotice}
+                                  onGerenciarCompartimentos={setGerenciarCompViatura}
+                                  onVisualizarViatura={setVisualizarViaturaObj}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* — Bloco: Demais Itens — */}
                       {(() => {
+                        const listToRender = meusItens.length > 0 ? demaisItens : filteredFleet;
+                        const sectionLabel = meusItens.length > 0 ? 'Demais Itens' : null;
                         const isExpanded = expandedGroups['all'] || false;
-                        const visibleItems = isExpanded ? filteredFleet : filteredFleet.slice(0, 6);
-                        const remainingCount = filteredFleet.length - 6;
+                        const visibleItems = isExpanded ? listToRender : listToRender.slice(0, 6);
+                        const remainingCount = listToRender.length - 6;
 
                         return (
                           <div className="space-y-6">
+                            {sectionLabel && listToRender.length > 0 && (
+                              <div className="flex items-center gap-3 mb-4">
+                                <span className="material-symbols-outlined text-stone-400">inventory_2</span>
+                                <h3 className="font-black text-sm uppercase tracking-widest text-stone-500">{sectionLabel}</h3>
+                                <span className="text-[10px] font-bold bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full border border-stone-200">
+                                  {listToRender.length}
+                                </span>
+                                <div className="flex-1 h-px bg-stone-200/60" />
+                              </div>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                               {visibleItems.map(item => (
                                 <ItemCard

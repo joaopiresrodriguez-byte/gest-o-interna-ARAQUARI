@@ -121,6 +121,8 @@ export interface Personnel {
     data_ultima_promocao?: string;
     bc_graduacao_ordem?: number | null;
     created_at?: string;
+    /** Atividades operacionais B4 pelas quais este militar é responsável */
+    atividades_responsavel?: string[];
 }
 
 export interface RankHistory {
