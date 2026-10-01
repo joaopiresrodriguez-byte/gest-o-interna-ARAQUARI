@@ -772,7 +772,9 @@ const PatrimonioB4: React.FC = () => {
   const ATIVIDADES_LIST = [
     'Incêndio Urbano', 'Incêndio Florestal', 'Salvamento Terrestre',
     'Salvamento em Altura', 'Salvamento Aquático', 'APH',
-    'Produtos Perigosos', 'Corte de Árvore', 'Defesa Civil', 'Administrativo'
+    'Produtos Perigosos', 'Corte de Árvore', 'Defesa Civil', 'Administrativo',
+    'TI', 'Viaturas administrativas', 'Viaturas operacionais',
+    'Produtos de limpeza', 'SPCI', 'Motomecanizado'
   ];
 
   const uniqueLocations = Array.from(
