@@ -23,15 +23,15 @@ export const Button = React.memo<ButtonProps>(({
     disabled,
     ...props
 }) => {
-    const baseClasses = 'inline-flex items-center justify-center gap-2 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed';
+    const baseClasses = 'inline-flex items-center justify-center gap-2 font-bold rounded-lg transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
     const variantClasses = {
-        primary: 'bg-primary text-white hover:brightness-110 active:scale-[0.98] shadow-md border-b-4 border-red-800',
-        secondary: 'bg-gray-600 text-white hover:bg-gray-700 active:scale-[0.98] shadow-md',
-        success: 'bg-secondary-green text-white hover:bg-green-700 active:scale-[0.98] shadow-md',
-        danger: 'bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-md',
-        warning: 'bg-amber-500 text-white hover:bg-amber-600 active:scale-[0.98] shadow-md',
-        ghost: 'bg-transparent border-2 border-gray-300 text-gray-700 hover:bg-gray-50'
+        primary: 'bg-primary text-white hover:brightness-110 active:scale-[0.97] shadow-md border-b-4 border-red-800 hover:shadow-lg',
+        secondary: 'bg-gray-600 text-white hover:bg-gray-700 active:scale-[0.97] shadow-md',
+        success: 'bg-secondary-green text-white hover:bg-green-700 active:scale-[0.97] shadow-md',
+        danger: 'bg-red-600 text-white hover:bg-red-700 active:scale-[0.97] shadow-md',
+        warning: 'bg-amber-500 text-white hover:bg-amber-600 active:scale-[0.97] shadow-md',
+        ghost: 'bg-transparent border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
     };
 
     const sizeClasses = {

@@ -25,7 +25,7 @@ export const Input = React.memo<InputProps>(({
     return (
         <div className={`flex flex-col gap-2 ${containerClassName}`}>
             {label && (
-                <label className="text-xs font-black uppercase text-rustic-brown/60 ml-1">
+                <label className="text-xs font-black uppercase text-rustic-brown/80 ml-1 tracking-wide">
                     {label}
                 </label>
             )}
@@ -39,7 +39,7 @@ export const Input = React.memo<InputProps>(({
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     className={`w-full h-11 ${icon ? 'pl-11' : 'pl-4'} pr-4 rounded-lg border ${error ? 'border-red-500 bg-red-50/20' : 'border-rustic-border bg-white'
-                        } text-sm focus:ring-2 focus:ring-primary/20 transition-all ${className}`}
+                        } text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary focus-visible:outline-none transition-all duration-150 ${className}`}
                     {...props}
                 />
             </div>

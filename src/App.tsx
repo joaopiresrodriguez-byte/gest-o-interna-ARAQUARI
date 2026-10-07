@@ -130,6 +130,19 @@ const AppLayout: React.FC = () => {
   const userName = user?.email?.split('@')[0] || 'Usuário';
   const location = useLocation();
 
+  // Mapa de rotas para exibição no header mobile (Apple HIG: título da seção atual)
+  const routeLabels: Record<string, string> = {
+    '/avisos': 'Avisos',
+    '/operacional': 'Operacional',
+    '/ssci': 'SSCI',
+    '/pessoal': 'B1 — Pessoal',
+    '/instrucao': 'B3 — Instrução',
+    '/logistica': 'B4 — Logística',
+    '/social': 'B5 — Rel. Públicas',
+    '/gestao': 'Gestão de Acessos',
+  };
+  const currentModuleLabel = routeLabels[location.pathname] ?? 'Gestão Interna';
+
   // Close sidebar whenever route changes (mobile navigation)
   React.useEffect(() => {
     setSidebarAberta(false);
@@ -281,10 +294,12 @@ const AppLayout: React.FC = () => {
             <span className="material-symbols-outlined text-[26px]">menu</span>
           </button>
 
-          {/* Logo / Title */}
+          {/* Logo / Title — mostra módulo ativo (Apple HIG: Navigation Bar contextual) */}
           <div className="flex flex-col items-center">
-            <span className="text-white text-xs font-black leading-tight tracking-wide uppercase">Gestão Interna</span>
-            <span className="text-primary text-[10px] font-bold leading-tight tracking-wider uppercase">CBMSC Araquari</span>
+            <span className="text-white text-xs font-black leading-tight tracking-wide uppercase transition-all duration-200">
+              {currentModuleLabel}
+            </span>
+            <span className="text-primary text-[10px] font-bold leading-tight tracking-wider uppercase opacity-70">CBMSC Araquari</span>
           </div>
 
           {/* Notifications on mobile header */}
@@ -292,7 +307,7 @@ const AppLayout: React.FC = () => {
         </header>
 
         {/* ── ROUTE CONTENT ── */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 relative pb-16 md:pb-0">
+        <main key={location.pathname} className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 relative pb-16 md:pb-0 animate-page-in">
           <RouteErrorBoundary>
             <Suspense fallback={<LoadingFallback />}>
               <Routes>
