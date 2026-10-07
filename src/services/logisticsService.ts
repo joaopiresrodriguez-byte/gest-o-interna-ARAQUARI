@@ -95,6 +95,8 @@ export const LogisticsService = {
             const nf = row.fiscal_note_number || row.numero_nota_fiscal || row.nf_number || row.nf || row.nota_fiscal || 'S/N';
             const date = row.receipt_date || row.data_recebimento || row.created_at || row.date || '';
             const obs = row.notes || row.observacoes || row.description || row.obs || '';
+            const createdBy = row.created_by || row.user || row.usuario || '';
+            const cadastradoPor = row.cadastrado_por || row.registered_by || row.responsavel || createdBy || '';
 
             return {
                 id: row.id || `rec-${Math.random()}`,
@@ -105,7 +107,9 @@ export const LogisticsService = {
                 product: row.product || row.produto || '',
                 quantity: row.quantity || row.quantidade || 1,
                 supplier: row.supplier || row.fornecedor || '',
-                created_at: row.created_at || date
+                created_at: row.created_at || date,
+                created_by: createdBy,
+                cadastrado_por: cadastradoPor
             };
         });
     },
@@ -116,28 +120,36 @@ export const LogisticsService = {
     addProductReceipt: async (receipt: Omit<ProductReceipt, 'id'>): Promise<ProductReceipt> => {
         try {
             // Tenta inserir com o padrão photo_url e fiscal_note_number
+            const insertData: any = {
+                photo_url: receipt.photo_url,
+                fiscal_note_number: receipt.fiscal_note_number,
+                notes: receipt.notes,
+                receipt_date: receipt.receipt_date || new Date().toISOString(),
+            };
+            if (receipt.created_by) insertData.created_by = receipt.created_by;
+            if (receipt.cadastrado_por) insertData.cadastrado_por = receipt.cadastrado_por;
+
             const { data, error } = await supabase
                 .from('product_receipts')
-                .insert({
-                    photo_url: receipt.photo_url,
-                    fiscal_note_number: receipt.fiscal_note_number,
-                    notes: receipt.notes,
-                    receipt_date: receipt.receipt_date || new Date().toISOString()
-                })
+                .insert(insertData)
                 .select('*')
                 .single();
 
             if (error) {
                 console.warn('First insert attempt failed, trying fallback columns:', error);
                 // Fallback caso a tabela no banco ainda use colunas legadas em pt-BR
+                const fallbackData: any = {
+                    foto_url: receipt.photo_url,
+                    numero_nota_fiscal: receipt.fiscal_note_number,
+                    observacoes: receipt.notes,
+                    data_recebimento: receipt.receipt_date || new Date().toISOString()
+                };
+                if (receipt.created_by) fallbackData.created_by = receipt.created_by;
+                if (receipt.cadastrado_por) fallbackData.cadastrado_por = receipt.cadastrado_por;
+
                 const fallbackRes = await supabase
                     .from('product_receipts')
-                    .insert({
-                        foto_url: receipt.photo_url,
-                        numero_nota_fiscal: receipt.fiscal_note_number,
-                        observacoes: receipt.notes,
-                        data_recebimento: receipt.receipt_date || new Date().toISOString()
-                    })
+                    .insert(fallbackData)
                     .select('*')
                     .single();
 

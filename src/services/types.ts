@@ -372,6 +372,8 @@ export interface ProductReceipt {
     supplier?: string;
     notes?: string;
     created_at?: string;
+    created_by?: string;
+    cadastrado_por?: string;
 }
 
 export interface ChecklistItem {

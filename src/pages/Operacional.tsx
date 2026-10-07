@@ -509,6 +509,7 @@ const Operacional: React.FC = () => {
   const [receiptNF, setReceiptNF] = useState("");
   const [receiptObs, setReceiptObs] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedReceiptModal, setSelectedReceiptModal] = useState<ProductReceipt | null>(null);
 
   // Daily Missions states
   const [missions, setMissions] = useState<DailyMission[]>([]);
@@ -633,27 +634,7 @@ const Operacional: React.FC = () => {
         publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
       }
 
-      const newReceipt = await SupabaseService.addProductReceipt({
-        photo_url: publicUrl,
-        fiscal_note_number: receiptNF,
-        notes: receiptObs,
-        receipt_date: new Date().toISOString()
-      });
-
-      // Optimistic update: adiciona imediatamente ao estado local
-      const optimisticRec: ProductReceipt = {
-        id: (newReceipt as any)?.id || `tmp-${Date.now()}`,
-        photo_url: publicUrl,
-        fiscal_note_number: receiptNF,
-        receipt_date: new Date().toISOString(),
-        notes: receiptObs,
-        created_at: new Date().toISOString(),
-      };
-      setReceipts(prev => [optimisticRec, ...prev]);
-
-      toast.success("Recebimento registrado com sucesso!");
-
-      // Buscar nome de guerra do usuário logado para o recibo
+      // Buscar nome de guerra/graduação do usuário logado para o recibo
       let responsavelNomeGuerra = user?.email || 'N/A';
       if (user?.email) {
         try {
@@ -670,6 +651,30 @@ const Operacional: React.FC = () => {
           console.warn("Não foi possível carregar dados do responsável:", pErr);
         }
       }
+
+      const newReceipt = await SupabaseService.addProductReceipt({
+        photo_url: publicUrl,
+        fiscal_note_number: receiptNF,
+        notes: receiptObs,
+        receipt_date: new Date().toISOString(),
+        created_by: user?.email || 'N/A',
+        cadastrado_por: responsavelNomeGuerra
+      });
+
+      // Optimistic update: adiciona imediatamente ao estado local
+      const optimisticRec: ProductReceipt = {
+        id: (newReceipt as any)?.id || `tmp-${Date.now()}`,
+        photo_url: publicUrl,
+        fiscal_note_number: receiptNF,
+        receipt_date: new Date().toISOString(),
+        notes: receiptObs,
+        created_at: new Date().toISOString(),
+        created_by: user?.email || 'N/A',
+        cadastrado_por: responsavelNomeGuerra
+      };
+      setReceipts(prev => [optimisticRec, ...prev]);
+
+      toast.success("Recebimento registrado com sucesso!");
 
       // Show notification modal (vinculado ao WhatsApp +55 47 3481-7549)
       const notifData = NotificationService.getReceiptNotificationData({
@@ -1057,18 +1062,39 @@ const Operacional: React.FC = () => {
                       <span className="material-symbols-outlined text-primary text-[18px]">history</span>
                       Recebimentos Recentes
                     </h4>
-                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
+                    <div className="space-y-3 max-h-[380px] overflow-y-auto pr-2">
                       {receipts.map(rec => (
-                        <div key={rec.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-rustic-border/50">
-                          <img src={rec.photo_url} className="w-16 h-16 rounded object-cover border border-gray-200" alt="Produto" loading="lazy" />
-                          <div className="flex flex-col flex-1">
-                            <span className="text-xs font-bold text-[#181111]">NF: {rec.fiscal_note_number}</span>
-                            <span className="text-[10px] text-gray-500">{rec.receipt_date ? new Date(rec.receipt_date).toLocaleDateString('pt-BR') : 'N/A'}</span>
-                            <span className="text-[10px] text-gray-400 mt-1 line-clamp-1">{rec.notes}</span>
+                        <div
+                          key={rec.id}
+                          className="group flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100/90 rounded-xl border border-rustic-border/50 transition-all cursor-pointer relative shadow-xs"
+                          onClick={() => setSelectedReceiptModal(rec)}
+                          title="Clique para abrir e visualizar a Nota Fiscal completa"
+                        >
+                          <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-900/5">
+                            <img src={rec.photo_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" alt={`NF: ${rec.fiscal_note_number}`} loading="lazy" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                              <span className="material-symbols-outlined text-sm">zoom_in</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-[#181111] truncate">NF: {rec.fiscal_note_number}</span>
+                              <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px]">visibility</span> Visualizar
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-gray-500 mt-0.5">
+                              {rec.receipt_date ? new Date(rec.receipt_date).toLocaleDateString('pt-BR') : 'N/A'}
+                            </span>
+                            <span className="text-[10px] text-gray-600 font-semibold truncate mt-0.5">
+                              Cadastrado por: <span className="text-gray-800 font-bold">{rec.cadastrado_por || rec.created_by || 'Não registrado'}</span>
+                            </span>
+                            {rec.notes && <span className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{rec.notes}</span>}
                           </div>
                           {isEditor && (
                             <button
-                              onClick={async () => {
+                              onClick={async (e) => {
+                                e.stopPropagation();
                                 if (!confirm('Excluir este recebimento?')) return;
                                 try {
                                   await SupabaseService.deleteProductReceipt(rec.id!);
@@ -1076,7 +1102,7 @@ const Operacional: React.FC = () => {
                                   loadAllData();
                                 } catch { toast.error('Erro ao excluir.'); }
                               }}
-                              className="p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors flex-shrink-0"
+                              className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
                               title="Excluir recebimento"
                             >
                               <span className="material-symbols-outlined text-[18px]">delete</span>
@@ -1093,6 +1119,123 @@ const Operacional: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de Visualização Detalhada da Nota Fiscal */}
+      {selectedReceiptModal && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn"
+          onClick={() => setSelectedReceiptModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 bg-rustic-brown text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-400 text-2xl">receipt_long</span>
+                <div>
+                  <h3 className="font-bold text-base">Nota Fiscal: {selectedReceiptModal.fiscal_note_number}</h3>
+                  <p className="text-xs text-white/70">
+                    Registrada em {selectedReceiptModal.receipt_date ? new Date(selectedReceiptModal.receipt_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Data não informada'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedReceiptModal(null)}
+                className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-white/80 hover:text-white"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 bg-gray-50/50">
+              {/* Info Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-xs flex items-start gap-3">
+                  <span className="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">person</span>
+                  <div>
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Cadastrado por</span>
+                    <span className="text-sm font-bold text-gray-900 block mt-0.5">
+                      {selectedReceiptModal.cadastrado_por || selectedReceiptModal.created_by || 'Não registrado'}
+                    </span>
+                    {selectedReceiptModal.created_by && selectedReceiptModal.created_by !== selectedReceiptModal.cadastrado_por && (
+                      <span className="text-[11px] text-gray-500 block">Login: {selectedReceiptModal.created_by}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-xs flex items-start gap-3">
+                  <span className="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">event</span>
+                  <div>
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Data do Recebimento</span>
+                    <span className="text-sm font-bold text-gray-900 block mt-0.5">
+                      {selectedReceiptModal.receipt_date ? new Date(selectedReceiptModal.receipt_date).toLocaleDateString('pt-BR') : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedReceiptModal.notes && (
+                <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-xs">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Observações</span>
+                  <p className="text-xs text-gray-700 whitespace-pre-wrap">{selectedReceiptModal.notes}</p>
+                </div>
+              )}
+
+              {/* Image Viewer */}
+              <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-700 flex flex-col items-center justify-center p-3 relative group min-h-[300px]">
+                <img
+                  src={selectedReceiptModal.photo_url}
+                  alt={`Nota Fiscal ${selectedReceiptModal.fiscal_note_number}`}
+                  className="max-h-[480px] w-auto object-contain rounded-lg shadow-md"
+                />
+                <div className="mt-3 flex items-center gap-3">
+                  <a
+                    href={selectedReceiptModal.photo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
+                  >
+                    <span className="material-symbols-outlined text-sm">open_in_new</span>
+                    Abrir imagem em tamanho real
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-white border-t border-gray-200 flex items-center justify-between">
+              {isEditor && selectedReceiptModal.id ? (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Tem certeza que deseja excluir esta nota fiscal do histórico?')) return;
+                    try {
+                      await SupabaseService.deleteProductReceipt(selectedReceiptModal.id!);
+                      toast.success('Recebimento excluído.');
+                      setSelectedReceiptModal(null);
+                      loadAllData();
+                    } catch {
+                      toast.error('Erro ao excluir recebimento.');
+                    }
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-sm">delete</span>
+                  Excluir Nota Fiscal
+                </button>
+              ) : <div />}
+              <button
+                onClick={() => setSelectedReceiptModal(null)}
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notification Modal */}
       <NotificationModal
