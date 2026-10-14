@@ -4,7 +4,7 @@ import { BaseService } from './baseService';
 
 // Campos específicos para otimizar queries
 const PURCHASE_FIELDS = 'id, item, quantity, unit_price, supplier, status, created_at';
-const RECEIPT_FIELDS = 'id, photo_url, fiscal_note_number, receipt_date, notes, created_at';
+const RECEIPT_FIELDS = 'id, photo_url, fiscal_note_number, receipt_date, notes, created_at, created_by, cadastrado_por';
 const NOTICE_FIELDS = 'id, type, description, status, viatura_id, target_module, inspection_id, created_at';
 
 // Instâncias dos serviços base
@@ -116,52 +116,73 @@ export const LogisticsService = {
 
     /**
      * Adicionar recibo de produto
+     * 3 camadas de fallback para garantir compatibilidade com qualquer estado do schema.
      */
     addProductReceipt: async (receipt: Omit<ProductReceipt, 'id'>): Promise<ProductReceipt> => {
-        try {
-            // Tenta inserir com o padrão photo_url e fiscal_note_number
-            const insertData: any = {
+        const isSchemaError = (err: any) =>
+            err?.message?.includes('schema cache') ||
+            err?.message?.includes('column') ||
+            err?.code === 'PGRST204';
+
+        // Camada 1: insert completo com todos os campos
+        const insertFull: any = {
+            photo_url: receipt.photo_url,
+            fiscal_note_number: receipt.fiscal_note_number,
+            notes: receipt.notes,
+            receipt_date: receipt.receipt_date || new Date().toISOString(),
+        };
+        if (receipt.created_by) insertFull.created_by = receipt.created_by;
+        if (receipt.cadastrado_por) insertFull.cadastrado_por = receipt.cadastrado_por;
+
+        const res1 = await supabase
+            .from('product_receipts')
+            .insert(insertFull)
+            .select('id, photo_url, fiscal_note_number, receipt_date, notes, created_at')
+            .single();
+
+        if (!res1.error) return res1.data as unknown as ProductReceipt;
+
+        console.warn('addProductReceipt: camada 1 falhou, tentando sem campos opcionais:', res1.error);
+
+        // Camada 2: insert sem created_by/cadastrado_por (schema cache desatualizado)
+        if (isSchemaError(res1.error)) {
+            const insertCore: any = {
                 photo_url: receipt.photo_url,
                 fiscal_note_number: receipt.fiscal_note_number,
                 notes: receipt.notes,
                 receipt_date: receipt.receipt_date || new Date().toISOString(),
             };
-            if (receipt.created_by) insertData.created_by = receipt.created_by;
-            if (receipt.cadastrado_por) insertData.cadastrado_por = receipt.cadastrado_por;
 
-            const { data, error } = await supabase
+            const res2 = await supabase
                 .from('product_receipts')
-                .insert(insertData)
-                .select('*')
+                .insert(insertCore)
+                .select('id, photo_url, fiscal_note_number, receipt_date, notes, created_at')
                 .single();
 
-            if (error) {
-                console.warn('First insert attempt failed, trying fallback columns:', error);
-                // Fallback caso a tabela no banco ainda use colunas legadas em pt-BR
-                const fallbackData: any = {
-                    foto_url: receipt.photo_url,
-                    numero_nota_fiscal: receipt.fiscal_note_number,
-                    observacoes: receipt.notes,
-                    data_recebimento: receipt.receipt_date || new Date().toISOString()
-                };
-                if (receipt.created_by) fallbackData.created_by = receipt.created_by;
-                if (receipt.cadastrado_por) fallbackData.cadastrado_por = receipt.cadastrado_por;
-
-                const fallbackRes = await supabase
-                    .from('product_receipts')
-                    .insert(fallbackData)
-                    .select('*')
-                    .single();
-
-                if (fallbackRes.error) throw fallbackRes.error;
-                return fallbackRes.data as unknown as ProductReceipt;
+            if (!res2.error) {
+                console.info('addProductReceipt: salvo sem cadastrado_por (migration pendente no Supabase).');
+                return res2.data as unknown as ProductReceipt;
             }
 
-            return data as unknown as ProductReceipt;
-        } catch (error) {
-            console.error('Error adding receipt:', error);
-            throw error;
+            console.warn('addProductReceipt: camada 2 falhou, tentando colunas legadas pt-BR:', res2.error);
         }
+
+        // Camada 3: fallback para nomes de colunas legados em pt-BR
+        const insertLegacy: any = {
+            foto_url: receipt.photo_url,
+            numero_nota_fiscal: receipt.fiscal_note_number,
+            observacoes: receipt.notes,
+            data_recebimento: receipt.receipt_date || new Date().toISOString(),
+        };
+
+        const res3 = await supabase
+            .from('product_receipts')
+            .insert(insertLegacy)
+            .select('*')
+            .single();
+
+        if (res3.error) throw res3.error;
+        return res3.data as unknown as ProductReceipt;
     },
 
     /**
