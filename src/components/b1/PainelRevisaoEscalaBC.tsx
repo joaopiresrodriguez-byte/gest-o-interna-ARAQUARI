@@ -38,7 +38,7 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
   const [addFim, setAddFim] = useState<string>('20:00');
 
   const [processando, setProcessando] = useState<boolean>(false);
-  const [mensagemStatus, setMensagemStatus] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
+  const [mensagemStatus, setMensagemStatus] = useState<{ tipo: 'sucesso' | 'erro' | 'aviso'; texto: string } | null>(null);
   const [modalLinksTeste, setModalLinksTeste] = useState<{
     aberto: boolean;
     links: Array<{ bombeiro: Personnel; token: string; link: string }>;
@@ -137,18 +137,26 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     }
   };
 
-  // Disparar WhatsApp de TESTE — re-envia links existentes sem recriar nada
+  // Disparar WhatsApp de TESTE — tenta Z-API automático; se falhar, abre modal para envio manual
   const handleDispararWhatsAppTeste = async () => {
     if (!confirm(`Isso irá RE-ENVIAR os links de ${mesRef} via WhatsApp para todos os BCs. Confirmar?`)) return;
     try {
       setProcessando(true);
       setMensagemStatus(null);
       const res = await bcEscalaService.dispararLinksExistentesWhatsApp(mesRef);
-      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.enviados });
-      setMensagemStatus({
-        tipo: 'sucesso',
-        texto: `📱 Teste concluído! ${res.enviados} de ${res.total} mensagem(ns) enviada(s) via WhatsApp.`
-      });
+      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.modoManual ? undefined : res.enviados });
+
+      if (res.modoManual) {
+        setMensagemStatus({
+          tipo: 'aviso',
+          texto: `⚠️ Modo Manual: Edge Function não deployada. Use os botões 💬 WhatsApp no modal abaixo para enviar individualmente. Total: ${res.total} link(s).`
+        });
+      } else {
+        setMensagemStatus({
+          tipo: 'sucesso',
+          texto: `📱 Teste concluído! ${res.enviados} de ${res.total} mensagem(ns) enviada(s) via WhatsApp (Z-API).`
+        });
+      }
     } catch (err: any) {
       setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao disparar WhatsApp de teste.' });
     } finally {
@@ -437,7 +445,11 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
       {/* MENSAGEM STATUS */}
       {mensagemStatus && (
         <div className={`p-4 rounded-xl border flex items-center justify-between text-sm ${
-          mensagemStatus.tipo === 'sucesso' ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200' : 'bg-red-950/80 border-red-800 text-red-200'
+          mensagemStatus.tipo === 'sucesso'
+            ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
+            : mensagemStatus.tipo === 'aviso'
+            ? 'bg-amber-950/80 border-amber-700 text-amber-200'
+            : 'bg-red-950/80 border-red-800 text-red-200'
         }`}>
           <span>{mensagemStatus.texto}</span>
           <button onClick={() => setMensagemStatus(null)} className="text-xs opacity-70 hover:opacity-100">✕ Fechar</button>

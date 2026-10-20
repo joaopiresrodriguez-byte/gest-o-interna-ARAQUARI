@@ -198,80 +198,129 @@ export const bcEscalaService = {
 
   /**
    * Busca os links JÁ gerados para um mês sem recriar nada.
-   * Usado pelo botão "Ver Links" no painel de gestão.
+   * Primeiro tenta bc_access_tokens (nova tabela).
+   * Fallback: extrai tokens únicos de bc_intencoes (retrocompatibilidade).
    */
   buscarLinksExistentes: async (
     mesRef: string
   ): Promise<Array<{ bombeiro: Personnel; token: string; link: string; whatsappEnviado: boolean }>> => {
-    const { data: tokens } = await supabase
-      .from('bc_access_tokens')
-      .select('*, personnel(*)')
-      .eq('mes_referencia', mesRef);
-
-    if (!tokens || tokens.length === 0) return [];
-
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
 
-    return tokens.map((tk: any) => ({
-      bombeiro:       tk.personnel as Personnel,
-      token:          tk.token,
-      link:           `${origin}/bc-intencao?token=${tk.token}`,
-      whatsappEnviado: tk.whatsapp_enviado || false,
-    }));
+    // 1. Tentar bc_access_tokens (nova tabela)
+    try {
+      const { data: tokens, error } = await supabase
+        .from('bc_access_tokens')
+        .select('*, personnel(*)')
+        .eq('mes_referencia', mesRef);
+
+      if (!error && tokens && tokens.length > 0) {
+        return tokens.map((tk: any) => ({
+          bombeiro:        tk.personnel as Personnel,
+          token:           tk.token,
+          link:            `${origin}/bc-intencao?token=${tk.token}`,
+          whatsappEnviado: tk.whatsapp_enviado || false,
+        }));
+      }
+    } catch (_) {
+      // tabela ainda não existe — usa fallback abaixo
+    }
+
+    // 2. Fallback: buscar tokens únicos em bc_intencoes (tokens legados)
+    const { data: intencoes } = await supabase
+      .from('bc_intencoes')
+      .select('bombeiro_id, token_acesso, mes_referencia')
+      .eq('mes_referencia', mesRef)
+      .not('token_acesso', 'is', null);
+
+    if (!intencoes || intencoes.length === 0) return [];
+
+    // Pegar 1 token por bombeiro (pode haver múltiplas intenções com mesmo token)
+    const tokenPorBombeiro = new Map<number, string>();
+    intencoes.forEach((i: any) => {
+      if (!tokenPorBombeiro.has(i.bombeiro_id) && i.token_acesso) {
+        tokenPorBombeiro.set(i.bombeiro_id, i.token_acesso);
+      }
+    });
+
+    const resultado: Array<{ bombeiro: Personnel; token: string; link: string; whatsappEnviado: boolean }> = [];
+    for (const [bombeiroId, token] of tokenPorBombeiro.entries()) {
+      const { data: bc } = await supabase
+        .from('personnel')
+        .select('*')
+        .eq('id', bombeiroId)
+        .maybeSingle();
+
+      if (bc) {
+        resultado.push({
+          bombeiro:        bc as Personnel,
+          token,
+          link:            `${origin}/bc-intencao?token=${token}`,
+          whatsappEnviado: false, // legado — não rastreado
+        });
+      }
+    }
+    return resultado;
   },
 
   /**
    * Re-dispara os links WhatsApp existentes sem recriar ciclo ou tokens.
-   * Usado pelo botão "🧪 Disparar WhatsApp (Teste)" no painel.
+   * Tenta via Edge Function (Z-API automático) com timeout de 15s.
+   * Fallback: retorna links para envio manual via WhatsApp Web (modoManual=true).
    */
   dispararLinksExistentesWhatsApp: async (
     mesRef: string
-  ): Promise<{ total: number; enviados: number; links: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> }> => {
+  ): Promise<{ total: number; enviados: number; modoManual: boolean; links: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> }> => {
     const edgeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-    };
-
-    const resp = await fetch(edgeUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ action: 'enviar_links', mesRef }),
-    });
-
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => resp.statusText);
-      throw new Error(`Erro ao disparar WhatsApp (HTTP ${resp.status}): ${errText}`);
-    }
-
-    const resultado = await resp.json();
-    if (!resultado.ok) throw new Error(resultado.error || 'Erro ao enviar links.');
-
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
-    const linksList: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> = [];
 
-    for (const item of (resultado.links || [])) {
-      const { data: bc } = await supabase
-        .from('personnel')
-        .select('*')
-        .eq('id', item.bombeiro_id)
-        .maybeSingle();
+    // ── Tentativa 1: Edge Function com Z-API (envio automático) ────────────
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      if (bc) {
-        linksList.push({
-          bombeiro: bc as Personnel,
-          token:    item.token,
-          link:     `${origin}/bc-intencao?token=${item.token}`,
-          enviado:  item.enviado,
-        });
+      const resp = await fetch(edgeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ action: 'enviar_links', mesRef }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (resp.ok) {
+        const resultado = await resp.json().catch(() => null);
+        if (resultado?.ok) {
+          const linksList: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> = [];
+          for (const item of (resultado.links || [])) {
+            const { data: bc } = await supabase
+              .from('personnel')
+              .select('*')
+              .eq('id', item.bombeiro_id)
+              .maybeSingle();
+            if (bc) {
+              linksList.push({
+                bombeiro: bc as Personnel,
+                token:    item.token,
+                link:     `${origin}/bc-intencao?token=${item.token}`,
+                enviado:  item.enviado || false,
+              });
+            }
+          }
+          return { total: resultado.total || 0, enviados: resultado.enviados || 0, modoManual: false, links: linksList };
+        }
       }
+    } catch (errEdge) {
+      // Edge Function não deployada ou timeout — usa modo manual
+      console.warn('[BC] Edge Function indisponível, usando modo manual:', errEdge);
     }
 
-    return {
-      total:   resultado.total || 0,
-      enviados: resultado.enviados || 0,
-      links:   linksList,
-    };
+    // ── Fallback: buscar links existentes para envio manual via WhatsApp Web ─
+    const linksExistentes = await bcEscalaService.buscarLinksExistentes(mesRef);
+    const linksList = linksExistentes.map(l => ({ ...l, enviado: false }));
+    return { total: linksList.length, enviados: 0, modoManual: true, links: linksList };
   },
 
   /**
