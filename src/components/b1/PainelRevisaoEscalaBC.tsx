@@ -78,19 +78,20 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
   const [modalLinks, setModalLinks] = useState<{
     aberto: boolean;
-    links: Array<{ bombeiro: Personnel; token: string; link: string }>;
+    links: Array<{ bombeiro: Personnel; token: string; link: string; whatsappEnviado?: boolean }>;
+    mensagensEnviadas?: number;
   }>({ aberto: false, links: [] });
 
-  // Executar Disparo Manual com Prazo de 1 Dia (24h)
+  // Executar Disparo Manual com Prazo de 1 Dia (24h) — chama Edge Function que envia WhatsApp
   const handleAberturaManual = async () => {
     try {
       setProcessando(true);
       setMensagemStatus(null);
       const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'manual');
-      setModalLinks({ aberto: true, links: res.links });
+      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.mensagensEnviadas });
       setMensagemStatus({
         tipo: 'sucesso',
-        texto: `Abertura MANUAL do ciclo ${mesRef} realizada com sucesso! Links válidos por 1 DIA (24 horas).`
+        texto: `⚡ Abertura MANUAL do ciclo ${mesRef} realizada! ${res.mensagensEnviadas} link(s) enviado(s) via WhatsApp. Prazo: 1 DIA (24 horas).`
       });
       await carregarDados();
     } catch (err: any) {
@@ -100,16 +101,16 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     }
   };
 
-  // Executar Disparo Dia 20 Manualmente (5 dias) / Gerar Links
+  // Executar Disparo Dia 20 (5 dias) — chama Edge Function que envia WhatsApp
   const handleDispararDia20 = async () => {
     try {
       setProcessando(true);
       setMensagemStatus(null);
       const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'auto');
-      setModalLinks({ aberto: true, links: res.links });
+      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.mensagensEnviadas });
       setMensagemStatus({
         tipo: 'sucesso',
-        texto: `Ciclo ${mesRef} aberto com prazo de 5 DIAS (até o dia 25)! ${res.tokensGerados} link(s) de acesso gerado(s).`
+        texto: `📲 Ciclo ${mesRef} aberto! ${res.tokensGerados} token(s) gerado(s), ${res.mensagensEnviadas} mensagem(ns) enviada(s) via WhatsApp. Prazo: até o dia 25.`
       });
       await carregarDados();
     } catch (err: any) {
@@ -119,13 +120,37 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     }
   };
 
+  // Ver links JÁ GERADOS — sem recriar ciclo ou tokens
   const handleVerLinks = async () => {
     try {
       setProcessando(true);
-      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'auto');
-      setModalLinks({ aberto: true, links: res.links });
+      const links = await bcEscalaService.buscarLinksExistentes(mesRef);
+      if (links.length === 0) {
+        setMensagemStatus({ tipo: 'erro', texto: 'Nenhum link gerado para este mês. Abra o ciclo primeiro.' });
+        return;
+      }
+      setModalLinks({ aberto: true, links });
     } catch (err: any) {
       setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao buscar links.' });
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  // Disparar WhatsApp de TESTE — re-envia links existentes sem recriar nada
+  const handleDispararWhatsAppTeste = async () => {
+    if (!confirm(`Isso irá RE-ENVIAR os links de ${mesRef} via WhatsApp para todos os BCs. Confirmar?`)) return;
+    try {
+      setProcessando(true);
+      setMensagemStatus(null);
+      const res = await bcEscalaService.dispararLinksExistentesWhatsApp(mesRef);
+      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.enviados });
+      setMensagemStatus({
+        tipo: 'sucesso',
+        texto: `📱 Teste concluído! ${res.enviados} de ${res.total} mensagem(ns) enviada(s) via WhatsApp.`
+      });
+    } catch (err: any) {
+      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao disparar WhatsApp de teste.' });
     } finally {
       setProcessando(false);
     }
@@ -331,9 +356,18 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                 onClick={handleVerLinks}
                 disabled={processando}
                 className="px-3 py-2 bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-                title="Visualizar e copiar os links das intenções gerados para os BCs"
+                title="Visualizar os links de intenção já gerados para os BCs (sem recriar ciclo)"
               >
-                <span>🔗</span> Ver Links (BCs)
+                <span>🔗</span> Ver Links
+              </button>
+
+              <button
+                onClick={handleDispararWhatsAppTeste}
+                disabled={processando || !ciclo}
+                className="px-3 py-2 bg-green-950/80 hover:bg-green-900 text-green-300 border border-green-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                title="Re-enviar os links via WhatsApp para todos os BCs sem recriar o ciclo (teste de envio)"
+              >
+                <span>📱</span> Disparar WA (Teste)
               </button>
 
               <button
@@ -643,7 +677,7 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
                         <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                           {item.lista.map((opt, idx) => {
-                            const [anoOpt, mesOpt, diaOpt] = opt.dia.split('-');
+                            const [, mesOpt, diaOpt] = opt.dia.split('-');
                             return (
                               <div key={opt.id || idx} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 px-3 flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-2">
@@ -1074,7 +1108,14 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <span>🔗</span> Links das Intenções de Serviço (BCs)
                 </h3>
-                <p className="text-xs text-slate-400">Mês de Referência: <span className="text-red-400 font-semibold">{mesRef}</span></p>
+                <p className="text-xs text-slate-400">
+                  Mês: <span className="text-red-400 font-semibold">{mesRef}</span>
+                  {modalLinks.mensagensEnviadas !== undefined && (
+                    <span className="ml-3 px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-400 rounded-full text-[10px] font-bold">
+                      ✅ {modalLinks.mensagensEnviadas} enviado(s) via WhatsApp
+                    </span>
+                  )}
+                </p>
               </div>
               <button
                 onClick={() => setModalLinks({ aberto: false, links: [] })}
@@ -1090,8 +1131,16 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
               ) : (
                 modalLinks.links.map((item, idx) => (
                   <div key={idx} className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div>
-                      <strong className="text-white text-sm block">{item.bombeiro.name}</strong>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <strong className="text-white text-sm">{item.bombeiro.name}</strong>
+                        {item.whatsappEnviado === true && (
+                          <span className="px-1.5 py-0.5 bg-emerald-950 border border-emerald-800/80 text-emerald-400 text-[10px] font-bold rounded">✅ WA Enviado</span>
+                        )}
+                        {item.whatsappEnviado === false && (
+                          <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-bold rounded">📵 Sem Fone</span>
+                        )}
+                      </div>
                       <span className="text-slate-400 font-mono text-[11px] select-all block truncate max-w-md">{item.link}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -1133,7 +1182,7 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                         rel="noreferrer"
                         className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold"
                       >
-                        🔗 Simular / Abrir
+                        🔗 Simular
                       </a>
                     </div>
                   </div>

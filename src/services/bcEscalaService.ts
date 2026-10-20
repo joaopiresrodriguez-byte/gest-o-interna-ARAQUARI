@@ -103,9 +103,12 @@ export const bcEscalaService = {
   },
 
   /**
-   * Dispara abertura do ciclo e gera/recupera links únicos para cada BC ativo
-   * modo 'auto': Mantém abertura automática no dia 20 com prazo de 5 dias (até dia 25)
-   * modo 'manual': Abertura manual pelo gestor com prazo de 1 dia (24h)
+   * Dispara abertura do ciclo e gera/recupera links únicos para cada BC ativo.
+   * Usa bc_access_tokens (sem placeholders em bc_intencoes).
+   * Chama a Edge Function processar-ciclo-bc para enviar o WhatsApp.
+   *
+   * modo 'auto'   → abertura padrão dia 20, prazo 5 dias (até dia 25)
+   * modo 'manual' → abertura imediata pelo gestor, prazo 1 dia (24h)
    */
   abrirCicloEDispararLinks: async (
     mesRef?: string,
@@ -113,144 +116,168 @@ export const bcEscalaService = {
   ): Promise<{
     ciclo: BcCiclo;
     tokensGerados: number;
+    mensagensEnviadas: number;
     links: Array<{ bombeiro: Personnel; token: string; link: string }>;
   }> => {
-    const agora = new Date();
-    let targetMesRef = mesRef;
+    const edgeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    };
 
+    // Resolver mesRef padrão: próximo mês se já passou do dia 20, senão mês atual
+    let targetMesRef = mesRef;
     if (!targetMesRef) {
-      let targetAno = agora.getFullYear();
-      let targetMes = agora.getMonth() + 1;
+      const agora = new Date();
+      let ano = agora.getFullYear();
+      let mes = agora.getMonth() + 1;
       if (agora.getDate() >= 20) {
-        targetMes += 1;
-        if (targetMes > 12) {
-          targetMes = 1;
-          targetAno += 1;
-        }
+        mes += 1;
+        if (mes > 12) { mes = 1; ano += 1; }
       }
-      targetMesRef = `${targetAno}-${String(targetMes).padStart(2, '0')}`;
+      targetMesRef = `${ano}-${String(mes).padStart(2, '0')}`;
     }
 
-    let ciclo: BcCiclo;
+    const action = modo === 'manual' ? 'abrir_ciclo_manual' : 'abrir_ciclo_dia20';
 
-    if (modo === 'manual') {
-      const dataAbertura = agora.toISOString();
-      const dataEncerramento = new Date(agora.getTime() + 24 * 60 * 60 * 1000).toISOString(); // 1 dia (24 horas)
+    // Chamar a Edge Function — ela cria o ciclo, gera tokens em bc_access_tokens
+    // e envia WhatsApp para cada BC ativo
+    const resp = await fetch(edgeUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action, mesRef: targetMesRef }),
+    });
 
-      const { data: existente } = await supabase
-        .from('bc_ciclos')
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => resp.statusText);
+      throw new Error(`Erro ao abrir ciclo via Edge Function (HTTP ${resp.status}): ${errText}`);
+    }
+
+    const resultado = await resp.json();
+    if (!resultado.ok) {
+      throw new Error(resultado.error || 'Erro desconhecido na Edge Function.');
+    }
+
+    // Buscar ciclo atualizado do banco
+    const { data: ciclo } = await supabase
+      .from('bc_ciclos')
+      .select('*')
+      .eq('mes_referencia', targetMesRef)
+      .single();
+
+    if (!ciclo) throw new Error('Ciclo não encontrado após abertura.');
+
+    // Montar lista de links a partir do retorno da Edge Function
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
+    const linksList: Array<{ bombeiro: Personnel; token: string; link: string }> = [];
+
+    for (const item of (resultado.links || [])) {
+      // Buscar dados do bombeiro localmente para completar Personnel
+      const { data: bc } = await supabase
+        .from('personnel')
         .select('*')
-        .eq('mes_referencia', targetMesRef)
+        .eq('id', item.bombeiro_id)
         .maybeSingle();
 
-      if (existente) {
-        const { data: updated, error } = await supabase
-          .from('bc_ciclos')
-          .update({
-            data_abertura: dataAbertura,
-            data_encerramento: dataEncerramento,
-            status: 'aberto',
-          })
-          .eq('id', existente.id)
-          .select()
-          .single();
-        if (error) throw error;
-        ciclo = updated as BcCiclo;
-      } else {
-        const { data: created, error } = await supabase
-          .from('bc_ciclos')
-          .insert({
-            mes_referencia: targetMesRef,
-            data_abertura: dataAbertura,
-            data_encerramento: dataEncerramento,
-            status: 'aberto',
-          })
-          .select()
-          .single();
-        if (error) throw error;
-        ciclo = created as BcCiclo;
-      }
-    } else {
-      ciclo = await bcEscalaService.obterOuCriarCiclo(targetMesRef);
-      if (ciclo.status !== 'aberto') {
-        const { data: updated } = await supabase
-          .from('bc_ciclos')
-          .update({ status: 'aberto' })
-          .eq('id', ciclo.id)
-          .select()
-          .single();
-        if (updated) ciclo = updated as BcCiclo;
-      }
-    }
-
-    // Buscar todos os BCs ativos
-    const { data: bcs, error: errBcs } = await supabase
-      .from('personnel')
-      .select('*')
-      .eq('type', 'BC')
-      .eq('status', 'Ativo');
-
-    if (errBcs) throw errBcs;
-
-    const linksList: Array<{ bombeiro: Personnel; token: string; link: string }> = [];
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
-
-    if (bcs && bcs.length > 0) {
-      for (const bc of bcs) {
-        // Verificar se o BC já possui um token para este ciclo/mês
-        const { data: intencaoExistente } = await supabase
-          .from('bc_intencoes')
-          .select('token_acesso')
-          .eq('bombeiro_id', bc.id)
-          .eq('mes_referencia', targetMesRef)
-          .limit(1)
-          .maybeSingle();
-
-        let token = intencaoExistente?.token_acesso;
-        if (!token) {
-          token = bcEscalaService.gerarToken();
-          // Inserir registro inicial de intenção com token único
-          await supabase
-            .from('bc_intencoes')
-            .insert({
-              bombeiro_id: bc.id,
-              ciclo_id: ciclo.id,
-              mes_referencia: targetMesRef,
-              dia: `${targetMesRef}-01`,
-              horario_inicio: '07:00',
-              horario_fim: '19:00',
-              total_horas: 12,
-              status: 'pendente',
-              token_acesso: token,
-            });
-        }
-
+      if (bc) {
         linksList.push({
           bombeiro: bc as Personnel,
-          token,
-          link: `${origin}/bc-intencao?token=${token}`,
+          token:    item.token,
+          link:     `${origin}/bc-intencao?token=${item.token}`,
         });
       }
     }
 
-    // Tentar chamar a Edge Function assincronamente (se implantada no Supabase)
-    try {
-      const edgeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`;
-      fetch(edgeUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ action: modo === 'manual' ? 'abrir_ciclo_manual' : 'abrir_ciclo_dia20', mesRef: targetMesRef }),
-      }).catch(() => {});
-    } catch (_) {}
+    return {
+      ciclo:             ciclo as BcCiclo,
+      tokensGerados:     resultado.tokensGerados || linksList.length,
+      mensagensEnviadas: resultado.mensagensEnviadas || 0,
+      links:             linksList,
+    };
+  },
 
-    return { ciclo, tokensGerados: linksList.length, links: linksList };
+  /**
+   * Busca os links JÁ gerados para um mês sem recriar nada.
+   * Usado pelo botão "Ver Links" no painel de gestão.
+   */
+  buscarLinksExistentes: async (
+    mesRef: string
+  ): Promise<Array<{ bombeiro: Personnel; token: string; link: string; whatsappEnviado: boolean }>> => {
+    const { data: tokens } = await supabase
+      .from('bc_access_tokens')
+      .select('*, personnel(*)')
+      .eq('mes_referencia', mesRef);
+
+    if (!tokens || tokens.length === 0) return [];
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
+
+    return tokens.map((tk: any) => ({
+      bombeiro:       tk.personnel as Personnel,
+      token:          tk.token,
+      link:           `${origin}/bc-intencao?token=${tk.token}`,
+      whatsappEnviado: tk.whatsapp_enviado || false,
+    }));
+  },
+
+  /**
+   * Re-dispara os links WhatsApp existentes sem recriar ciclo ou tokens.
+   * Usado pelo botão "🧪 Disparar WhatsApp (Teste)" no painel.
+   */
+  dispararLinksExistentesWhatsApp: async (
+    mesRef: string
+  ): Promise<{ total: number; enviados: number; links: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> }> => {
+    const edgeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    };
+
+    const resp = await fetch(edgeUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'enviar_links', mesRef }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => resp.statusText);
+      throw new Error(`Erro ao disparar WhatsApp (HTTP ${resp.status}): ${errText}`);
+    }
+
+    const resultado = await resp.json();
+    if (!resultado.ok) throw new Error(resultado.error || 'Erro ao enviar links.');
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
+    const linksList: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> = [];
+
+    for (const item of (resultado.links || [])) {
+      const { data: bc } = await supabase
+        .from('personnel')
+        .select('*')
+        .eq('id', item.bombeiro_id)
+        .maybeSingle();
+
+      if (bc) {
+        linksList.push({
+          bombeiro: bc as Personnel,
+          token:    item.token,
+          link:     `${origin}/bc-intencao?token=${item.token}`,
+          enviado:  item.enviado,
+        });
+      }
+    }
+
+    return {
+      total:   resultado.total || 0,
+      enviados: resultado.enviados || 0,
+      links:   linksList,
+    };
   },
 
   /**
    * BLOCO 4 — Busca de Dados por Token Acesso
+   * Primeiro consulta bc_access_tokens (nova tabela).
+   * Fallback em bc_intencoes (retrocompatibilidade com tokens legados).
    */
   buscarDadosPorToken: async (token: string): Promise<{
     bombeiro: Personnel;
@@ -263,32 +290,55 @@ export const bcEscalaService = {
   }> => {
     if (!token) throw new Error('Link inválido. Verifique se o link recebido está completo.');
 
-    // Buscar intenção de amostra para identificar o bombeiro e ciclo
-    const { data: intencaoAmostra, error: errInt } = await supabase
-      .from('bc_intencoes')
+    let bombeiroId: number | string | null = null;
+    let mesRef: string | null = null;
+
+    // 1. Tentar buscar o token em bc_access_tokens (nova tabela)
+    const { data: accessToken, error: errAT } = await supabase
+      .from('bc_access_tokens')
       .select('*')
-      .eq('token_acesso', token)
-      .limit(1)
+      .eq('token', token)
       .maybeSingle();
 
-    if (errInt) {
-      // Erro de RLS ou de rede — expõe mensagem original para diagnóstico
-      console.error('Erro ao buscar intenção por token:', errInt);
-      throw new Error(
-        `Erro de acesso ao banco de dados: ${errInt.message || errInt.code || 'permissão negada'}. ` +
-        `Informe o código ao responsável: ${errInt.code || 'RLS_ERR'}`
-      );
-    }
-    if (!intencaoAmostra) {
-      throw new Error(
-        'Link não encontrado ou expirado. Solicite ao gestor que gere um novo link de intenção.'
-      );
+    if (errAT) {
+      console.error('Erro ao buscar em bc_access_tokens:', errAT);
     }
 
-    const bombeiroId = intencaoAmostra.bombeiro_id;
-    const mesRef = intencaoAmostra.mes_referencia;
+    if (accessToken) {
+      bombeiroId = accessToken.bombeiro_id;
+      mesRef     = accessToken.mes_referencia;
+    } else {
+      // 2. Fallback: tentar em bc_intencoes (tokens legados)
+      const { data: intencaoAmostra, error: errInt } = await supabase
+        .from('bc_intencoes')
+        .select('*')
+        .eq('token_acesso', token)
+        .limit(1)
+        .maybeSingle();
 
-    // Buscar bombeiro por ID (pode ser number ou string)
+      if (errInt) {
+        console.error('Erro ao buscar intenção por token (fallback):', errInt);
+        throw new Error(
+          `Erro de acesso ao banco de dados: ${errInt.message || errInt.code || 'permissão negada'}. ` +
+          `Informe o código ao responsável: ${errInt.code || 'RLS_ERR'}`
+        );
+      }
+
+      if (!intencaoAmostra) {
+        throw new Error(
+          'Link não encontrado ou expirado. Solicite ao gestor que gere um novo link de intenção.'
+        );
+      }
+
+      bombeiroId = intencaoAmostra.bombeiro_id;
+      mesRef     = intencaoAmostra.mes_referencia;
+    }
+
+    if (!bombeiroId || !mesRef) {
+      throw new Error('Token inválido: não foi possível identificar o bombeiro ou mês de referência.');
+    }
+
+    // Buscar bombeiro
     const { data: bombeiro, error: errBomb } = await supabase
       .from('personnel')
       .select('*')
@@ -309,12 +359,17 @@ export const bcEscalaService = {
 
     if (errCiclo || !ciclo) throw new Error('Ciclo de escala não encontrado para este mês.');
 
-    // Buscar todas as intenções salvas para este bombeiro neste mês
-    const { data: intencoes } = await supabase
+    // Buscar intenções salvas REAIS (excluindo placeholders legados dia -01)
+    const { data: intencoesBrutas } = await supabase
       .from('bc_intencoes')
       .select('*')
       .eq('bombeiro_id', bombeiroId)
       .eq('mes_referencia', mesRef);
+
+    // Filtrar placeholders legados (dia = primeiro do mês com horário padrão)
+    const intencoes = (intencoesBrutas || []).filter(i =>
+      !(i.dia === `${mesRef}-01` && i.horario_inicio === '07:00' && i.horario_fim === '19:00')
+    );
 
     // Calcular expiração detalhada
     const agora = new Date();
@@ -322,14 +377,14 @@ export const bcEscalaService = {
     const expirado = ciclo.status !== 'aberto' || agora > dataEnc;
 
     const diffMs = Math.max(0, dataEnc.getTime() - agora.getTime());
-    const diasRestantes = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-    const horasRestantes = Math.floor(diffMs / (1000 * 60 * 60));
+    const diasRestantes    = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const horasRestantes   = Math.floor(diffMs / (1000 * 60 * 60));
     const minutosRestantes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
     return {
-      bombeiro: bombeiro as Personnel,
-      ciclo: ciclo as BcCiclo,
-      intencoes: (intencoes || []) as BcIntencao[],
+      bombeiro:        bombeiro as Personnel,
+      ciclo:           ciclo as BcCiclo,
+      intencoes:       intencoes as BcIntencao[],
       expirado,
       diasRestantes,
       horasRestantes,
@@ -347,7 +402,7 @@ export const bcEscalaService = {
     const { bombeiro, ciclo, expirado } = await bcEscalaService.buscarDadosPorToken(token);
 
     if (expirado) {
-      throw new Error('O prazo de 5 dias foi encerrado. Não é mais possível registrar ou alterar intenções para este mês.');
+      throw new Error('O prazo foi encerrado. Não é mais possível registrar ou alterar intenções para este mês.');
     }
 
     // Validar todas as intenções antes de salvar
@@ -358,30 +413,31 @@ export const bcEscalaService = {
       }
     }
 
-    // Remover intenções anteriores do mesmo bombeiro no mês pelo token e pelo bombeiro_id
+    // Remover intenções anteriores do mesmo bombeiro no mês
+    // Deleta apenas por bombeiro_id + mes_referencia para não afetar o registro de token
     await supabase
       .from('bc_intencoes')
       .delete()
-      .or(`bombeiro_id.eq.${bombeiro.id},token_acesso.eq.${token}`)
+      .eq('bombeiro_id', bombeiro.id)
       .eq('mes_referencia', ciclo.mes_referencia);
 
     if (novasIntencoes.length === 0) {
       return { ok: true, quantidade: 0 };
     }
 
-    // Inserir novas intenções
+    // Inserir novas intenções (com token_acesso para rastreabilidade)
     const records = novasIntencoes.map(item => {
       const v = bcEscalaService.validarHoras(item.horario_inicio, item.horario_fim);
       return {
-        bombeiro_id: bombeiro.id,
-        ciclo_id: ciclo.id,
+        bombeiro_id:    bombeiro.id,
+        ciclo_id:       ciclo.id,
         mes_referencia: ciclo.mes_referencia,
-        dia: item.dia,
+        dia:            item.dia,
         horario_inicio: item.horario_inicio,
-        horario_fim: item.horario_fim,
-        total_horas: v.totalHoras,
-        status: 'pendente',
-        token_acesso: token,
+        horario_fim:    item.horario_fim,
+        total_horas:    v.totalHoras,
+        status:         'pendente',
+        token_acesso:   token,
       };
     });
 
@@ -728,18 +784,25 @@ export const bcEscalaService = {
   /**
    * BLOCO 2-EXTRA — Gerar Ciclo de Teste manualmente
    * Cria um ciclo com status 'aberto' e datas de hoje + 5 dias,
-   * gerando tokens para todos os BCs ativos sem necessitar do dia 20.
+   * gerando tokens em bc_access_tokens para todos os BCs ativos.
+   * NÃO cria intenções placeholder em bc_intencoes.
    */
   gerarCicloTeste: async (mesRef: string): Promise<{
     ciclo: BcCiclo;
     tokensGerados: number;
     links: Array<{ bombeiro: Personnel; token: string; link: string }>;
   }> => {
-    // Forçar recriação do ciclo de teste
-    await supabase
+    // Limpar tokens de teste anteriores
+    const { data: cicloAnt } = await supabase
       .from('bc_ciclos')
-      .delete()
-      .eq('mes_referencia', mesRef);
+      .select('id')
+      .eq('mes_referencia', mesRef)
+      .maybeSingle();
+
+    if (cicloAnt) {
+      await supabase.from('bc_access_tokens').delete().eq('ciclo_id', cicloAnt.id);
+      await supabase.from('bc_ciclos').delete().eq('id', cicloAnt.id);
+    }
 
     const hoje = new Date();
     const encerramento = new Date(hoje);
@@ -748,17 +811,17 @@ export const bcEscalaService = {
     const { data: novoCiclo, error: errCiclo } = await supabase
       .from('bc_ciclos')
       .insert({
-        mes_referencia: mesRef,
-        data_abertura: hoje.toISOString().split('T')[0],
-        data_encerramento: encerramento.toISOString().split('T')[0],
-        status: 'aberto',
+        mes_referencia:    mesRef,
+        data_abertura:     hoje.toISOString(),
+        data_encerramento: encerramento.toISOString(),
+        status:            'aberto',
       })
       .select()
       .single();
 
     if (errCiclo || !novoCiclo) throw errCiclo || new Error('Falha ao criar ciclo de teste.');
 
-    // Buscar BCs ativos (ou ativos do efetivo se type não estiver estritamente BC)
+    // Buscar BCs ativos
     const { data: bcsBrutos, error: errBcs } = await supabase
       .from('personnel')
       .select('*')
@@ -766,10 +829,9 @@ export const bcEscalaService = {
 
     if (errBcs) throw errBcs;
 
-    // Filtrar BCs ou todos os ativos se nenhum tiver type 'BC'
     let bcs = (bcsBrutos || []).filter(b => b.type === 'BC');
     if (bcs.length === 0) {
-      bcs = (bcsBrutos || []).slice(0, 10); // amostra de fallback para teste
+      bcs = (bcsBrutos || []).slice(0, 10);
     }
 
     const origin = typeof window !== 'undefined'
@@ -780,16 +842,13 @@ export const bcEscalaService = {
 
     for (const bc of bcs || []) {
       const token = bcEscalaService.gerarToken();
-      await supabase.from('bc_intencoes').insert({
-        bombeiro_id: String(bc.id),
-        ciclo_id: novoCiclo.id,
+
+      // Inserir em bc_access_tokens (sem criar intenção placeholder)
+      await supabase.from('bc_access_tokens').insert({
+        ciclo_id:      novoCiclo.id,
+        bombeiro_id:   bc.id,
         mes_referencia: mesRef,
-        dia: `${mesRef}-01`,
-        horario_inicio: '07:00',
-        horario_fim: '19:00',
-        total_horas: 12,
-        status: 'pendente',
-        token_acesso: token,
+        token,
       });
 
       linksList.push({
@@ -800,9 +859,9 @@ export const bcEscalaService = {
     }
 
     return {
-      ciclo: novoCiclo as BcCiclo,
+      ciclo:         novoCiclo as BcCiclo,
       tokensGerados: linksList.length,
-      links: linksList,
+      links:         linksList,
     };
   },
 
@@ -941,7 +1000,11 @@ export const bcEscalaService = {
 
   /**
    * BLOCO 7 & 8 — Publicar Escala & Disparar Notificações WhatsApp
+   * Alias publicarEscalaDefinitiva mantido para compatibilidade retroativa.
    */
+  publicarEscalaDefinitiva: async (mesRef: string): Promise<{ publicadas: number }> =>
+    bcEscalaService.publicarEscala(mesRef),
+
   publicarEscala: async (mesRef: string): Promise<{ publicadas: number }> => {
     // 1. Atualizar ciclo para publicado
     await supabase
