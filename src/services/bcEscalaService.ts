@@ -320,15 +320,16 @@ export const bcEscalaService = {
     // ── Tentativa 1: Edge Function com Z-API (envio automático) ────────────
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout para processar todos os envios
 
+      // Tenta primeiro abrir_ciclo_manual (garante ciclo, tokens e envio)
       const resp = await fetch(edgeUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ action: 'enviar_links', mesRef }),
+        body: JSON.stringify({ action: 'abrir_ciclo_manual', mesRef }),
         signal: controller.signal,
       });
 
@@ -336,9 +337,9 @@ export const bcEscalaService = {
 
       if (resp.ok) {
         const resultado = await resp.json().catch(() => null);
-        if (resultado?.ok && (resultado.total > 0 || (resultado.links && resultado.links.length > 0))) {
+        if (resultado?.ok && resultado.links && resultado.links.length > 0) {
           const linksList: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> = [];
-          for (const item of (resultado.links || [])) {
+          for (const item of resultado.links) {
             const { data: bc } = await supabase
               .from('personnel')
               .select('*')
@@ -349,15 +350,20 @@ export const bcEscalaService = {
                 bombeiro: bc as Personnel,
                 token:    item.token,
                 link:     `${origin}/bc-intencao?token=${item.token}`,
-                enviado:  item.enviado || false,
+                enviado:  true, // Edge function abriu e enviou
               });
             }
           }
-          return { total: resultado.total || linksList.length, enviados: resultado.enviados || 0, modoManual: false, links: linksList };
+          return {
+            total: resultado.links.length,
+            enviados: resultado.mensagensEnviadas || 0,
+            modoManual: false,
+            links: linksList
+          };
         }
       }
     } catch (errEdge) {
-      // Edge Function não deployada ou timeout — usa modo manual
+      // Edge Function indisponível ou timeout — usa modo manual
       console.warn('[BC] Edge Function indisponível, usando modo manual:', errEdge);
     }
 

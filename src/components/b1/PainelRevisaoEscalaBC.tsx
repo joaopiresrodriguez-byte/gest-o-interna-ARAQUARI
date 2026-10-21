@@ -149,12 +149,12 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
       if (res.modoManual) {
         setMensagemStatus({
           tipo: 'aviso',
-          texto: `⚠️ Modo Manual: Edge Function não deployada. Use os botões 💬 WhatsApp no modal abaixo para enviar individualmente. Total: ${res.total} link(s).`
+          texto: `⚠️ Modo Manual ativo (${res.total} links gerados). O envio automático via Z-API não concluiu ou deu timeout. Você pode usar os botões 💬 WhatsApp no modal para disparar.`
         });
       } else {
         setMensagemStatus({
           tipo: 'sucesso',
-          texto: `📱 Teste concluído! ${res.enviados} de ${res.total} mensagem(ns) enviada(s) via WhatsApp (Z-API).`
+          texto: `📱 Disparo automático concluído! ${res.enviados} de ${res.total} link(s) processado(s) via WhatsApp (Z-API).`
         });
       }
     } catch (err: any) {
@@ -1149,8 +1149,13 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                         {item.whatsappEnviado === true && (
                           <span className="px-1.5 py-0.5 bg-emerald-950 border border-emerald-800/80 text-emerald-400 text-[10px] font-bold rounded">✅ WA Enviado</span>
                         )}
-                        {item.whatsappEnviado === false && (
-                          <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-bold rounded">📵 Sem Fone</span>
+                        {item.whatsappEnviado !== true && !item.bombeiro.phone && !item.bombeiro.emergency_phone && (
+                          <span className="px-1.5 py-0.5 bg-rose-950/80 border border-rose-800/80 text-rose-300 text-[10px] font-bold rounded">📵 Sem Fone</span>
+                        )}
+                        {item.whatsappEnviado !== true && (item.bombeiro.phone || item.bombeiro.emergency_phone) && (
+                          <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-medium rounded">
+                            ⏳ Pendente Envio ({item.bombeiro.phone || item.bombeiro.emergency_phone})
+                          </span>
                         )}
                       </div>
                       <span className="text-slate-400 font-mono text-[11px] select-all block truncate max-w-md">{item.link}</span>
