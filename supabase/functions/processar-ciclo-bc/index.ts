@@ -284,10 +284,39 @@ serve(async (req) => {
       if (!ciclo) throw new Error(`Nenhum ciclo encontrado para ${mesRef}. Abra o ciclo primeiro.`);
 
       // Buscar todos os tokens do ciclo com dados do bombeiro
-      const { data: tokens } = await supabase
+      let { data: tokens } = await supabase
         .from('bc_access_tokens')
         .select('*, personnel(*)')
         .eq('mes_referencia', mesRef);
+
+      // Se nenhum token foi gerado ainda para este ciclo, gerar automaticamente para os BCs ativos
+      if (!tokens || tokens.length === 0) {
+        const { data: bcs } = await supabase
+          .from('personnel')
+          .select('*')
+          .eq('type', 'BC')
+          .eq('status', 'Ativo');
+
+        for (const bc of (bcs || [])) {
+          const token = gerarToken();
+          try {
+            await supabase.from('bc_access_tokens').insert({
+              ciclo_id: ciclo.id,
+              bombeiro_id: bc.id,
+              mes_referencia: mesRef,
+              token,
+            });
+          } catch (_) {
+            // Caso tabela não exista ou erro RLS
+          }
+        }
+
+        const { data: novosTokens } = await supabase
+          .from('bc_access_tokens')
+          .select('*, personnel(*)')
+          .eq('mes_referencia', mesRef);
+        tokens = novosTokens || [];
+      }
 
       const [anoEnc, mesEnc, diaEnc] = (ciclo.data_encerramento || '').split('T')[0].split('-');
       const prazoStr = `${diaEnc || '25'}/${mesStr}`;

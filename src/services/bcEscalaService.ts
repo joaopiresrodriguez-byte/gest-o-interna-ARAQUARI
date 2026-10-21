@@ -232,34 +232,78 @@ export const bcEscalaService = {
       .eq('mes_referencia', mesRef)
       .not('token_acesso', 'is', null);
 
-    if (!intencoes || intencoes.length === 0) return [];
+    if (intencoes && intencoes.length > 0) {
+      // Pegar 1 token por bombeiro (pode haver múltiplas intenções com mesmo token)
+      const tokenPorBombeiro = new Map<number, string>();
+      intencoes.forEach((i: any) => {
+        if (!tokenPorBombeiro.has(i.bombeiro_id) && i.token_acesso) {
+          tokenPorBombeiro.set(i.bombeiro_id, i.token_acesso);
+        }
+      });
 
-    // Pegar 1 token por bombeiro (pode haver múltiplas intenções com mesmo token)
-    const tokenPorBombeiro = new Map<number, string>();
-    intencoes.forEach((i: any) => {
-      if (!tokenPorBombeiro.has(i.bombeiro_id) && i.token_acesso) {
-        tokenPorBombeiro.set(i.bombeiro_id, i.token_acesso);
+      const resultado: Array<{ bombeiro: Personnel; token: string; link: string; whatsappEnviado: boolean }> = [];
+      for (const [bombeiroId, token] of tokenPorBombeiro.entries()) {
+        const { data: bc } = await supabase
+          .from('personnel')
+          .select('*')
+          .eq('id', bombeiroId)
+          .maybeSingle();
+
+        if (bc) {
+          resultado.push({
+            bombeiro:        bc as Personnel,
+            token,
+            link:            `${origin}/bc-intencao?token=${token}`,
+            whatsappEnviado: false, // legado — não rastreado
+          });
+        }
       }
-    });
-
-    const resultado: Array<{ bombeiro: Personnel; token: string; link: string; whatsappEnviado: boolean }> = [];
-    for (const [bombeiroId, token] of tokenPorBombeiro.entries()) {
-      const { data: bc } = await supabase
-        .from('personnel')
-        .select('*')
-        .eq('id', bombeiroId)
-        .maybeSingle();
-
-      if (bc) {
-        resultado.push({
-          bombeiro:        bc as Personnel,
-          token,
-          link:            `${origin}/bc-intencao?token=${token}`,
-          whatsappEnviado: false, // legado — não rastreado
-        });
-      }
+      return resultado;
     }
-    return resultado;
+
+    // 3. Fallback inteligente: se não há tokens em bc_access_tokens nem bc_intencoes,
+    // buscar os Bombeiros Comunitários ativos da tabela 'personnel' e gerar tokens para eles
+    const { data: bcsAtivos } = await supabase
+      .from('personnel')
+      .select('*')
+      .eq('type', 'BC')
+      .eq('status', 'Ativo');
+
+    if (!bcsAtivos || bcsAtivos.length === 0) return [];
+
+    // Buscar ou garantir ciclo
+    const { data: ciclo } = await supabase
+      .from('bc_ciclos')
+      .select('id')
+      .eq('mes_referencia', mesRef)
+      .maybeSingle();
+
+    const resultadoGerado: Array<{ bombeiro: Personnel; token: string; link: string; whatsappEnviado: boolean }> = [];
+
+    for (const bc of bcsAtivos) {
+      const token = bcEscalaService.gerarToken();
+      // Tentar persistir se a tabela existir
+      if (ciclo) {
+        try {
+          await supabase.from('bc_access_tokens').insert({
+            ciclo_id: ciclo.id,
+            bombeiro_id: bc.id,
+            mes_referencia: mesRef,
+            token,
+          });
+        } catch (_) {
+          // Fallback silencioso caso a tabela não tenha sido criada
+        }
+      }
+      resultadoGerado.push({
+        bombeiro: bc as Personnel,
+        token,
+        link: `${origin}/bc-intencao?token=${token}`,
+        whatsappEnviado: false,
+      });
+    }
+
+    return resultadoGerado;
   },
 
   /**
@@ -292,7 +336,7 @@ export const bcEscalaService = {
 
       if (resp.ok) {
         const resultado = await resp.json().catch(() => null);
-        if (resultado?.ok) {
+        if (resultado?.ok && (resultado.total > 0 || (resultado.links && resultado.links.length > 0))) {
           const linksList: Array<{ bombeiro: Personnel; token: string; link: string; enviado: boolean }> = [];
           for (const item of (resultado.links || [])) {
             const { data: bc } = await supabase
@@ -309,7 +353,7 @@ export const bcEscalaService = {
               });
             }
           }
-          return { total: resultado.total || 0, enviados: resultado.enviados || 0, modoManual: false, links: linksList };
+          return { total: resultado.total || linksList.length, enviados: resultado.enviados || 0, modoManual: false, links: linksList };
         }
       }
     } catch (errEdge) {
