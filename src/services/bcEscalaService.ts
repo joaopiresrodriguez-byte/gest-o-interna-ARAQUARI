@@ -103,97 +103,202 @@ export const bcEscalaService = {
   },
 
   /**
-   * Dispara abertura do ciclo e gera/recupera links únicos para cada BC ativo.
-   * Usa bc_access_tokens (sem placeholders em bc_intencoes).
-   * Chama a Edge Function processar-ciclo-bc para enviar o WhatsApp.
-   *
-   * modo 'auto'   → abertura padrão dia 20, prazo 5 dias (até dia 25)
-   * modo 'manual' → abertura imediata pelo gestor, prazo 1 dia (24h)
+   * BLOCO 3 — Abertura de Ciclo e Gestão de Links Coletivos / Individuais
    */
-  abrirCicloEDispararLinks: async (
-    mesRef?: string,
-    modo: 'auto' | 'manual' = 'auto'
-  ): Promise<{
+  abrirCiclo: async (
+    mesRef: string,
+    prazoDias: 1 | 5 = 5
+  ): Promise<{ ciclo: BcCiclo; linkColetivo: string }> => {
+    const agora = new Date();
+    const dataAbertura = agora.toISOString();
+    const dataEncerramento = new Date(agora.getTime() + prazoDias * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: ciclo, error } = await supabase
+      .from('bc_ciclos')
+      .upsert({
+        mes_referencia: mesRef,
+        data_abertura: dataAbertura,
+        data_encerramento: dataEncerramento,
+        status: 'aberto',
+      }, { onConflict: 'mes_referencia' })
+      .select()
+      .single();
+
+    if (error || !ciclo) {
+      throw new Error(`Falha ao abrir ciclo de intenções: ${error?.message}`);
+    }
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
+    const linkColetivo = `${origin}/bc-intencao?mes=${mesRef}`;
+
+    return { ciclo: ciclo as BcCiclo, linkColetivo };
+  },
+
+  /**
+   * Buscar ciclo e dados para o Link Coletivo (aberto a todos os BCs via mesRef)
+   */
+  buscarDadosCicloColetivo: async (mesRef: string): Promise<{
     ciclo: BcCiclo;
-    tokensGerados: number;
-    mensagensEnviadas: number;
-    links: Array<{ bombeiro: Personnel; token: string; link: string }>;
+    bcsAtivos: Array<{ id: number; name: string; war_name: string | null; role: string | null; rank: string | null }>;
+    expirado: boolean;
+    diasRestantes: number;
+    horasRestantes: number;
+    minutosRestantes: number;
   }> => {
-    const edgeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/processar-ciclo-bc`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    // Buscar ciclo
+    let { data: ciclo } = await supabase
+      .from('bc_ciclos')
+      .select('*')
+      .eq('mes_referencia', mesRef)
+      .maybeSingle();
+
+    if (!ciclo) {
+      ciclo = await bcEscalaService.obterOuCriarCiclo(mesRef);
+    }
+
+    // Buscar lista de BCs ativos
+    const { data: bcs, error: errBCs } = await supabase
+      .from('personnel')
+      .select('id, name, war_name, role, rank')
+      .eq('type', 'BC')
+      .eq('status', 'Ativo')
+      .order('name');
+
+    if (errBCs) throw errBCs;
+
+    // Calcular tempo restante
+    const agora = new Date();
+    const dataEnc = new Date(ciclo.data_encerramento);
+    const expirado = ciclo.status !== 'aberto' || agora > dataEnc;
+
+    const diffMs = Math.max(0, dataEnc.getTime() - agora.getTime());
+    const diasRestantes    = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const horasRestantes   = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutosRestantes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    return {
+      ciclo: ciclo as BcCiclo,
+      bcsAtivos: (bcs || []) as any,
+      expirado,
+      diasRestantes,
+      horasRestantes,
+      minutosRestantes,
     };
+  },
 
-    // Resolver mesRef padrão: próximo mês se já passou do dia 20, senão mês atual
-    let targetMesRef = mesRef;
-    if (!targetMesRef) {
-      const agora = new Date();
-      let ano = agora.getFullYear();
-      let mes = agora.getMonth() + 1;
-      if (agora.getDate() >= 20) {
-        mes += 1;
-        if (mes > 12) { mes = 1; ano += 1; }
-      }
-      targetMesRef = `${ano}-${String(mes).padStart(2, '0')}`;
+  /**
+   * Valida bombeiro pelo ID e CPF (aceita com ou sem formatação, ou os últimos 4 dígitos)
+   */
+  validarBombeiroPorCPF: async (
+    bombeiroId: number,
+    cpfDigitado: string,
+    mesRef: string
+  ): Promise<{ valido: boolean; bombeiro: Personnel; intencoes: BcIntencao[] }> => {
+    const { data: bc, error } = await supabase
+      .from('personnel')
+      .select('*')
+      .eq('id', bombeiroId)
+      .single();
+
+    if (error || !bc) throw new Error('Bombeiro não encontrado.');
+
+    // Normalização de CPF
+    const cpfLimpo = (bc.cpf || '').replace(/\D/g, '');
+    const digitadoLimpo = (cpfDigitado || '').replace(/\D/g, '');
+
+    // Permite validar tanto pelo CPF completo quanto pelos últimos 4 dígitos
+    const coincide =
+      (cpfLimpo.length >= 4 && digitadoLimpo.length >= 4 && (
+        cpfLimpo === digitadoLimpo ||
+        cpfLimpo.endsWith(digitadoLimpo) ||
+        cpfLimpo.startsWith(digitadoLimpo)
+      ));
+
+    if (!coincide) {
+      throw new Error('CPF incorreto para o bombeiro selecionado. Confirme seus dados e tente novamente.');
     }
 
-    const action = modo === 'manual' ? 'abrir_ciclo_manual' : 'abrir_ciclo_dia20';
+    // Buscar intenções já gravadas para ele neste mês
+    const { data: intencoes } = await supabase
+      .from('bc_intencoes')
+      .select('*')
+      .eq('bombeiro_id', bombeiroId)
+      .eq('mes_referencia', mesRef);
 
-    // Chamar a Edge Function — ela cria o ciclo, gera tokens em bc_access_tokens
-    // e envia WhatsApp para cada BC ativo
-    const resp = await fetch(edgeUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ action, mesRef: targetMesRef }),
-    });
+    // Filtrar intenções reais (não placeholders)
+    const intencoesReais = (intencoes || []).filter(i =>
+      !(i.dia === `${mesRef}-01` && i.horario_inicio === '07:00' && i.horario_fim === '19:00')
+    );
 
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => resp.statusText);
-      throw new Error(`Erro ao abrir ciclo via Edge Function (HTTP ${resp.status}): ${errText}`);
-    }
+    return {
+      valido: true,
+      bombeiro: bc as Personnel,
+      intencoes: intencoesReais as BcIntencao[],
+    };
+  },
 
-    const resultado = await resp.json();
-    if (!resultado.ok) {
-      throw new Error(resultado.error || 'Erro desconhecido na Edge Function.');
-    }
-
-    // Buscar ciclo atualizado do banco
+  /**
+   * Salva intenções do bombeiro autenticado por CPF no link coletivo
+   */
+  salvarIntencoesColetivo: async (
+    bombeiroId: number,
+    mesRef: string,
+    novasIntencoes: Array<{ dia: string; horario_inicio: string; horario_fim: string }>
+  ): Promise<{ ok: boolean; quantidade: number }> => {
+    // Verificar se o ciclo está aberto
     const { data: ciclo } = await supabase
       .from('bc_ciclos')
       .select('*')
-      .eq('mes_referencia', targetMesRef)
+      .eq('mes_referencia', mesRef)
       .single();
 
-    if (!ciclo) throw new Error('Ciclo não encontrado após abertura.');
+    if (!ciclo) throw new Error('Ciclo não encontrado.');
 
-    // Montar lista de links a partir do retorno da Edge Function
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
-    const linksList: Array<{ bombeiro: Personnel; token: string; link: string }> = [];
+    const agora = new Date();
+    if (ciclo.status !== 'aberto' || agora > new Date(ciclo.data_encerramento)) {
+      throw new Error('O prazo de intenções para este mês já foi encerrado.');
+    }
 
-    for (const item of (resultado.links || [])) {
-      // Buscar dados do bombeiro localmente para completar Personnel
-      const { data: bc } = await supabase
-        .from('personnel')
-        .select('*')
-        .eq('id', item.bombeiro_id)
-        .maybeSingle();
-
-      if (bc) {
-        linksList.push({
-          bombeiro: bc as Personnel,
-          token:    item.token,
-          link:     `${origin}/bc-intencao?token=${item.token}`,
-        });
+    // Validar horários
+    for (const item of novasIntencoes) {
+      const v = bcEscalaService.validarHoras(item.horario_inicio, item.horario_fim);
+      if (!v.valido) {
+        throw new Error(`Dia ${item.dia}: ${v.mensagem}`);
       }
     }
 
-    return {
-      ciclo:             ciclo as BcCiclo,
-      tokensGerados:     resultado.tokensGerados || linksList.length,
-      mensagensEnviadas: resultado.mensagensEnviadas || 0,
-      links:             linksList,
-    };
+    // Remover intenções anteriores do mesmo bombeiro no mês
+    await supabase
+      .from('bc_intencoes')
+      .delete()
+      .eq('bombeiro_id', bombeiroId)
+      .eq('mes_referencia', mesRef);
+
+    if (novasIntencoes.length === 0) {
+      return { ok: true, quantidade: 0 };
+    }
+
+    const records = novasIntencoes.map(item => {
+      const v = bcEscalaService.validarHoras(item.horario_inicio, item.horario_fim);
+      return {
+        bombeiro_id: bombeiroId,
+        ciclo_id: ciclo.id,
+        mes_referencia: mesRef,
+        dia: item.dia,
+        horario_inicio: item.horario_inicio,
+        horario_fim: item.horario_fim,
+        total_horas: v.totalHoras,
+        status: 'pendente',
+      };
+    });
+
+    const { error: errIns } = await supabase
+      .from('bc_intencoes')
+      .insert(records);
+
+    if (errIns) throw errIns;
+
+    return { ok: true, quantidade: records.length };
   },
 
   /**

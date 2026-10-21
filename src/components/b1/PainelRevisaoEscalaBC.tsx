@@ -82,86 +82,54 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
     mensagensEnviadas?: number;
   }>({ aberto: false, links: [] });
 
-  // Executar Disparo Manual com Prazo de 1 Dia (24h) — chama Edge Function que envia WhatsApp
-  const handleAberturaManual = async () => {
+  const [modalLinkColetivo, setModalLinkColetivo] = useState<{
+    aberto: boolean;
+    link: string;
+    mesRef: string;
+    prazoDias: number;
+  }>({ aberto: false, link: '', mesRef: '', prazoDias: 5 });
+
+  // Abertura do Ciclo com Link Coletivo (1 ou 5 dias)
+  const handleAbrirCicloComLinkColetivo = async (prazoDias: 1 | 5) => {
     try {
       setProcessando(true);
       setMensagemStatus(null);
-      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'manual');
-      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.mensagensEnviadas });
+      const res = await bcEscalaService.abrirCiclo(mesRef, prazoDias);
+      setModalLinkColetivo({
+        aberto: true,
+        link: res.linkColetivo,
+        mesRef,
+        prazoDias,
+      });
       setMensagemStatus({
         tipo: 'sucesso',
-        texto: `⚡ Abertura MANUAL do ciclo ${mesRef} realizada! ${res.mensagensEnviadas} link(s) enviado(s) via WhatsApp. Prazo: 1 DIA (24 horas).`
+        texto: `✅ Ciclo de intenções ${mesRef} aberto com sucesso! Prazo: ${prazoDias === 1 ? '1 DIA (24h)' : '5 DIAS'}. Copie o link abaixo e envie no grupo do WhatsApp.`
       });
       await carregarDados();
     } catch (err: any) {
-      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro na abertura manual do ciclo.' });
+      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao abrir ciclo de intenções.' });
     } finally {
       setProcessando(false);
     }
   };
 
-  // Executar Disparo Dia 20 (5 dias) — chama Edge Function que envia WhatsApp
-  const handleDispararDia20 = async () => {
-    try {
-      setProcessando(true);
-      setMensagemStatus(null);
-      const res = await bcEscalaService.abrirCicloEDispararLinks(mesRef, 'auto');
-      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.mensagensEnviadas });
-      setMensagemStatus({
-        tipo: 'sucesso',
-        texto: `📲 Ciclo ${mesRef} aberto! ${res.tokensGerados} token(s) gerado(s), ${res.mensagensEnviadas} mensagem(ns) enviada(s) via WhatsApp. Prazo: até o dia 25.`
-      });
-      await carregarDados();
-    } catch (err: any) {
-      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao disparar ciclo.' });
-    } finally {
-      setProcessando(false);
-    }
-  };
+  // Copiar Link Coletivo do Mês atual
+  const handleCopiarLinkColetivo = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gest-o-interna-araquari.vercel.app';
+    const link = `${origin}/bc-intencao?mes=${mesRef}`;
+    const [ano, mes] = mesRef.split('-');
+    const msg =
+      `🔥 *CBMSC Araquari — Escala de Bombeiros Comunitários*\n\n` +
+      `Estão abertas as intenções de serviço para o mês de *${mes}/${ano}*.\n\n` +
+      `👉 *Acesse o link abaixo, selecione seu nome e confirme seu CPF para informar suas disponibilidades:*\n` +
+      `${link}\n\n` +
+      `⏰ Turnos de 12h ou 24h. Você pode editar suas escolhas durante o período de abertura.`;
 
-  // Ver links JÁ GERADOS — sem recriar ciclo ou tokens
-  const handleVerLinks = async () => {
-    try {
-      setProcessando(true);
-      const links = await bcEscalaService.buscarLinksExistentes(mesRef);
-      if (links.length === 0) {
-        setMensagemStatus({ tipo: 'erro', texto: 'Nenhum link gerado para este mês. Abra o ciclo primeiro.' });
-        return;
-      }
-      setModalLinks({ aberto: true, links });
-    } catch (err: any) {
-      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao buscar links.' });
-    } finally {
-      setProcessando(false);
-    }
-  };
-
-  // Disparar WhatsApp de TESTE — tenta Z-API automático; se falhar, abre modal para envio manual
-  const handleDispararWhatsAppTeste = async () => {
-    if (!confirm(`Isso irá RE-ENVIAR os links de ${mesRef} via WhatsApp para todos os BCs. Confirmar?`)) return;
-    try {
-      setProcessando(true);
-      setMensagemStatus(null);
-      const res = await bcEscalaService.dispararLinksExistentesWhatsApp(mesRef);
-      setModalLinks({ aberto: true, links: res.links, mensagensEnviadas: res.modoManual ? undefined : res.enviados });
-
-      if (res.modoManual) {
-        setMensagemStatus({
-          tipo: 'aviso',
-          texto: `⚠️ Modo Manual ativo (${res.total} links gerados). O envio automático via Z-API não concluiu ou deu timeout. Você pode usar os botões 💬 WhatsApp no modal para disparar.`
-        });
-      } else {
-        setMensagemStatus({
-          tipo: 'sucesso',
-          texto: `📱 Disparo automático concluído! ${res.enviados} de ${res.total} link(s) processado(s) via WhatsApp (Z-API).`
-        });
-      }
-    } catch (err: any) {
-      setMensagemStatus({ tipo: 'erro', texto: err.message || 'Erro ao disparar WhatsApp de teste.' });
-    } finally {
-      setProcessando(false);
-    }
+    navigator.clipboard.writeText(msg);
+    setMensagemStatus({
+      tipo: 'sucesso',
+      texto: '📋 Mensagem completa com link único copiada! Basta colar no grupo de WhatsApp dos BCs.'
+    });
   };
 
   // Executar Motor de Seleção (Dia 26)
@@ -343,39 +311,30 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
             <div className="flex flex-wrap items-center gap-2 mt-5">
               <button
-                onClick={handleAberturaManual}
+                onClick={() => handleAbrirCicloComLinkColetivo(5)}
                 disabled={processando}
-                className="px-3 py-2 bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
-                title="Abrir imediatamente os links de escolha para os BCs com prazo de 1 DIA (24 horas)"
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-950/40"
+                title="Abrir período de intenções para o mês com prazo padrão de 5 DIAS"
               >
-                <span>⚡</span> Abertura Manual (1 Dia)
+                <span>📲</span> Abrir Escolha (5 Dias)
               </button>
 
               <button
-                onClick={handleDispararDia20}
+                onClick={() => handleAbrirCicloComLinkColetivo(1)}
                 disabled={processando}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-                title="Abertura padrão do dia 20 com prazo de 5 DIAS (até o dia 25)"
+                className="px-3 py-2 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                title="Abrir período emergencial com prazo de 1 DIA (24 horas)"
               >
-                <span>📲</span> Dia 20: Abertura Auto (5 Dias)
+                <span>⚡</span> Abertura Rápida (1 Dia)
               </button>
 
               <button
-                onClick={handleVerLinks}
+                onClick={handleCopiarLinkColetivo}
                 disabled={processando}
-                className="px-3 py-2 bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-                title="Visualizar os links de intenção já gerados para os BCs (sem recriar ciclo)"
+                className="px-3 py-2 bg-green-950/90 hover:bg-green-900 text-green-300 border border-green-700/80 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                title="Copiar mensagem pronta com link único para colar no grupo de WhatsApp"
               >
-                <span>🔗</span> Ver Links
-              </button>
-
-              <button
-                onClick={handleDispararWhatsAppTeste}
-                disabled={processando || !ciclo}
-                className="px-3 py-2 bg-green-950/80 hover:bg-green-900 text-green-300 border border-green-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-                title="Re-enviar os links via WhatsApp para todos os BCs sem recriar o ciclo (teste de envio)"
-              >
-                <span>📱</span> Disparar WA (Teste)
+                <span>💬</span> Copiar Link p/ Grupo WA
               </button>
 
               <button
@@ -1111,6 +1070,80 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL LINK COLETIVO WHATSAPP */}
+      {modalLinkColetivo.aberto && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-xl w-full shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
+              <div>
+                <span className="px-2.5 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-400 rounded-full text-xs font-bold uppercase tracking-wider inline-block mb-1">
+                  ✓ Ciclo Aberto com Sucesso
+                </span>
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <span>💬</span> Link Coletivo para WhatsApp
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Mês de Referência: <strong className="text-red-400">{modalLinkColetivo.mesRef}</strong> | Prazo: <strong className="text-amber-400">{modalLinkColetivo.prazoDias === 1 ? '1 Dia (24h)' : '5 Dias'}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setModalLinkColetivo({ aberto: false, link: '', mesRef: '', prazoDias: 5 })}
+                className="text-slate-400 hover:text-white p-1 text-base font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 text-xs">
+                <span className="text-slate-400 block mb-1 font-semibold">Link Direto para os BCs:</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={modalLinkColetivo.link}
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-xs select-all focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(modalLinkColetivo.link);
+                      setMensagemStatus({ tipo: 'sucesso', texto: 'Link copiado para a área de transferência!' });
+                    }}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold border border-slate-700 transition"
+                  >
+                    📋 Copiar
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-emerald-950/30 border border-emerald-800/60 rounded-xl p-4 text-xs text-slate-300 space-y-2">
+                <strong className="text-emerald-400 block text-sm flex items-center gap-1.5">
+                  <span>📲</span> Como funciona para os Bombeiros:
+                </strong>
+                <p>1. Você cola este link único no grupo de WhatsApp dos BCs.</p>
+                <p>2. Ao abrir o link, o BC seleciona o seu nome na lista e digita o seu CPF para confirmar a identidade.</p>
+                <p>3. Ele preenche seus dias/turnos (12h ou 24h) e salva. Pronto! Zero custos com robôs ou APIs pagas.</p>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-end">
+                <button
+                  onClick={handleCopiarLinkColetivo}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/40"
+                >
+                  <span>📋</span> Copiar Mensagem Completa com Link
+                </button>
+                <button
+                  onClick={() => setModalLinkColetivo({ aberto: false, link: '', mesRef: '', prazoDias: 5 })}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL LINKS DAS INTENÇÕES */}
       {modalLinks.aberto && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1122,11 +1155,6 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
                 </h3>
                 <p className="text-xs text-slate-400">
                   Mês: <span className="text-red-400 font-semibold">{mesRef}</span>
-                  {modalLinks.mensagensEnviadas !== undefined && (
-                    <span className="ml-3 px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-400 rounded-full text-[10px] font-bold">
-                      ✅ {modalLinks.mensagensEnviadas} enviado(s) via WhatsApp
-                    </span>
-                  )}
                 </p>
               </div>
               <button

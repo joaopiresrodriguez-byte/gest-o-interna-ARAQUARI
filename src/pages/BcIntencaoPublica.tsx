@@ -12,41 +12,118 @@ interface IntencaoForm {
 
 export const BcIntencaoPublica: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token') || '';
+  const tokenParam = searchParams.get('token') || '';
+  const mesParam = searchParams.get('mes') || '';
+
+  // Determinar mês alvo
+  const mesRef = useMemo(() => {
+    if (mesParam) return mesParam;
+    const agora = new Date();
+    let m = agora.getMonth() + 2;
+    let a = agora.getFullYear();
+    if (m > 12) { m = 1; a += 1; }
+    return `${a}-${String(m).padStart(2, '0')}`;
+  }, [mesParam]);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [bombeiro, setBombeiro] = useState<Personnel | null>(null);
   const [ciclo, setCiclo] = useState<BcCiclo | null>(null);
+  const [bcsAtivos, setBcsAtivos] = useState<Array<{ id: number; name: string; war_name: string | null; role: string | null; rank: string | null }>>([]);
+  const [bombeiro, setBombeiro] = useState<Personnel | null>(null);
+
+  // Estados de seleção no Link Coletivo
+  const [bombeiroIdSelecionado, setBombeiroIdSelecionado] = useState<string>('');
+  const [cpfDigitado, setCpfDigitado] = useState<string>('');
+  const [autenticando, setAutenticando] = useState<boolean>(false);
+  const [erroAutenticacao, setErroAutenticacao] = useState<string | null>(null);
+  const [autenticado, setAutenticado] = useState<boolean>(false);
+
+  // Contadores de prazo
   const [expirado, setExpirado] = useState<boolean>(false);
   const [diasRestantes, setDiasRestantes] = useState<number>(0);
   const [horasRestantes, setHorasRestantes] = useState<number>(0);
   const [minutosRestantes, setMinutosRestantes] = useState<number>(0);
 
+  // Intenções e submissão
   const [intencoes, setIntencoes] = useState<IntencaoForm[]>([]);
   const [salvando, setSalvando] = useState<boolean>(false);
   const [sucessoMsg, setSucessoMsg] = useState<string | null>(null);
 
-  // Carregar dados por token
-  const carregarDados = async () => {
-    if (!token) {
-      setErrorMsg('Link inválido ou sem token de acesso.');
-      setLoading(false);
+  // Inicialização
+  useEffect(() => {
+    const inicializar = async () => {
+      try {
+        setLoading(true);
+        setErrorMsg(null);
+
+        // Se veio com token individual legado
+        if (tokenParam) {
+          const res = await bcEscalaService.buscarDadosPorToken(tokenParam);
+          setBombeiro(res.bombeiro);
+          setCiclo(res.ciclo);
+          setExpirado(res.expirado);
+          setDiasRestantes(res.diasRestantes);
+          setHorasRestantes(res.horasRestantes || 0);
+          setMinutosRestantes(res.minutosRestantes || 0);
+          setAutenticado(true);
+
+          if (res.intencoes && res.intencoes.length > 0) {
+            setIntencoes(
+              res.intencoes.map(i => ({
+                id: i.id,
+                dia: i.dia,
+                horario_inicio: i.horario_inicio,
+                horario_fim: i.horario_fim,
+              }))
+            );
+          } else {
+            const diaPadrao = res.ciclo.mes_referencia ? `${res.ciclo.mes_referencia}-01` : '';
+            setIntencoes([{ dia: diaPadrao, horario_inicio: '08:00', horario_fim: '20:00' }]);
+          }
+        } else {
+          // Link Coletivo Geral (mesRef)
+          const dadosColetivos = await bcEscalaService.buscarDadosCicloColetivo(mesRef);
+          setCiclo(dadosColetivos.ciclo);
+          setBcsAtivos(dadosColetivos.bcsAtivos);
+          setExpirado(dadosColetivos.expirado);
+          setDiasRestantes(dadosColetivos.diasRestantes);
+          setHorasRestantes(dadosColetivos.horasRestantes);
+          setMinutosRestantes(dadosColetivos.minutosRestantes);
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Erro ao carregar escala de intenção.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    inicializar();
+  }, [tokenParam, mesRef]);
+
+  // Ação de confirmar identidade do BC no Link Coletivo
+  const handleConfirmarIdentidade = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bombeiroIdSelecionado) {
+      setErroAutenticacao('Selecione o seu nome na lista.');
+      return;
+    }
+    if (!cpfDigitado.trim()) {
+      setErroAutenticacao('Digite seu CPF ou os 4 últimos dígitos para identificação.');
       return;
     }
 
     try {
-      setLoading(true);
-      setErrorMsg(null);
-      const res = await bcEscalaService.buscarDadosPorToken(token);
+      setAutenticando(true);
+      setErroAutenticacao(null);
+      const res = await bcEscalaService.validarBombeiroPorCPF(
+        Number(bombeiroIdSelecionado),
+        cpfDigitado,
+        mesRef
+      );
 
       setBombeiro(res.bombeiro);
-      setCiclo(res.ciclo);
-      setExpirado(res.expirado);
-      setDiasRestantes(res.diasRestantes);
-      setHorasRestantes(res.horasRestantes || 0);
-      setMinutosRestantes(res.minutosRestantes || 0);
+      setAutenticado(true);
 
       if (res.intencoes && res.intencoes.length > 0) {
         setIntencoes(
@@ -58,20 +135,15 @@ export const BcIntencaoPublica: React.FC = () => {
           }))
         );
       } else {
-        // Inicializar com 1 item padrão no dia 1º do mês de referência
-        const diaPadrao = res.ciclo.mes_referencia ? `${res.ciclo.mes_referencia}-01` : '';
+        const diaPadrao = `${mesRef}-01`;
         setIntencoes([{ dia: diaPadrao, horario_inicio: '08:00', horario_fim: '20:00' }]);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao carregar link de intenções.');
+      setErroAutenticacao(err.message || 'Erro ao validar identidade.');
     } finally {
-      setLoading(false);
+      setAutentando(false);
     }
   };
-
-  useEffect(() => {
-    carregarDados();
-  }, [token]);
 
   // Adicionar nova linha de intenção
   const adicionarIntencao = () => {
@@ -80,7 +152,6 @@ export const BcIntencaoPublica: React.FC = () => {
     const diaFormatted = `${ciclo.mes_referencia}-${String(proximoDiaNum).padStart(2, '0')}`;
     setIntencoes(prev => [...prev, { dia: diaFormatted, horario_inicio: '08:00', horario_fim: '20:00' }]);
 
-    // Rolar a tela suavemente para baixo para acompanhar o novo item adicionado
     setTimeout(() => {
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }, 100);
@@ -121,17 +192,21 @@ export const BcIntencaoPublica: React.FC = () => {
   // Submeter intenções
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validacaoGeral.valido || !token) return;
+    if (!validacaoGeral.valido || !bombeiro || !ciclo) return;
 
     try {
       setSalvando(true);
       setSucessoMsg(null);
       setErrorMsg(null);
 
-      await bcEscalaService.salvarIntencoesPorToken(token, intencoes);
-      setSucessoMsg('Intenções salvas com sucesso! Você pode alterar até o final do prazo.');
-      // Re-carregar para atualizar estados
-      await carregarDados();
+      if (tokenParam) {
+        await bcEscalaService.salvarIntencoesPorToken(tokenParam, intencoes);
+      } else {
+        await bcEscalaService.salvarIntencoesColetivo(bombeiro.id, ciclo.mes_referencia, intencoes);
+      }
+
+      setSucessoMsg('✅ Intenções salvas com sucesso! Você pode retornar e alterar até o encerramento do prazo.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao salvar intenções de serviço.');
     } finally {
@@ -157,16 +232,15 @@ export const BcIntencaoPublica: React.FC = () => {
     );
   }
 
-  if (errorMsg && !bombeiro) {
+  if (errorMsg && !bombeiro && !ciclo) {
     return (
-      <div className="h-screen overflow-y-auto bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-2xl">
-          <div className="w-16 h-16 bg-red-950/60 border border-red-800/80 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500 text-2xl">
-            ⚠️
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-red-800 rounded-2xl p-6 text-center shadow-2xl">
+          <div className="w-12 h-12 bg-red-950 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-4 text-red-400 text-xl font-bold">
+            ✕
           </div>
-          <h2 className="text-xl font-bold text-slate-100 mb-2">Acesso Não Permitido</h2>
+          <h2 className="text-xl font-bold text-white mb-2">Acesso Indisponível</h2>
           <p className="text-slate-400 text-sm mb-6">{errorMsg}</p>
-          <p className="text-xs text-slate-500">Se você acredita que isso é um erro, entre em contato com a seção responsável do CBMSC.</p>
         </div>
       </div>
     );
@@ -176,7 +250,6 @@ export const BcIntencaoPublica: React.FC = () => {
     return (
       <div className="h-screen overflow-y-auto bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
         <div className="max-w-lg w-full bg-slate-900 border border-amber-900/50 rounded-2xl p-8 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-amber-500/5 rounded-full blur-3xl"></div>
           <div className="w-16 h-16 bg-amber-950/60 border border-amber-800/80 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 text-3xl">
             ⏰
           </div>
@@ -185,11 +258,8 @@ export const BcIntencaoPublica: React.FC = () => {
             Mês de Referência: <span className="text-white font-semibold">{mesFormatado}</span>
           </p>
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 mb-6 text-slate-400 text-sm text-left">
-            <p className="mb-2 text-slate-300">
-              Olá, <strong className="text-white">{bombeiro?.name}</strong>.
-            </p>
             <p>
-              O período de 5 dias para registrar ou alterar intenções de serviço para este mês foi encerrado.
+              O período para registrar ou alterar intenções de serviço para este mês foi encerrado pela gestão da escala.
             </p>
           </div>
           <p className="text-xs text-slate-500">Dúvidas ou solicitações excepcionais devem ser encaminhadas ao gestor responsável da escala.</p>
@@ -198,11 +268,118 @@ export const BcIntencaoPublica: React.FC = () => {
     );
   }
 
+  // TELA 1 — IDENTIFICAÇÃO DO BOMBEIRO (Link Coletivo)
+  if (!autenticado) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-950/80 border border-red-800/60 rounded-full text-red-400 text-xs font-semibold uppercase tracking-wider mb-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+              CBMSC Araquari
+            </div>
+            <h1 className="text-2xl font-black text-white">Intenção de Serviço</h1>
+            <p className="text-slate-400 text-xs mt-1">
+              Escala de Bombeiros Comunitários — Mês <strong className="text-red-400">{mesFormatado}</strong>
+            </p>
+          </div>
+
+          {/* CONTADOR DE PRAZO */}
+          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-center mb-6">
+            <div className="text-[11px] text-slate-400 font-medium uppercase tracking-wider mb-0.5">Prazo de Escolha</div>
+            <div className="text-base font-black text-amber-400 flex items-center justify-center gap-1">
+              <span>⏳</span>
+              {horasRestantes <= 24 ? `${horasRestantes}h ${minutosRestantes}m restantes` : `${diasRestantes} dias restantes`}
+            </div>
+          </div>
+
+          <form onSubmit={handleConfirmarIdentidade} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                Selecione seu Nome na Lista <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={bombeiroIdSelecionado}
+                onChange={e => {
+                  setBombeiroIdSelecionado(e.target.value);
+                  setErroAutenticacao(null);
+                }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-red-500"
+                required
+              >
+                <option value="">-- Toque para selecionar seu nome --</option>
+                {bcsAtivos.map(bc => (
+                  <option key={bc.id} value={bc.id}>
+                    {bc.name} {bc.war_name ? `(${bc.war_name})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                Confirmação de CPF <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Digite seu CPF completo ou os 4 últimos dígitos"
+                value={cpfDigitado}
+                onChange={e => {
+                  setCpfDigitado(e.target.value);
+                  setErroAutenticacao(null);
+                }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-red-500 font-mono"
+                required
+              />
+              <span className="block text-[11px] text-slate-500 mt-1">
+                🔒 Confirmação segura para proteger suas disponibilidades.
+              </span>
+            </div>
+
+            {erroAutenticacao && (
+              <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl text-red-300 text-xs font-medium">
+                ⚠️ {erroAutenticacao}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={autenticando || !bombeiroIdSelecionado}
+              className={`w-full py-3 rounded-xl font-bold text-sm transition shadow-lg flex items-center justify-center gap-2 ${
+                bombeiroIdSelecionado && !autenticando
+                  ? 'bg-red-600 hover:bg-red-500 text-white cursor-pointer shadow-red-900/30'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+              }`}
+            >
+              {autenticando ? (
+                <>
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                  Validando Identidade...
+                </>
+              ) : (
+                <>
+                  <span>🔓</span> Acessar Minha Intenção
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="text-center text-[11px] text-slate-500 mt-6">
+            Corpo de Bombeiros Militar de Santa Catarina — Araquari
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // TELA 2 — PREENCHIMENTO DE DISPONIBILIDADE (APÓS IDENTIFICAÇÃO)
   return (
     <div className="h-screen overflow-y-auto bg-slate-950 text-slate-100 font-sans p-4 sm:p-6 md:p-8 selection:bg-red-500 selection:text-white">
       <div className="max-w-4xl mx-auto pb-12">
 
-        {/* CABEÇALHO DA PÁGINA */}
+        {/* CABEÇALHO */}
         <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 mb-6 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-red-600/5 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -242,94 +419,90 @@ export const BcIntencaoPublica: React.FC = () => {
               <strong className="text-white text-base">{bombeiro?.name}</strong>
               {bombeiro?.war_name && <span className="text-slate-400 text-xs ml-2">({bombeiro.war_name})</span>}
             </div>
-            <div>
-              <span className="text-slate-400 block text-xs">Status do Ciclo</span>
-              <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Aberto para Escolha ({horasRestantes <= 24 ? '1 dia' : '5 dias'})
-              </span>
+            <div className="flex sm:justify-end items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setAutenticado(false);
+                  setCpfDigitado('');
+                }}
+                className="text-xs text-slate-400 hover:text-white underline"
+              >
+                Trocar Bombeiro / Sair
+              </button>
             </div>
           </div>
         </div>
 
-        {/* ALERTA DE SUCESSO / ERRO */}
+        {/* FEEDBACK DE SUCESSO OU ERRO */}
         {sucessoMsg && (
-          <div className="bg-emerald-950/80 border border-emerald-800/80 text-emerald-200 rounded-xl p-4 mb-6 flex items-start gap-3 shadow-lg">
-            <span className="text-xl">✅</span>
-            <div>
-              <strong className="font-semibold block text-emerald-100">Intenções Registradas!</strong>
-              <p className="text-sm text-emerald-300">{sucessoMsg}</p>
-            </div>
+          <div className="bg-emerald-950 border border-emerald-800 text-emerald-200 p-4 rounded-xl mb-6 flex items-center justify-between text-sm shadow-lg">
+            <span>{sucessoMsg}</span>
+            <button onClick={() => setSucessoMsg(null)} className="text-emerald-400 hover:text-white text-xs font-bold">✕ Fechar</button>
           </div>
         )}
 
         {errorMsg && (
-          <div className="bg-red-950/80 border border-red-800/80 text-red-200 rounded-xl p-4 mb-6 flex items-start gap-3 shadow-lg">
-            <span className="text-xl">🚨</span>
-            <div>
-              <strong className="font-semibold block text-red-100">Atenção</strong>
-              <p className="text-sm text-red-300">{errorMsg}</p>
-            </div>
+          <div className="bg-red-950 border border-red-800 text-red-200 p-4 rounded-xl mb-6 flex items-center justify-between text-sm shadow-lg">
+            <span>⚠️ {errorMsg}</span>
+            <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-white text-xs font-bold">✕ Fechar</button>
           </div>
         )}
 
         {/* FORMULÁRIO DE INTENÇÕES */}
-        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-white">Dias e Horários Pretendidos</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Disponibilidade voluntária para o serviço comunitário</p>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>📅</span> Seus Dias e Horários Disponíveis
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Selecione apenas turnos exatos de 12 horas ou 24 horas.</p>
             </div>
+
             <button
               type="button"
               onClick={adicionarIntencao}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition border border-slate-700"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition border border-slate-700 shadow-sm"
             >
-              <span>➕</span> Adicionar Dia
+              <span>➕</span> Adicionar Outro Dia
             </button>
           </div>
 
-          <div className="space-y-4 mb-8">
+          {/* LISTA DE INTENÇÕES */}
+          <div className="space-y-4">
             {intencoes.map((item, index) => {
               const valHoras = bcEscalaService.validarHoras(item.horario_inicio, item.horario_fim);
 
               return (
-                <div
-                  key={index}
-                  className={`p-4 rounded-xl border transition-all ${
-                    valHoras.valido
-                      ? 'bg-slate-950/80 border-slate-800'
-                      : 'bg-red-950/30 border-red-800/80 shadow-[0_0_15px_rgba(220,38,38,0.15)]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px]">
+                <div key={index} className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 sm:p-5 relative transition-all">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-800/50 pb-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-slate-800 text-white text-[10px] flex items-center justify-center font-bold">
                         {index + 1}
                       </span>
-                      Intenção #{index + 1}
+                      Disponibilidade #{index + 1}
                     </span>
 
                     {intencoes.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removerIntencao(index)}
-                        className="text-xs text-slate-500 hover:text-red-400 transition flex items-center gap-1"
+                        className="text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1"
                       >
-                        🗑️ Remover
+                        <span>🗑️</span> Remover
                       </button>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* DIA DO MÊS */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* DIA */}
                     <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1">Dia de Serviço</label>
+                      <label className="block text-xs font-medium text-slate-300 mb-1">Dia do Plantão</label>
                       <input
                         type="date"
                         value={item.dia}
                         onChange={e => atualizarCampo(index, 'dia', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
                         required
                       />
                     </div>
@@ -377,7 +550,7 @@ export const BcIntencaoPublica: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* INDICADOR DE CARGA HORÁRIA E ERRO BLOCO 2 & 4 */}
+                  {/* INDICADOR DE CARGA HORÁRIA E ERRO */}
                   <div className="mt-3 pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400">Total de Horas Calculado:</span>
