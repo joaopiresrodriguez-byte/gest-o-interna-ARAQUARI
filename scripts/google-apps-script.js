@@ -35,6 +35,33 @@ function doPost(e) {
                 .setMimeType(ContentService.MimeType.JSON);
         }
 
+        // 1.1 AÇÃO: ENVIAR E-MAIL (GRATUITO VIA GOOGLE APPS SCRIPT)
+        if (action === 'sendEmail') {
+            var recipient = payload.recipient || payload.to;
+            var subject = payload.subject || 'Aviso de Escala - CBMSC Araquari';
+            var body = payload.body || '';
+            var htmlBody = payload.htmlBody;
+
+            if (!recipient) {
+                return ContentService
+                    .createTextOutput(JSON.stringify({ success: false, error: 'Destinatário (recipient) não fornecido.' }))
+                    .setMimeType(ContentService.MimeType.JSON);
+            }
+
+            var emailOptions = {
+                name: 'CBMSC Araquari - Gestão de Escalas',
+            };
+            if (htmlBody) {
+                emailOptions.htmlBody = htmlBody;
+            }
+
+            MailApp.sendEmail(recipient, subject, body, emailOptions);
+
+            return ContentService
+                .createTextOutput(JSON.stringify({ success: true, recipient: recipient }))
+                .setMimeType(ContentService.MimeType.JSON);
+        }
+
         // 2. AÇÃO: DELETAR LINHA NA PLANILHA
         if (action === 'delete') {
             var delSpreadsheetId = payload.spreadsheetId;

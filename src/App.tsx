@@ -19,6 +19,7 @@ const Login = lazy(() => import('./pages/Login'));
 const GestaoUsuarios = lazy(() => import('./pages/GestaoUsuarios'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const ExtratoPublico = lazy(() => import('./pages/ExtratoPublico'));
+const EscalaPublica = lazy(() => import('./pages/EscalaPublica').then(m => ({ default: m.EscalaPublica })));
 const BcIntencaoPublica = lazy(() => import('./pages/BcIntencaoPublica').then(m => ({ default: m.BcIntencaoPublica })));
 const SolicitarApoioPublico = lazy(() => import('./pages/SolicitarApoioPublico'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
@@ -411,6 +412,14 @@ const App: React.FC = () => {
               element={
                 <Suspense fallback={<LoadingFallback message="Carregando formulário de intenção..." />}>
                   <BcIntencaoPublica />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/escala-publica"
+              element={
+                <Suspense fallback={<LoadingFallback message="Carregando escala oficial..." />}>
+                  <EscalaPublica />
                 </Suspense>
               }
             />

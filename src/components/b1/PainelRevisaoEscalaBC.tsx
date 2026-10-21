@@ -238,11 +238,12 @@ export const PainelRevisaoEscalaBC: React.FC = () => {
 
   // Publicar Escala Definitiva
   const handlePublicarEscala = async () => {
-    if (!confirm('Deseja publicar esta escala? Os registros serão inseridos no módulo de escala oficial e os bombeiros serão notificados via WhatsApp.')) return;
+    if (!confirm('Deseja publicar esta escala? Os registros serão inseridos no módulo de escala oficial e os bombeiros comunitários escalados receberão aviso por e-mail com seus plantões e o link do calendário completo.')) return;
     try {
       setProcessando(true);
-      await bcEscalaService.publicarEscalaDefinitiva(mesRef);
-      setMensagemStatus({ tipo: 'sucesso', texto: 'Escala publicada com sucesso no módulo oficial B1!' });
+      const res = await bcEscalaService.publicarEscalaDefinitiva(mesRef);
+      const msgEmails = (res as any)?.emailsEnviados !== undefined ? ` (${(res as any).emailsEnviados} e-mails disparados)` : '';
+      setMensagemStatus({ tipo: 'sucesso', texto: `Escala publicada com sucesso no módulo oficial B1!${msgEmails}` });
       await carregarDados();
     } catch (err: any) {
       setMensagemStatus({ tipo: 'erro', texto: err.message });

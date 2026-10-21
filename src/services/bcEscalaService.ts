@@ -1265,14 +1265,125 @@ export const bcEscalaService = {
       }
     }
 
-    // 4. Disparar notificações via Edge Function ou Z-API
-    // Marcar como notificado em bc_selecionados
+    // 4. Agrupar selecionados por bombeiro e disparar notificação por e-mail com as datas e link do calendário
+    let emailsEnviados = 0;
+    try {
+      const webhookUrl = import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URL;
+      const baseUrl = window.location.origin;
+      const linkPublico = `${baseUrl}/escala-publica?mes=${mesRef}`;
+
+      // Buscar dados de contato dos bombeiros
+      const { data: personnelList } = await supabase
+        .from('personnel')
+        .select('id, name, war_name, email');
+
+      const militarMap = new Map<number, { name: string; war_name: string; email: string }>();
+      (personnelList || []).forEach(p => militarMap.set(p.id, p));
+
+      // Agrupar dias por militar
+      const diasPorMilitar: Record<number, string[]> = {};
+      selecionadosMes.forEach(s => {
+        const mId = Number(s.bombeiro_id);
+        if (!isNaN(mId)) {
+          if (!diasPorMilitar[mId]) diasPorMilitar[mId] = [];
+          if (!diasPorMilitar[mId].includes(s.dia)) {
+            diasPorMilitar[mId].push(s.dia);
+          }
+        }
+      });
+
+      // Formatar mês para cabeçalho
+      const [anoStr, mesStr] = mesRef.split('-');
+      const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+      const mesExtenso = `${nomesMeses[parseInt(mesStr, 10) - 1] || mesStr}/${anoStr}`;
+
+      for (const [mIdStr, dias] of Object.entries(diasPorMilitar)) {
+        const mId = Number(mIdStr);
+        const militar = militarMap.get(mId);
+
+        if (!militar || !militar.email) continue;
+
+        // Ordenar os dias em ordem cronológica
+        const diasOrdenados = dias.sort();
+        const diasFormatadosTexto = diasOrdenados.map(d => {
+          const partes = d.split('-');
+          return partes.length === 3 ? `${partes[2]}/${partes[1]}` : d;
+        });
+
+        const nomeExibicao = militar.war_name || militar.name.split(' ')[0];
+
+        const subject = `🚒 Escala Publicada - CBMSC Araquari (${mesExtenso})`;
+        const body = `Olá, ${nomeExibicao}!
+
+Você foi escalado para o serviço operacional do CBMSC Araquari no mês de ${mesExtenso}.
+
+📅 SEUS DIAS DE ESCALA:
+${diasFormatadosTexto.map(d => `• ${d}`).join('\n')}
+
+Para visualizar o calendário completo da escala oficial e consultar todas as equipes e horários, acesse:
+${linkPublico}
+
+Atenciosamente,
+Comando 3º/1ª/7ºBBM - Araquari/SC`;
+
+        const htmlBody = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            <div style="background-color: #991b1b; padding: 15px; border-radius: 8px; text-align: center; color: white;">
+              <h2 style="margin: 0; font-size: 20px;">CBMSC ARAQUARI</h2>
+              <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">3º/1ª/7º BBM - Notificação de Escala Operacional</p>
+            </div>
+            <div style="padding: 20px 10px; color: #1e293b;">
+              <p style="font-size: 16px;">Olá, <strong>${nomeExibicao}</strong>!</p>
+              <p style="font-size: 14px; line-height: 1.5;">A escala oficial para o mês de <strong>${mesExtenso}</strong> foi publicada e você foi escalado para os seguintes plantões:</p>
+              <div style="background-color: #f8fafc; border-left: 4px solid #dc2626; padding: 12px 16px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0 0 8px 0; font-weight: bold; font-size: 14px; color: #991b1b;">📅 Seus Dias de Serviço:</p>
+                <ul style="margin: 0; padding-left: 20px; font-size: 15px; font-weight: 600; color: #334155;">
+                  ${diasFormatadosTexto.map(d => `<li style="margin-bottom: 4px;">${d}</li>`).join('')}
+                </ul>
+              </div>
+              <p style="font-size: 14px; line-height: 1.5;">Você pode consultar o calendário completo de serviço e acompanhar todas as guarnições pelo link abaixo:</p>
+              <div style="text-align: center; margin: 25px 0;">
+                <a href="${linkPublico}" style="background-color: #dc2626; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
+                  📅 Ver Calendário da Escala Completa
+                </a>
+              </div>
+              <p style="font-size: 12px; color: #64748b; margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                Link direto: <a href="${linkPublico}" style="color: #dc2626;">${linkPublico}</a>
+              </p>
+            </div>
+          </div>
+        `;
+
+        if (webhookUrl) {
+          try {
+            await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                action: 'sendEmail',
+                recipient: militar.email,
+                subject,
+                body,
+                htmlBody,
+              }),
+            });
+            emailsEnviados++;
+          } catch (mailErr) {
+            console.warn(`Falha ao disparar webhook para ${militar.email}:`, mailErr);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao processar notificações por e-mail:', e);
+    }
+
+    // 5. Marcar como notificado em bc_selecionados
     const idsSel = selecionadosMes.map(s => s.id);
     await supabase
       .from('bc_selecionados')
       .update({ notificado: true })
       .in('id', idsSel);
 
-    return { publicadas: selecionadosMes.length };
+    return { publicadas: selecionadosMes.length, emailsEnviados };
   }
 };
