@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Personnel, Escala, Vacation } from '../../services/types';
 import { ScaleAdjustmentService } from '../../services/scaleAdjustmentService';
 import { supabase } from '../../services/supabase';
+import { PersonnelSelect } from '../shared/PersonnelSelect';
 
 interface SecaoAlteracoesEscalaProps {
   personnelList: Personnel[];
@@ -327,16 +328,13 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-stone-500">Militar A</label>
-              <select
+              <PersonnelSelect
+                personnelList={personnelList}
                 value={militarAId}
-                onChange={e => setMilitarAId(Number(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown"
-              >
-                <option value="">Selecione Militar A...</option>
-                {personnelList.filter(p => p.status === 'Ativo').map(p => (
-                  <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>
-                ))}
-              </select>
+                onChange={val => setMilitarAId(val ? Number(val) : '')}
+                placeholder="Selecione Militar A..."
+                filterFn={p => p.status === 'Ativo'}
+              />
             </div>
 
             <div className="space-y-1">
@@ -351,16 +349,13 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
 
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-stone-500">Militar B</label>
-              <select
+              <PersonnelSelect
+                personnelList={personnelList}
                 value={militarBId}
-                onChange={e => setMilitarBId(Number(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown"
-              >
-                <option value="">Selecione Militar B...</option>
-                {personnelList.filter(p => p.status === 'Ativo' && p.id !== militarAId).map(p => (
-                  <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>
-                ))}
-              </select>
+                onChange={val => setMilitarBId(val ? Number(val) : '')}
+                placeholder="Selecione Militar B..."
+                filterFn={p => p.status === 'Ativo' && p.id !== militarAId}
+              />
             </div>
 
             <div className="space-y-1">
@@ -409,16 +404,13 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-stone-500">Militar</label>
-              <select
+              <PersonnelSelect
+                personnelList={personnelList}
                 value={indMilitarId}
-                onChange={e => setIndMilitarId(Number(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown"
-              >
-                <option value="">Selecione o Militar...</option>
-                {personnelList.filter(p => p.status === 'Ativo').map(p => (
-                  <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>
-                ))}
-              </select>
+                onChange={val => setIndMilitarId(val ? Number(val) : '')}
+                placeholder="Selecione o Militar..."
+                filterFn={p => p.status === 'Ativo'}
+              />
             </div>
 
             <div className="space-y-1">
@@ -443,16 +435,14 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
 
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-stone-500">Militar Substituído (Opcional)</label>
-              <select
+              <PersonnelSelect
+                personnelList={personnelList}
                 value={indSubstituidoId}
-                onChange={e => setIndSubstituidoId(Number(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown"
-              >
-                <option value="">Ninguém (Apenas entra no dia)</option>
-                {personnelList.filter(p => p.status === 'Ativo' && p.id !== indMilitarId).map(p => (
-                  <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>
-                ))}
-              </select>
+                onChange={val => setIndSubstituidoId(val ? Number(val) : '')}
+                placeholder="Ninguém (Apenas entra no dia)"
+                emptyLabel="Ninguém (Apenas entra no dia)"
+                filterFn={p => p.status === 'Ativo' && p.id !== indMilitarId}
+              />
             </div>
           </div>
 
@@ -491,16 +481,13 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-stone-500">Militar</label>
-              <select
+              <PersonnelSelect
+                personnelList={personnelList}
                 value={transfMilitarId}
-                onChange={e => setTransfMilitarId(Number(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold text-rustic-brown"
-              >
-                <option value="">Selecione o Militar...</option>
-                {personnelList.filter(p => p.status === 'Ativo').map(p => (
-                  <option key={p.id} value={p.id}>{p.graduation || ''} {p.war_name || p.name}</option>
-                ))}
-              </select>
+                onChange={val => setTransfMilitarId(val ? Number(val) : '')}
+                placeholder="Selecione o Militar..."
+                filterFn={p => p.status === 'Ativo'}
+              />
             </div>
 
             <div className="space-y-1">
@@ -574,18 +561,14 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-stone-500">Militar a ser Excluído</label>
-              <select
+              <PersonnelSelect
+                personnelList={personnelList}
                 value={desligMilitarId}
-                onChange={e => setDesligMilitarId(e.target.value)}
-                className="w-full h-11 px-3 rounded-lg border border-red-300 bg-white text-xs font-bold text-rustic-brown focus:ring-2 focus:ring-red-400 focus:outline-none"
-              >
-                <option value="">Selecione o Militar...</option>
-                {personnelList.filter(p => p.status === 'Ativo' || p.status === 'Cedido').map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.graduation || ''} {p.war_name || p.name} ({p.status})
-                  </option>
-                ))}
-              </select>
+                onChange={val => setDesligMilitarId(val ? String(val) : '')}
+                placeholder="Selecione o Militar..."
+                showStatusBadge={true}
+                filterFn={p => p.status === 'Ativo' || p.status === 'Cedido'}
+              />
             </div>
 
             <div className="space-y-1">

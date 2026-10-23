@@ -28,6 +28,7 @@ import ModalCadastroMilitar, { BC_RANKS_CONFIG } from '../components/b1/ModalCad
 import ModalEdicaoFerias from '../components/b1/ModalEdicaoFerias';
 import { SecaoAlteracoesEscala } from '../components/b1/SecaoAlteracoesEscala';
 import { PainelRevisaoEscalaBC } from '../components/b1/PainelRevisaoEscalaBC';
+import { PersonnelSelect } from '../components/shared/PersonnelSelect';
 
 type Tab = 'EFETIVO' | 'CADASTRO' | 'ESCALA' | 'BC_ESCALA' | 'FERIAS' | 'DISCIPLINA' | 'PERFIL' | 'EXTRATOS' | 'DOCUMENTOS' | 'CURSOS' | 'DASHBOARD';
 
@@ -1528,10 +1529,12 @@ const PessoalB1: React.FC = () => {
                     <div className="space-y-4">
                       <div>
                         <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Militar Vinculado</label>
-                        <select value={docPersonId} onChange={e => setDocPersonId(Number(e.target.value))} className="w-full h-10 px-3 rounded-lg border border-rustic-border text-xs bg-white">
-                          <option value="">Selecionar militar...</option>
-                          {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}
-                        </select>
+                        <PersonnelSelect
+                          personnelList={personnelList}
+                          value={docPersonId}
+                          onChange={val => setDocPersonId(val ? Number(val) : '')}
+                          placeholder="Selecionar militar..."
+                        />
                       </div>
 
                       <div>
@@ -1746,10 +1749,13 @@ const PessoalB1: React.FC = () => {
                         <div className="space-y-4">
                           <div>
                             <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Militar</label>
-                            <select value={vacPersonnelId} onChange={e => setVacPersonnelId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border border-rustic-border text-sm bg-white">
-                              <option value="">Selecionar militar...</option>
-                              {personnelList.filter(p => !p.bc_graduacao_ordem).map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}
-                            </select>
+                            <PersonnelSelect
+                              personnelList={personnelList}
+                              value={vacPersonnelId}
+                              onChange={val => setVacPersonnelId(val ? Number(val) : '')}
+                              placeholder="Selecionar militar..."
+                              filterFn={p => !p.bc_graduacao_ordem}
+                            />
                           </div>
                           <div>
                             <label className="text-[10px] uppercase font-black text-gray-400 block mb-1">Tipo de Afastamento</label>

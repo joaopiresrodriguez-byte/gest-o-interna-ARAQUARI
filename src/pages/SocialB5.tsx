@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { SupabaseService, SocialPost, Personnel, Occurrence, PressContact, PortaVoz } from '../services/SupabaseService';
 import { GroqService } from '../services/GroqService';
 import { toast } from 'sonner';
+import { PersonnelSelect } from '../components/shared/PersonnelSelect';
 
 type TabKey = 'DIVULGAÇÃO' | 'OCORRÊNCIAS' | 'IMPRENSA' | 'ANIVERSARIANTES';
 
@@ -847,12 +848,15 @@ Mantenha o padrão oficial com emojis, formatação em negrito para WhatsApp, to
                   <div className="p-5 space-y-4">
                     {isEditor && (
                       <div className="bg-stone-50 border border-stone-200 p-4 rounded-xl flex gap-2 items-center">
-                        <select value={selectedPersonnelId} onChange={e => setSelectedPersonnelId(e.target.value === '' ? '' : Number(e.target.value))} className="flex-1 h-10 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold">
-                          <option value="">Selecione o Militar (Efetivo B1)...</option>
-                          {personnel.map(p => (
-                            <option key={p.id} value={p.id}>{p.rank} {p.war_name || p.name}</option>
-                          ))}
-                        </select>
+                        <div className="flex-1">
+                          <PersonnelSelect
+                            personnelList={personnel}
+                            value={selectedPersonnelId}
+                            onChange={val => setSelectedPersonnelId(val === '' ? '' : Number(val))}
+                            placeholder="Selecione o Militar (Efetivo B1)..."
+                            size="sm"
+                          />
+                        </div>
                         <button onClick={handleAddPortaVoz} disabled={loading} className="px-4 py-2.5 bg-stone-800 text-white rounded-lg text-xs font-bold hover:bg-stone-900 transition-colors shadow-xs">
                           Cadastrar
                         </button>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PersonnelService } from '../../services/personnelService';
 import { EpiDelivery, Personnel } from '../../services/types';
 import { toast } from 'sonner';
+import { PersonnelSelect } from '../shared/PersonnelSelect';
 
 const ITEM_TYPES = ['Uniforme', 'EPI', 'Equipamento Individual', 'Outros'] as const;
 const CONDITIONS = ['Novo', 'Bom', 'Regular'] as const;
@@ -126,11 +127,13 @@ export default function EpiB1({ personnelList }: Props) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-xs text-secondary-text">Militar *</label>
-                            <select value={form.personnel_id || ''} onChange={e => setForm(f => ({ ...f, personnel_id: Number(e.target.value) }))}
-                                className="w-full bg-secondary border border-rustic-border rounded-lg px-3 py-2 text-sm text-primary-text focus:outline-none focus:border-cbm-red">
-                                <option value="">Selecione...</option>
-                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.rank} {p.name}</option>)}
-                            </select>
+                            <PersonnelSelect
+                                personnelList={personnelList}
+                                value={form.personnel_id || ''}
+                                onChange={val => setForm(f => ({ ...f, personnel_id: Number(val) }))}
+                                placeholder="Selecione o militar..."
+                                size="sm"
+                            />
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs text-secondary-text">Tipo de Item *</label>
@@ -193,12 +196,17 @@ export default function EpiB1({ personnelList }: Props) {
             )}
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-2">
-                <select value={filterPersonnel} onChange={e => setFilterPersonnel(e.target.value)}
-                    className="bg-primary border border-rustic-border rounded-lg px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-cbm-red">
-                    <option value="">Todos os militares</option>
-                    {personnelList.map(p => <option key={p.id} value={p.id}>{p.rank} {p.name}</option>)}
-                </select>
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="w-56">
+                    <PersonnelSelect
+                        personnelList={personnelList}
+                        value={filterPersonnel}
+                        onChange={val => setFilterPersonnel(String(val))}
+                        placeholder="Todos os militares"
+                        emptyLabel="Todos os militares"
+                        size="sm"
+                    />
+                </div>
                 <select value={filterType} onChange={e => setFilterType(e.target.value)}
                     className="bg-primary border border-rustic-border rounded-lg px-3 py-1.5 text-sm text-primary-text focus:outline-none focus:border-cbm-red">
                     <option value="">Todos os tipos</option>

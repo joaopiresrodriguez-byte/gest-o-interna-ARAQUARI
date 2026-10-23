@@ -3,6 +3,7 @@ import { DailyMission, Personnel } from '../../services/types';
 import { SupabaseService } from '../../services/SupabaseService';
 import { getMilitaresRegularesOrdenados } from '../../utils/personnelUtils';
 import { toast } from 'sonner';
+import { PersonnelSelect } from './PersonnelSelect';
 
 export interface DailyMissionModalProps {
   isOpen: boolean;
@@ -382,21 +383,15 @@ export const DailyMissionModal: React.FC<DailyMissionModalProps> = ({
                 Responsável pela Missão
               </label>
               {personnelList.length > 0 && (
-                <select
-                  value={responsibleId}
-                  onChange={e => handleSelectResponsible(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-red-500 mb-2"
-                >
-                  <option value="">Selecione da lista de militares...</option>
-                  {personnelList.map(p => {
-                    const label = `${p.rank ? p.rank + ' ' : ''}${p.war_name || p.name}`;
-                    return (
-                      <option key={p.id} value={p.id}>
-                        {label}
-                      </option>
-                    );
-                  })}
-                </select>
+                <div className="mb-2">
+                  <PersonnelSelect
+                    personnelList={personnelList}
+                    value={responsibleId}
+                    onChange={val => handleSelectResponsible(String(val))}
+                    placeholder="Selecione da lista de militares..."
+                    size="sm"
+                  />
+                </div>
               )}
               <input
                 type="text"

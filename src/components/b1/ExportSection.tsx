@@ -3,6 +3,7 @@ import { Personnel, Vacation, SigrhExport, B1Course, RankHistory, DisciplinaryRe
 import { formatLocalDate } from '../../utils/dateUtils';
 import { toast } from 'sonner';
 import { supabase } from '../../services/supabase';
+import { PersonnelSelect } from '../shared/PersonnelSelect';
 
 import { ExtratoMensalB1 } from './ExtratoMensalB1';
 
@@ -981,18 +982,13 @@ const ExportSection: React.FC<Props> = ({
                                     <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">
                                         Selecione o Militar para Ficha:
                                     </label>
-                                    <select
+                                    <PersonnelSelect
+                                        personnelList={personnelList}
                                         value={selectedPersonnelId}
-                                        onChange={e => setSelectedPersonnelId(e.target.value)}
-                                        className="w-full h-10 px-3 rounded-lg border border-rustic-border bg-white text-xs font-bold"
-                                    >
-                                        <option value="">Selecione um militar...</option>
-                                        {personnelList.map(p => (
-                                            <option key={p.id} value={p.id}>
-                                                {p.graduation || p.rank || ''} {p.name} ({p.matricula || 'Sem Matrícula'})
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={val => setSelectedPersonnelId(String(val))}
+                                        placeholder="Selecione um militar..."
+                                        size="sm"
+                                    />
                                 </div>
                             </div>
 
@@ -1030,64 +1026,85 @@ const ExportSection: React.FC<Props> = ({
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Chefe Socorro:</label>
-                                            <select value={chefeSocorroId} onChange={e => setChefeSocorroId(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
-                                                <option value="">Selecione...</option>
-                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
-                                            </select>
+                                            <PersonnelSelect
+                                                personnelList={personnelList}
+                                                value={chefeSocorroId}
+                                                onChange={val => setChefeSocorroId(String(val))}
+                                                placeholder="Selecione..."
+                                                size="sm"
+                                            />
                                         </div>
 
                                         <div>
                                             <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Motorista ABTR:</label>
-                                            <select value={abtrMotoristaId} onChange={e => setAbtrMotoristaId(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
-                                                <option value="">Selecione...</option>
-                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
-                                            </select>
+                                            <PersonnelSelect
+                                                personnelList={personnelList}
+                                                value={abtrMotoristaId}
+                                                onChange={val => setAbtrMotoristaId(String(val))}
+                                                placeholder="Selecione..."
+                                                size="sm"
+                                            />
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Motorista ASU:</label>
-                                            <select value={asuMotoristaId} onChange={e => setAsuMotoristaId(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
-                                                <option value="">Selecione...</option>
-                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
-                                            </select>
+                                             <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Motorista ASU:</label>
+                                             <PersonnelSelect
+                                                 personnelList={personnelList}
+                                                 value={asuMotoristaId}
+                                                 onChange={val => setAsuMotoristaId(String(val))}
+                                                 placeholder="Selecione..."
+                                                 size="sm"
+                                             />
                                         </div>
 
                                         <div>
-                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Socorrista 1 ASU:</label>
-                                            <select value={asuSocorrista1Id} onChange={e => setAsuSocorrista1Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
-                                                <option value="">Selecione...</option>
-                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Resgatista 1 ABTR:</label>
-                                            <select value={abtrResgatista1Id} onChange={e => setAbtrResgatista1Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
-                                                <option value="">Selecione...</option>
-                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
-                                            </select>
-                                        </div>
-
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Resgatista 2 ABTR:</label>
-                                            <select value={abtrResgatista2Id} onChange={e => setAbtrResgatista2Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
-                                                <option value="">Selecione...</option>
-                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
-                                            </select>
+                                             <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Socorrista 1 ASU:</label>
+                                             <PersonnelSelect
+                                                 personnelList={personnelList}
+                                                 value={asuSocorrista1Id}
+                                                 onChange={val => setAsuSocorrista1Id(String(val))}
+                                                 placeholder="Selecione..."
+                                                 size="sm"
+                                             />
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Socorrista 2 ASU:</label>
-                                            <select value={asuSocorrista2Id} onChange={e => setAsuSocorrista2Id(e.target.value)} className="w-full h-8 px-2 rounded border bg-white text-[10px]">
-                                                <option value="">Selecione...</option>
-                                                {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation} {p.war_name || p.name}</option>)}
-                                            </select>
+                                             <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Resgatista 1 ABTR:</label>
+                                             <PersonnelSelect
+                                                 personnelList={personnelList}
+                                                 value={abtrResgatista1Id}
+                                                 onChange={val => setAbtrResgatista1Id(String(val))}
+                                                 placeholder="Selecione..."
+                                                 size="sm"
+                                             />
+                                        </div>
+
+                                        <div>
+                                             <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Resgatista 2 ABTR:</label>
+                                             <PersonnelSelect
+                                                 personnelList={personnelList}
+                                                 value={abtrResgatista2Id}
+                                                 onChange={val => setAbtrResgatista2Id(String(val))}
+                                                 placeholder="Selecione..."
+                                                 size="sm"
+                                             />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                             <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Socorrista 2 ASU:</label>
+                                             <PersonnelSelect
+                                                 personnelList={personnelList}
+                                                 value={asuSocorrista2Id}
+                                                 onChange={val => setAsuSocorrista2Id(String(val))}
+                                                 placeholder="Selecione..."
+                                                 size="sm"
+                                             />
                                         </div>
                                     </div>
 

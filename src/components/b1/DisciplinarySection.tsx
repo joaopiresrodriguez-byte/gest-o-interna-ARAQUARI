@@ -1,6 +1,7 @@
 import React from 'react';
 import { Personnel, DisciplinaryRecord } from '../../services/types';
 import { ActionButton } from '../ui/Icons';
+import { PersonnelSelect } from '../shared/PersonnelSelect';
 
 interface Props {
     records: DisciplinaryRecord[];
@@ -58,10 +59,12 @@ const DisciplinarySection: React.FC<Props> = ({ records, personnelList, onAdd, o
                         <span className="material-symbols-outlined text-primary">description</span> Novo Registro
                     </h3>
                     <div className="space-y-4">
-                        <select value={personId} onChange={e => setPersonId(Number(e.target.value))} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm">
-                            <option value="">Selecionar Militar...</option>
-                            {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation ? `${p.graduation} ` : ''}{p.name}</option>)}
-                        </select>
+                        <PersonnelSelect
+                            personnelList={personnelList}
+                            value={personId}
+                            onChange={val => setPersonId(val ? Number(val) : '')}
+                            placeholder="Selecionar Militar..."
+                        />
                         <select value={recordType} onChange={e => setRecordType(e.target.value)} className="w-full h-11 px-4 rounded-lg border border-rustic-border bg-stone-50 text-sm">
                             {Object.entries(recordTypeLabels).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                         </select>
@@ -76,15 +79,21 @@ const DisciplinarySection: React.FC<Props> = ({ records, personnelList, onAdd, o
 
             <div className={isEditor ? 'xl:col-span-2' : 'xl:col-span-3'}>
                 <div className="bg-white rounded-2xl border border-rustic-border shadow-sm p-6">
-                    <div className="flex flex-wrap gap-3 mb-6">
+                    <div className="flex flex-wrap items-center gap-3 mb-6">
                         <select value={filterType} onChange={e => setFilterType(e.target.value)} className="h-9 px-3 rounded-lg border text-xs font-bold">
                             <option value="">Todos os tipos</option>
                             {Object.entries(recordTypeLabels).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                         </select>
-                        <select value={filterPerson} onChange={e => setFilterPerson(e.target.value ? Number(e.target.value) : '')} className="h-9 px-3 rounded-lg border text-xs font-bold">
-                            <option value="">Todos os militares</option>
-                            {personnelList.map(p => <option key={p.id} value={p.id}>{p.war_name || p.name}</option>)}
-                        </select>
+                        <div className="w-56">
+                            <PersonnelSelect
+                                personnelList={personnelList}
+                                value={filterPerson}
+                                onChange={val => setFilterPerson(val ? Number(val) : '')}
+                                placeholder="Todos os militares"
+                                emptyLabel="Todos os militares"
+                                size="sm"
+                            />
+                        </div>
                     </div>
                     <div className="space-y-3">
                         {filtered.length === 0 && <p className="text-center py-12 text-gray-300 italic">Nenhum registro encontrado.</p>}

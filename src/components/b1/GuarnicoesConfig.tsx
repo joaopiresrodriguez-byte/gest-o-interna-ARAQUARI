@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { ModalEdicao } from '../shared/ModalEdicao';
 import { ActionButton } from '../ui/Icons';
+import { PersonnelSelect } from '../shared/PersonnelSelect';
+import { Personnel } from '../../services/types';
 
 
 interface Militar {
@@ -258,22 +260,24 @@ export function GuarnicoesConfig({ onDataChange }: { onDataChange?: (totalGuarni
             </div>
 
             <div className="p-2 border-t bg-gray-50">
-              <select
-                className="w-full text-xs border rounded px-2 py-1.5 bg-white"
-                defaultValue=""
-                onChange={e => {
-                  if (e.target.value) {
-                    adicionarMilitar(guarnicao.id, Number(e.target.value));
-                    e.target.value = '';
+              <PersonnelSelect
+                personnelList={getMilitaresLivres().map(m => ({
+                  id: m.id,
+                  name: m.nome_completo,
+                  war_name: m.nome_guerra,
+                  rank: m.posto_graduacao,
+                  graduation: m.posto_graduacao,
+                } as any))}
+                value=""
+                onChange={val => {
+                  if (val) {
+                    adicionarMilitar(guarnicao.id, Number(val));
                   }
-                }}>
-                <option value="">+ Adicionar militar...</option>
-                {getMilitaresLivres().map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.posto_graduacao} — {m.nome_guerra || m.nome_completo}
-                  </option>
-                ))}
-              </select>
+                }}
+                placeholder="+ Adicionar militar..."
+                size="sm"
+                allowEmpty={false}
+              />
             </div>
           </div>
         ))}

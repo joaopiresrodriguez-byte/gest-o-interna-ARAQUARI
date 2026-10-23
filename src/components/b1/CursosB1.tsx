@@ -4,6 +4,7 @@ import { B1Course, Personnel } from '../../services/types';
 import { toast } from 'sonner';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { ActionButton } from '../ui/Icons';
+import { PersonnelSelect } from '../shared/PersonnelSelect';
 
 const CATEGORIES = ['Operacional', 'Administrativo', 'Saúde', 'Liderança', 'Especialização Técnica', 'Outros'] as const;
 
@@ -257,14 +258,16 @@ export default function CursosB1({ personnelList }: Props) {
                         className="w-full pl-8 bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 placeholder-stone-400 focus:outline-none focus:border-red-600"
                     />
                 </div>
-                <select
-                    value={filterPersonnel}
-                    onChange={e => setFilterPersonnel(e.target.value)}
-                    className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm text-stone-700 focus:outline-none focus:border-red-600"
-                >
-                    <option value="">Todos os militares</option>
-                    {personnelList.map(p => <option key={p.id} value={p.id}>{p.graduation || p.rank || ''} {p.name}</option>)}
-                </select>
+                <div className="w-56">
+                    <PersonnelSelect
+                        personnelList={personnelList}
+                        value={filterPersonnel}
+                        onChange={val => setFilterPersonnel(String(val))}
+                        placeholder="Todos os militares"
+                        emptyLabel="Todos os militares"
+                        size="sm"
+                    />
+                </div>
                 <select
                     value={filterCategory}
                     onChange={e => setFilterCategory(e.target.value)}
