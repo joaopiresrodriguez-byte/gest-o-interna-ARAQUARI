@@ -713,6 +713,14 @@ const PessoalB1: React.FC = () => {
                   manualOverride = true;
                   overrideReason = alt.detalhes || 'Troca Individual (Entrada)';
                 }
+              } else if (alt.tipo_alteracao === 'desligamento_transferencia') {
+                if (alt.data_vigencia && dStr >= alt.data_vigencia && alt.militar_a_id) {
+                  if (diaMilitars.includes(Number(alt.militar_a_id))) {
+                    diaMilitars = diaMilitars.filter(id => id !== Number(alt.militar_a_id));
+                    manualOverride = true;
+                    overrideReason = alt.detalhes || `Desligamento a partir de ${alt.data_vigencia}`;
+                  }
+                }
               }
             });
           }
@@ -1690,7 +1698,7 @@ const PessoalB1: React.FC = () => {
               {tab === 'FERIAS' && (
                 <div className="space-y-6">
                   {/* Sub-tab navigation */}
-                  <div className="flex items-center justify-between border-b border-rustic-border pb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rustic-border pb-4">
                     <div className="flex gap-2">
                       <button
                         onClick={() => setVacationSubTab('lancamentos')}
@@ -1715,6 +1723,20 @@ const PessoalB1: React.FC = () => {
                         Painel de Saldos Anuais
                       </button>
                     </div>
+
+                    <button
+                      onClick={() => {
+                        setTab('ESCALA');
+                        setTimeout(() => {
+                          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                        }, 100);
+                      }}
+                      className="px-4 py-2 text-xs font-black rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-all flex items-center gap-2 shadow-xs"
+                      title="Excluir militar definitivamente da escala e cancelar férias futuras após data de transferência"
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-red-600">person_remove</span>
+                      Excluir Militar por Transferência
+                    </button>
                   </div>
 
                   {vacationSubTab === 'lancamentos' && (

@@ -310,6 +310,108 @@ export const ScaleAdjustmentService = {
     },
 
     /**
+     * MODALIDADE 4 — EXCLUSÃO DEFINITIVA / DESLIGAMENTO DA ESCALA
+     * Remove o militar da escala e da sua guarnição a partir de uma data específica (ex: transferência para outra unidade),
+     * preservando 100% dos serviços anteriores e cancelando apenas férias/afastamentos futuros após a data de corte.
+     */
+    registrarDesligamentoEscala: async (params: {
+        militarId: number;
+        dataCorte: string;
+        motivo: string;
+        novoStatus?: 'Cedido' | 'Afastado' | 'Licença' | 'Ativo';
+        usuario: string;
+    }): Promise<{ totalEscalasRemovidas: number; totalFeriasCanceladas: number }> => {
+        const { militarId, dataCorte, motivo, novoStatus = 'Cedido', usuario } = params;
+
+        // 1. Remover militar da tabela guarnicao_membros (para não entrar mais em publicações de escalas)
+        await supabase.from('guarnicao_membros').delete().eq('militar_id', militarId);
+
+        // 2. Atualizar status do militar na tabela personnel
+        await supabase.from('personnel').update({
+            status: novoStatus,
+        }).eq('id', militarId);
+
+        // 3. Remover militar de todas as escalas publicadas a partir da data de corte (>= dataCorte)
+        const { data: escalasFuturas } = await supabase
+            .from('escalas')
+            .select('*')
+            .gte('data', dataCorte);
+
+        let totalEscalasRemovidas = 0;
+        if (escalasFuturas && escalasFuturas.length > 0) {
+            for (const esc of escalasFuturas) {
+                const mils: number[] = Array.isArray(esc.militares) ? esc.militares.map(Number) : [];
+                if (mils.includes(militarId)) {
+                    const novosMils = mils.filter(id => id !== militarId);
+                    await supabase.from('escalas').update({
+                        militares: novosMils,
+                        manual_override: true,
+                        override_reason: `Desligamento/Transferência a partir de ${dataCorte}: ${motivo}`,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', esc.id);
+                    totalEscalasRemovidas++;
+                }
+            }
+        }
+
+        // 4. Cancelar períodos de férias/afastamentos futuros que começam ou terminam a partir da data de corte
+        // Mantém os registros no banco para histórico, marcando status = 'cancelado' e anotando o motivo da transferência
+        const { data: feriasFuturas } = await supabase
+            .from('personnel_vacations')
+            .select('*')
+            .eq('personnel_id', militarId)
+            .gte('end_date', dataCorte);
+
+        let totalFeriasCanceladas = 0;
+        if (feriasFuturas && feriasFuturas.length > 0) {
+            for (const f of feriasFuturas) {
+                // Se o período começou estritamente após a data de corte, cancela
+                if (f.start_date >= dataCorte) {
+                    await supabase.from('personnel_vacations').update({
+                        status: 'cancelado',
+                        notes: (f.notes ? `${f.notes} | ` : '') + `Cancelado por transferência/desligamento em ${dataCorte}: ${motivo}`
+                    }).eq('id', f.id);
+                    totalFeriasCanceladas++;
+                } else if (f.start_date < dataCorte && f.end_date >= dataCorte) {
+                    // Se o período iniciou antes e terminaria depois, encurta o fim para a véspera do desligamento
+                    const vespera = new Date(dataCorte + 'T00:00:00');
+                    vespera.setDate(vespera.getDate() - 1);
+                    const novaDataFim = vespera.toISOString().split('T')[0];
+                    await supabase.from('personnel_vacations').update({
+                        end_date: novaDataFim,
+                        notes: (f.notes ? `${f.notes} | ` : '') + `Encurtado até ${novaDataFim} devido a transferência em ${dataCorte}`
+                    }).eq('id', f.id);
+                    totalFeriasCanceladas++;
+                }
+            }
+        }
+
+        // 5. Registrar no Histórico de Alterações Auditável
+        const record = {
+            tipo_alteracao: 'desligamento_transferencia',
+            militar_a_id: militarId,
+            data_vigencia: dataCorte,
+            detalhes: `Desligamento definitivo da escala a partir de ${dataCorte}. Motivo: ${motivo}. Novo status: ${novoStatus}.`,
+            criado_por: usuario,
+            criado_em: new Date().toISOString()
+        };
+
+        const { error } = await supabase.from('escala_alteracoes').insert(record);
+        if (error) {
+            await ScaleAdjustmentService.logAudit({
+                action_type: 'Desligamento/Transferência',
+                scale_date: dataCorte,
+                personnel_id: militarId,
+                personnel_name: `Militar #${militarId}`,
+                reason: record.detalhes,
+                performed_by: usuario
+            });
+        }
+
+        return { totalEscalasRemovidas, totalFeriasCanceladas };
+    },
+
+    /**
      * Busca o histórico unificado de alterações da escala
      */
     getHistoricoAlteracoes: async (): Promise<any[]> => {

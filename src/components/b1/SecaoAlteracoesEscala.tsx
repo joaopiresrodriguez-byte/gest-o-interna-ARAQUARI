@@ -17,7 +17,7 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
   vacations,
   onReload,
 }) => {
-  const [modalidade, setModalidade] = useState<'mútua' | 'individual' | 'transferencia'>('mútua');
+  const [modalidade, setModalidade] = useState<'mútua' | 'individual' | 'transferencia' | 'desligamento'>('mútua');
   const [loading, setLoading] = useState(false);
   const [historico, setHistorico] = useState<any[]>([]);
   const [guarnicoesList, setGuarnicoesList] = useState<any[]>([]);
@@ -34,11 +34,17 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
   const [indDiaEntrada, setIndDiaEntrada] = useState('');
   const [indSubstituidoId, setIndSubstituidoId] = useState<number | ''>('');
 
-  // Form State — Modalidade 3 (Transferência)
+  // Form State — Modalidade 3 (Transferência de Guarnição)
   const [transfMilitarId, setTransfMilitarId] = useState<number | ''>('');
   const [transfGuarnicaoDestino, setTransfGuarnicaoDestino] = useState('');
   const [transfDataVigencia, setTransfDataVigencia] = useState('');
   const [motivo, setMotivo] = useState('');
+
+  // Form State — Modalidade 4 (Exclusão Definitiva / Desligamento / Transferência de Unidade)
+  const [desligMilitarId, setDesligMilitarId] = useState<number | ''>('');
+  const [desligDataCorte, setDesligDataCorte] = useState('');
+  const [desligStatus, setDesligStatus] = useState<'Cedido' | 'Afastado' | 'Licença' | 'Ativo'>('Cedido');
+  const [desligMotivo, setDesligMotivo] = useState('');
 
   const loadData = async () => {
     try {
@@ -204,6 +210,62 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
     }
   };
 
+  // 4. Executar Exclusão Definitiva / Desligamento / Transferência de Unidade
+  const handleDesligamentoEscala = async () => {
+    if (!desligMilitarId || !desligDataCorte || !desligMotivo.trim()) {
+      toast.error('Selecione o militar, a data de corte e informe o motivo da transferência/desligamento.');
+      return;
+    }
+
+    const mil = personnelList.find(p => p.id === Number(desligMilitarId));
+
+    // Contar quantas escalas futuras o militar possui a partir da dataCorte
+    const escalasAfetadas = escalas.filter(
+      e => e.data >= desligDataCorte && Array.isArray(e.militares) && e.militares.includes(Number(desligMilitarId))
+    );
+
+    const confirma = confirm(
+      `⚠️ CONFIRMAÇÃO DE EXCLUSÃO DEFINITIVA DA ESCALA:\n\n` +
+      `• Militar: ${mil?.graduation || ''} ${mil?.war_name || mil?.name}\n` +
+      `• Data de Corte: a partir de ${desligDataCorte}\n` +
+      `• Novo Status no Efetivo: ${desligStatus}\n` +
+      `• Motivo: ${desligMotivo}\n\n` +
+      `IMPACTO:\n` +
+      `1. O militar será removido da escala em ${escalasAfetadas.length} dia(s) a partir de ${desligDataCorte}.\n` +
+      `2. Será desvinculado da sua guarnição para não constar mais em escalas futuras.\n` +
+      `3. Afastamentos e férias agendados após ${desligDataCorte} serão cancelados no sistema (mantidos no histórico).\n` +
+      `4. TODOS os serviços e históricos anteriores a ${desligDataCorte} permanecerão INTACTOS.\n\n` +
+      `Deseja confirmar a exclusão definitiva a partir de ${desligDataCorte}?`
+    );
+
+    if (!confirma) return;
+
+    setLoading(true);
+    try {
+      const res = await ScaleAdjustmentService.registrarDesligamentoEscala({
+        militarId: Number(desligMilitarId),
+        dataCorte: desligDataCorte,
+        motivo: desligMotivo.trim(),
+        novoStatus: desligStatus,
+        usuario: 'Administrador B1',
+      });
+
+      toast.success(
+        `✅ Militar excluído da escala a partir de ${desligDataCorte}! (${res.totalEscalasRemovidas} dia(s) limpo(s))`
+      );
+      setDesligMilitarId('');
+      setDesligDataCorte('');
+      setDesligMotivo('');
+      setDesligStatus('Cedido');
+      loadData();
+      onReload();
+    } catch (err: any) {
+      toast.error('Erro ao registrar exclusão: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white p-6 rounded-2xl border border-rustic-border shadow-sm space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-100 pb-4">
@@ -213,12 +275,12 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
             Alterações na Escala Publicada
           </h3>
           <p className="text-xs text-rustic-brown/60">
-            Gerencie trocas mútuas, substituições individuais e transferências com histórico auditável.
+            Gerencie trocas mútuas, substituições individuais, transferências e exclusão definitiva com histórico auditável.
           </p>
         </div>
 
         {/* Modalidade Selector */}
-        <div className="flex bg-stone-100 p-1 rounded-xl gap-1">
+        <div className="flex bg-stone-100 p-1 rounded-xl gap-1 flex-wrap">
           <button
             onClick={() => setModalidade('mútua')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -241,7 +303,15 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
               modalidade === 'transferencia' ? 'bg-white text-primary shadow-sm font-black' : 'text-stone-600 hover:text-rustic-brown'
             }`}
           >
-            3. Transferência
+            3. Transf. Guarnição
+          </button>
+          <button
+            onClick={() => setModalidade('desligamento')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              modalidade === 'desligamento' ? 'bg-red-600 text-white shadow-sm font-black' : 'text-red-700 hover:bg-red-50'
+            }`}
+          >
+            4. Exclusão Definitiva (Transferência/Baixa)
           </button>
         </div>
       </div>
@@ -483,6 +553,93 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
         </div>
       )}
 
+      {/* FORM: MODALIDADE 4 — EXCLUSÃO DEFINITIVA / TRANSFERÊNCIA DE UNIDADE */}
+      {modalidade === 'desligamento' && (
+        <div className="space-y-4 bg-red-50/50 p-5 rounded-xl border border-red-200/80">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-red-200 pb-3">
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-red-900 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px] text-red-700">person_remove</span>
+                Modalidade 4 — Exclusão Definitiva da Escala por Transferência / Baixa
+              </h4>
+              <p className="text-[11px] text-red-800/80 mt-0.5">
+                Remove o militar de todas as escalas a partir da data de corte e desvincula-o da guarnição. Serviços anteriores permanecerão intactos.
+              </p>
+            </div>
+            <div className="px-2.5 py-1 bg-red-100 text-red-800 rounded-lg text-[10px] font-black uppercase tracking-wider border border-red-200 self-start md:self-auto">
+              Ação Irreversível com Auditoria
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-stone-500">Militar a ser Excluído</label>
+              <select
+                value={desligMilitarId}
+                onChange={e => setDesligMilitarId(e.target.value)}
+                className="w-full h-11 px-3 rounded-lg border border-red-300 bg-white text-xs font-bold text-rustic-brown focus:ring-2 focus:ring-red-400 focus:outline-none"
+              >
+                <option value="">Selecione o Militar...</option>
+                {personnelList.filter(p => p.status === 'Ativo' || p.status === 'Cedido').map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.graduation || ''} {p.war_name || p.name} ({p.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-stone-500">Data de Corte (A partir de)</label>
+              <input
+                type="date"
+                value={desligDataCorte}
+                onChange={e => setDesligDataCorte(e.target.value)}
+                className="w-full h-11 px-3 rounded-lg border border-red-300 bg-white text-xs font-bold text-rustic-brown focus:ring-2 focus:ring-red-400 focus:outline-none"
+              />
+              <span className="text-[9px] text-stone-400 block">Todas as escalas desta data em diante serão limpas.</span>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-stone-500">Novo Status no Efetivo</label>
+              <select
+                value={desligStatus}
+                onChange={e => setDesligStatus(e.target.value)}
+                className="w-full h-11 px-3 rounded-lg border border-red-300 bg-white text-xs font-bold text-rustic-brown focus:ring-2 focus:ring-red-400 focus:outline-none"
+              >
+                <option value="Cedido">Cedido (Transferido para outro BBM/Unidade)</option>
+                <option value="Afastado">Afastado</option>
+                <option value="Licença">Licença</option>
+                <option value="Inativo">Inativo / Reserva</option>
+                <option value="Ativo">Manter Ativo (Apenas retirar da escala)</option>
+              </select>
+              <span className="text-[9px] text-stone-400 block">Você escolhe o status do militar ao confirmar.</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-4 items-end pt-2">
+            <div className="flex-1 space-y-1">
+              <label className="text-[10px] font-black uppercase text-stone-500">Motivo / Portaria de Transferência (Obrigatório)</label>
+              <input
+                type="text"
+                value={desligMotivo}
+                onChange={e => setDesligMotivo(e.target.value)}
+                placeholder="Ex: Transferência para 1º BBM Florianópolis - Portaria nº 123/CBMSC/2026..."
+                className="w-full h-11 px-3 rounded-lg border border-red-300 bg-white text-xs font-medium focus:ring-2 focus:ring-red-400 focus:outline-none"
+              />
+            </div>
+
+            <button
+              onClick={handleDesligamentoEscala}
+              disabled={loading || !desligMilitarId || !desligDataCorte || !desligMotivo.trim()}
+              className="h-11 px-6 bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow transition-all flex items-center justify-center gap-2 shrink-0"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+              CONFIRMAR EXCLUSÃO DEFINITIVA
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* BLOCO 4: TABELA DE HISTÓRICO DE ALTERAÇÕES */}
       <div className="pt-4 border-t border-stone-100">
         <h4 className="text-xs font-black uppercase tracking-wider text-rustic-brown/70 mb-3 flex items-center gap-2">
@@ -518,9 +675,21 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
                   const nomeB = milB ? `${milB.graduation || ''} ${milB.war_name || milB.name}`.trim() : (h.militar_b_id ? `Militar #${h.militar_b_id}` : null);
 
                   let rotuloTipo = h.tipo_alteracao;
-                  if (h.tipo_alteracao === 'troca_militares') rotuloTipo = 'Troca Mútua';
-                  else if (h.tipo_alteracao === 'troca_individual') rotuloTipo = 'Troca Individual';
-                  else if (h.tipo_alteracao === 'transferencia_guarnicao') rotuloTipo = 'Transf. Guarnição';
+                  let badgeClass = 'bg-stone-100 text-stone-800';
+
+                  if (h.tipo_alteracao === 'troca_militares' || rotuloTipo === 'Troca Mútua') {
+                    rotuloTipo = 'Troca Mútua';
+                    badgeClass = 'bg-amber-100 text-amber-800';
+                  } else if (h.tipo_alteracao === 'troca_individual' || rotuloTipo === 'Troca Individual') {
+                    rotuloTipo = 'Troca Individual';
+                    badgeClass = 'bg-blue-100 text-blue-800';
+                  } else if (h.tipo_alteracao === 'transferencia_guarnicao' || rotuloTipo === 'Transf. Guarnição') {
+                    rotuloTipo = 'Transf. Guarnição';
+                    badgeClass = 'bg-green-100 text-green-800';
+                  } else if (h.tipo_alteracao === 'desligamento_transferencia' || rotuloTipo?.includes('desligamento')) {
+                    rotuloTipo = 'Exclusão / Transf.';
+                    badgeClass = 'bg-red-100 text-red-800';
+                  }
 
                   return (
                     <tr key={h.id || idx} className="hover:bg-stone-50/50">
@@ -528,13 +697,7 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
                         {new Date(h.criado_em || h.created_at || Date.now()).toLocaleString('pt-BR')}
                       </td>
                       <td className="py-2.5 px-3 font-bold whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                          h.tipo_alteracao?.includes('troca_militares') || rotuloTipo === 'Troca Mútua'
-                            ? 'bg-amber-100 text-amber-800'
-                            : h.tipo_alteracao?.includes('individual') || rotuloTipo === 'Troca Individual'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${badgeClass}`}>
                           {rotuloTipo}
                         </span>
                       </td>

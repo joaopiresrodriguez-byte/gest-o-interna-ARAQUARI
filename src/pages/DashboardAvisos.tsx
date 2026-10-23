@@ -226,6 +226,7 @@ const DashboardAvisos: React.FC = () => {
   // Find vacations and leaves active on the selectedDate
   const vacationsOnDate = useMemo(() => {
     return vacations.filter(v => {
+      if (v.status === 'cancelado') return false;
       if (v.leave_type === 'desconto_ferias') return false;
       return v.start_date <= selectedDate && v.end_date >= selectedDate;
     });
@@ -235,6 +236,7 @@ const DashboardAvisos: React.FC = () => {
   const totalAfastadosNaEscala = useMemo(() => {
     return escalaMilitares.filter((p: Personnel) =>
       vacations.some(v => {
+        if (v.status === 'cancelado') return false;
         if (v.leave_type === 'desconto_ferias') return false;
         const matchPerson = Number(v.personnel_id) === Number(p.id) ||
           (v.full_name && p.name && v.full_name.toLowerCase().trim() === p.name.toLowerCase().trim());
