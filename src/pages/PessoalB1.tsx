@@ -1660,6 +1660,25 @@ const PessoalB1: React.FC = () => {
                             SINCRONIZAR PLANILHA
                           </button>
                           <button
+                            onClick={() => {
+                              const publicUrl = `${window.location.origin}/escala-publica?mes=${scaleMonth}`;
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText(publicUrl).then(() => {
+                                  toast.success('Link público da escala copiado com sucesso!');
+                                }).catch(() => {
+                                  window.open(publicUrl, '_blank');
+                                });
+                              } else {
+                                window.open(publicUrl, '_blank');
+                              }
+                            }}
+                            className="flex items-center gap-2 px-4 py-3 bg-blue-700 text-white font-black rounded-xl text-xs hover:bg-blue-800 transition-colors shadow-lg shadow-blue-200"
+                            title="Copiar link público sempre atualizado da escala deste mês"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">share</span>
+                            LINK PÚBLICO
+                          </button>
+                          <button
                             onClick={() => ScaleReportingService.generateMonthlyScalePDF(scaleMonth, escalas, personnelList, vacations)}
                             className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-black rounded-xl text-xs hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
                           >

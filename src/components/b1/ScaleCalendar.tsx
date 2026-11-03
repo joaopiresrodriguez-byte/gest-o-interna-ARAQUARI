@@ -10,6 +10,19 @@ interface ScaleCalendarProps {
     onMonthChange?: (newMonth: string) => void;
 }
 
+// Helper para exibição padronizada do nome:
+// Bombeiro Comunitário (BC): apenas nome de guerra
+// Bombeiro Militar (BM): graduação + nome de guerra
+export const formatPersonnelName = (p?: Personnel | null): string => {
+    if (!p) return '';
+    const warName = p.war_name || p.name.split(' ')[0];
+    const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
+    if (isBC) {
+        return warName;
+    }
+    return `${p.graduation || ''} ${warName}`.trim();
+};
+
 const CORES: Record<string, { bg: string; text: string; hex: string; pillBg: string; borderHex: string }> = {
   A: { bg: 'bg-emerald-600', text: 'text-emerald-700', hex: '#16a34a', pillBg: '#dcfce7', borderHex: '#86efac' }, // VERDE
   B: { bg: 'bg-blue-600', text: 'text-blue-700', hex: '#2563eb', pillBg: '#dbeafe', borderHex: '#93c5fd' },   // AZUL
@@ -41,6 +54,13 @@ const monthNames = [
 
 const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, onDayClick, onMonthChange }) => {
     const [viewMode, setViewMode] = useState<'grid' | 'matrix'>('grid');
+    const [selectedDayDetails, setSelectedDayDetails] = useState<{
+        dateStr: string;
+        dayNum: number;
+        teamLetter: string | null;
+        escalados: Personnel[];
+        dayEscala: Escala | null;
+    } | null>(null);
     const [year, monthNum] = month.split('-').map(Number);
     
     const daysInMonth = new Date(year, monthNum, 0).getDate();
@@ -82,7 +102,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
             const onDutyMembers = dayEscala.militares
                 ?.map((id: number) => {
                     const p = personnelList.find(mil => mil.id === id);
-                    return p ? `${p.graduation || ''} ${p.war_name || p.name.split(' ')[0]}`.trim() : null;
+                    return p ? formatPersonnelName(p) : null;
                 })
                 .filter(Boolean)
                 .join(', ');
@@ -306,31 +326,54 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
 
                                                 {/* Militares Escalados no Dia */}
                                                 <div className="space-y-1 overflow-y-auto max-h-[85px] scrollbar-thin">
-                                                    {escaladosNoDia.slice(0, 4).map((p, idx) => (
-                                                        <div
-                                                            key={idx}
-                                                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate border flex items-center justify-between ${
-                                                                dayEscala?.manual_override
-                                                                    ? 'bg-amber-50 text-amber-900 border-amber-300'
-                                                                    : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200/80'
-                                                            }`}
-                                                            title={dayEscala?.manual_override ? `Troca / Alteração de Escala: ${dayEscala.override_reason || ''}` : `${p?.graduation || ''} ${p?.name}`}
-                                                        >
-                                                            <span className="truncate">
-                                                                <strong className="text-stone-900 mr-1">{p?.graduation || ''}</strong>
-                                                                {p?.war_name || p?.name.split(' ')[0]}
-                                                            </span>
-                                                            {dayEscala?.manual_override && (
-                                                                <span className="text-[8px] font-black uppercase text-amber-600 ml-1 px-1 bg-amber-100 rounded" title={dayEscala.override_reason}>
-                                                                    TROCA
+                                                    {escaladosNoDia.slice(0, 4).map((p, idx) => {
+                                                        const isBC = p?.type === 'BC' || (p?.graduation && p.graduation.toLowerCase().includes('bc')) || (p?.rank && p.rank.toLowerCase().includes('bc'));
+                                                        const warName = p?.war_name || p?.name.split(' ')[0];
+
+                                                        return (
+                                                            <div
+                                                                key={idx}
+                                                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate border flex items-center justify-between ${
+                                                                    dayEscala?.manual_override
+                                                                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                                                        : isBC
+                                                                        ? 'bg-orange-50/70 text-orange-950 border-orange-200 hover:bg-orange-100/70'
+                                                                        : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200/80'
+                                                                }`}
+                                                                title={dayEscala?.manual_override ? `Troca / Alteração de Escala: ${dayEscala.override_reason || ''}` : `${isBC ? 'BC ' : (p?.graduation || '') + ' '}${p?.name}`}
+                                                            >
+                                                                <span className="truncate">
+                                                                    {!isBC && p?.graduation && (
+                                                                        <strong className="text-stone-900 mr-1">{p.graduation}</strong>
+                                                                    )}
+                                                                    {warName}
                                                                 </span>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                                {dayEscala?.manual_override && (
+                                                                    <span className="text-[8px] font-black uppercase text-amber-600 ml-1 px-1 bg-amber-100 rounded" title={dayEscala.override_reason}>
+                                                                        TROCA
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
                                                     {escaladosNoDia.length > 4 && (
-                                                        <div className="text-[9px] font-extrabold text-blue-700 text-center bg-blue-50 py-0.5 rounded">
-                                                            +{escaladosNoDia.length - 4} militares
-                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedDayDetails({
+                                                                    dateStr,
+                                                                    dayNum: cell.dayNum!,
+                                                                    teamLetter,
+                                                                    escalados: escaladosNoDia,
+                                                                    dayEscala
+                                                                });
+                                                            }}
+                                                            className="w-full text-[9px] font-black text-blue-700 hover:text-blue-900 text-center bg-blue-50 hover:bg-blue-100/90 py-0.5 rounded border border-blue-200 transition-colors shadow-2xs cursor-pointer"
+                                                            title="Clique para ver todos os escalados do dia"
+                                                        >
+                                                            +{escaladosNoDia.length - 4} escalados (ver todos)
+                                                        </button>
                                                     )}
                                                 </div>
                                             </>
@@ -379,7 +422,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                     .map(person => (
                                         <tr key={person.id} className="hover:bg-stone-50/50">
                                             <td className="p-3 border-r border-stone-200 sticky left-0 bg-white z-10 font-bold shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                {person.graduation || ''} {person.war_name || person.name}
+                                                {formatPersonnelName(person)}
                                             </td>
                                             {days.map(d => {
                                                 const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -432,6 +475,121 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                         ))}
                         <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-stone-100 border border-stone-200"></span> Folga</div>
                         <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-100 border border-amber-200"></span> Férias/Licença</div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DETALHADO: GUARNICAO COMPLETA DO DIA */}
+            {selectedDayDetails && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+                    onClick={() => setSelectedDayDetails(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl border border-stone-200 max-w-lg w-full overflow-hidden text-stone-900"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header Modal */}
+                        <div className="bg-[#1e40af] text-white p-4 flex items-center justify-between">
+                            <div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-blue-200">Guarnição de Serviço</span>
+                                <h3 className="text-lg font-black flex items-center gap-2">
+                                    <span>Dia {String(selectedDayDetails.dayNum).padStart(2, '0')}/{String(monthNum).padStart(2, '0')}/{year}</span>
+                                    {selectedDayDetails.teamLetter && (
+                                        <span className="text-xs bg-white text-[#1e40af] font-black px-2 py-0.5 rounded-full shadow-xs">
+                                            Guarnição {selectedDayDetails.teamLetter}
+                                        </span>
+                                    )}
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedDayDetails(null)}
+                                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
+                            {selectedDayDetails.dayEscala?.manual_override && (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                                    <div className="font-bold flex items-center gap-1.5 mb-1">
+                                        <span className="material-symbols-outlined text-sm text-amber-600">published_with_changes</span>
+                                        Alteração / Troca registrada nesta escala
+                                    </div>
+                                    <p className="text-stone-700">{selectedDayDetails.dayEscala.override_reason || 'Alteração manual efetuada.'}</p>
+                                </div>
+                            )}
+
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-black uppercase tracking-wider text-stone-500">
+                                        Total Escalados ({selectedDayDetails.escalados.length})
+                                    </span>
+                                </div>
+
+                                <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden bg-stone-50/50">
+                                    {selectedDayDetails.escalados.map((p, idx) => {
+                                        const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
+                                        const warName = p.war_name || p.name.split(' ')[0];
+
+                                        return (
+                                            <div key={idx} className="p-3 flex items-center justify-between bg-white hover:bg-blue-50/40 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                        isBC ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
+                                                    }`}>
+                                                        {idx + 1}
+                                                    </span>
+                                                    <div>
+                                                        <div className="font-black text-sm text-stone-900 flex items-center gap-1.5">
+                                                            {!isBC && p.graduation && (
+                                                                <span className="text-xs font-extrabold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                                                    {p.graduation}
+                                                                </span>
+                                                            )}
+                                                            {warName}
+                                                            {isBC && (
+                                                                <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-1.5 py-0.2 rounded border border-orange-200">
+                                                                    BC
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[11px] text-stone-500">{p.name} {p.role ? `• ${p.role}` : ''}</div>
+                                                    </div>
+                                                </div>
+
+                                                {onDayClick && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedDayDetails(null);
+                                                            onDayClick(selectedDayDetails.dateStr, p.id || 0);
+                                                        }}
+                                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg border border-blue-200 transition-colors"
+                                                    >
+                                                        Ajustar
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Modal */}
+                        <div className="p-3 bg-stone-50 border-t border-stone-200 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedDayDetails(null)}
+                                className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 text-xs font-bold rounded-xl transition-colors"
+                            >
+                                Fechar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
