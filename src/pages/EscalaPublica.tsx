@@ -29,11 +29,18 @@ export const EscalaPublica: React.FC = () => {
     try {
       setLoading(true);
 
+      const [anoStr, mesStr] = month.split('-');
+      const anoNum = parseInt(anoStr, 10);
+      const mesNum = parseInt(mesStr, 10);
+      const primeiroDia = `${month}-01`;
+      const ultimoDiaNum = new Date(anoNum, mesNum, 0).getDate();
+      const ultimoDia = `${month}-${String(ultimoDiaNum).padStart(2, '0')}`;
+
       const [resEscalas, resPersonnel, resVacations, resBcSelecionados] = await Promise.all([
         supabase.from('escalas').select('*').order('data'),
         supabase.from('personnel').select('*').eq('status', 'Ativo').order('name'),
         supabase.from('personnel_vacations').select('*'),
-        supabase.from('bc_selecionados').select('*').like('dia', `${month}%`),
+        supabase.from('bc_selecionados').select('*').gte('dia', primeiroDia).lte('dia', ultimoDia),
       ]);
 
       setEscalas((resEscalas.data as Escala[]) || []);
