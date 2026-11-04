@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ATIVIDADES_B4 } from '../config/atividadesB4';
 import { toast } from 'sonner';
-import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification } from '../services/types';
+import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification, BcSelecionado } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
 import { syncCalendar } from '../services/syncScheduler';
 import { supabase } from '../services/supabase';
@@ -234,6 +234,7 @@ const PessoalB1: React.FC = () => {
   const [_epiDeliveries, setEpiDeliveries] = useState<EpiDelivery[]>([]);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [escalas, setEscalas] = useState<Escala[]>([]);
+  const [bcSelecionados, setBcSelecionados] = useState<BcSelecionado[]>([]);
 
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [selectedDayInfo, setSelectedDayInfo] = useState<{ date: string, personId: number } | null>(null);
@@ -286,7 +287,8 @@ const PessoalB1: React.FC = () => {
         epiList,
         notifList,
         escalasRes,
-        configs
+        configs,
+        bcSelRes
       ] = await Promise.all([
         PersonnelService.getPersonnel(),
         PersonnelService.getVacations(),
@@ -296,6 +298,7 @@ const PessoalB1: React.FC = () => {
         PersonnelService.getNotifications(),
         supabase.from('escalas').select('*').order('data', { ascending: true }),
         PersonnelService.getScaleConfigs(),
+        supabase.from('bc_selecionados').select('*').order('dia', { ascending: true }),
       ]);
 
       setPersonnelList(pList);
@@ -304,6 +307,7 @@ const PessoalB1: React.FC = () => {
       setCourses(courseList);
       setEpiDeliveries(epiList);
       setNotifications(notifList);
+      setBcSelecionados((bcSelRes.data || []) as BcSelecionado[]);
 
       const escalasData = (escalasRes.data || []) as Escala[];
       setEscalas(escalasData);
@@ -1691,6 +1695,7 @@ const PessoalB1: React.FC = () => {
                           escalas={escalas}
                           personnelList={personnelList}
                           vacations={vacations}
+                          bcSelecionados={bcSelecionados}
                           onMonthChange={setScaleMonth}
                           onDayClick={(date, personId) => {
                             setSelectedDayInfo({ date, personId });

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
-import { Escala, Personnel, Vacation } from '../services/types';
+import { Escala, Personnel, Vacation, BcSelecionado } from '../services/types';
 import ScaleCalendar from '../components/b1/ScaleCalendar';
 import { ScaleReportingService } from '../services/scaleReportingService';
 
@@ -22,21 +22,24 @@ export const EscalaPublica: React.FC = () => {
   const [escalas, setEscalas] = useState<Escala[]>([]);
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   const [vacations, setVacations] = useState<Vacation[]>([]);
+  const [bcSelecionados, setBcSelecionados] = useState<BcSelecionado[]>([]);
   const [filtroMilitar, setFiltroMilitar] = useState<string>(militarParam);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
 
-      const [resEscalas, resPersonnel, resVacations] = await Promise.all([
+      const [resEscalas, resPersonnel, resVacations, resBcSelecionados] = await Promise.all([
         supabase.from('escalas').select('*').order('data'),
         supabase.from('personnel').select('*').eq('status', 'Ativo').order('name'),
         supabase.from('personnel_vacations').select('*'),
+        supabase.from('bc_selecionados').select('*').like('dia', `${month}%`),
       ]);
 
       setEscalas((resEscalas.data as Escala[]) || []);
       setPersonnelList((resPersonnel.data as Personnel[]) || []);
       setVacations((resVacations.data as Vacation[]) || []);
+      setBcSelecionados((resBcSelecionados.data as BcSelecionado[]) || []);
     } catch (err) {
       console.error('Erro ao carregar escala pública:', err);
     } finally {
@@ -97,6 +100,7 @@ export const EscalaPublica: React.FC = () => {
               escalas={escalas}
               personnelList={personnelList}
               vacations={vacations}
+              bcSelecionados={bcSelecionados}
               onMonthChange={setMonth}
             />
           </div>

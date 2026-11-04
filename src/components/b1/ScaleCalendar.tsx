@@ -1,14 +1,62 @@
-import React, { useState } from 'react';
-import { Escala, Personnel, Vacation } from '../../services/types';
+import React, { useState, useEffect } from 'react';
+import { Escala, Personnel, Vacation, BcSelecionado } from '../../services/types';
+import { supabase } from '../../services/supabase';
 
 interface ScaleCalendarProps {
     month: string;
     escalas: Escala[];
     personnelList: Personnel[];
     vacations: Vacation[];
+    bcSelecionados?: BcSelecionado[];
     onDayClick?: (date: string, personId: number) => void;
     onMonthChange?: (newMonth: string) => void;
 }
+
+export type BcTurnoType = '12h Matutino' | '12h Noturno' | '24h';
+
+export interface BcTurnoInfo {
+    label: BcTurnoType;
+    shortLabel: string;
+    horarios: string;
+    badgeCls: string;
+    borderCls: string;
+}
+
+export const getBcTurnoInfo = (inicio?: string, fim?: string, totalHoras?: number): BcTurnoInfo => {
+    const cleanInicio = (inicio || '').substring(0, 5);
+    const cleanFim = (fim || '').substring(0, 5);
+
+    // 24 horas: total_horas === 24 ou mesmo horário de início e fim
+    if (totalHoras === 24 || (cleanInicio === '08:00' && cleanFim === '08:00')) {
+        return {
+            label: '24h',
+            shortLabel: '24h',
+            horarios: '08:00 às 08:00 (24h)',
+            badgeCls: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            borderCls: 'border-emerald-300'
+        };
+    }
+
+    // 12h Noturno: início 20h ou fim 08h
+    if (cleanInicio === '20:00' || cleanFim === '08:00') {
+        return {
+            label: '12h Noturno',
+            shortLabel: '12h Noturno',
+            horarios: '20:00 às 08:00 (12h)',
+            badgeCls: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+            borderCls: 'border-indigo-300'
+        };
+    }
+
+    // 12h Matutino: padrão para 08:00 às 20:00
+    return {
+        label: '12h Matutino',
+        shortLabel: '12h Matutino',
+        horarios: '08:00 às 20:00 (12h)',
+        badgeCls: 'bg-amber-100 text-amber-800 border-amber-300',
+        borderCls: 'border-amber-300'
+    };
+};
 
 // Helper para exibição padronizada do nome:
 // Bombeiro Comunitário (BC): apenas nome de guerra
@@ -52,8 +100,9 @@ const monthNames = [
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
 ];
 
-const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, onDayClick, onMonthChange }) => {
+const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, bcSelecionados: propBcSelecionados, onDayClick, onMonthChange }) => {
     const [viewMode, setViewMode] = useState<'grid' | 'matrix'>('grid');
+    const [internalBcSelecionados, setInternalBcSelecionados] = useState<BcSelecionado[]>([]);
     const [selectedDayDetails, setSelectedDayDetails] = useState<{
         dateStr: string;
         dayNum: number;
@@ -62,6 +111,43 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
         dayEscala: Escala | null;
     } | null>(null);
     const [year, monthNum] = month.split('-').map(Number);
+    
+    // Sincronizar/carregar bc_selecionados para o mês se não fornecido via props
+    useEffect(() => {
+        if (propBcSelecionados && propBcSelecionados.length > 0) {
+            setInternalBcSelecionados(propBcSelecionados);
+            return;
+        }
+
+        let isMounted = true;
+        supabase
+            .from('bc_selecionados')
+            .select('*')
+            .like('dia', `${month}%`)
+            .then(res => {
+                if (isMounted && res.data) {
+                    setInternalBcSelecionados(res.data as BcSelecionado[]);
+                }
+            })
+            .catch(err => {
+                console.warn('Erro ao carregar bc_selecionados no ScaleCalendar:', err);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [month, propBcSelecionados]);
+
+    const activeBcSelecionados = (propBcSelecionados && propBcSelecionados.length > 0) ? propBcSelecionados : internalBcSelecionados;
+
+    // Helper para buscar o turno selecionado de um BC específico em uma data
+    const findBcTurno = (dateStr: string, personId: number): BcTurnoInfo | null => {
+        const item = activeBcSelecionados.find(s => s && s.dia === dateStr && Number(s.bombeiro_id) === Number(personId));
+        if (item) {
+            return getBcTurnoInfo(item.horario_inicio, item.horario_fim, item.total_horas);
+        }
+        return null;
+    };
     
     const daysInMonth = new Date(year, monthNum, 0).getDate();
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -329,30 +415,48 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                     {escaladosNoDia.slice(0, 4).map((p, idx) => {
                                                         const isBC = p?.type === 'BC' || (p?.graduation && p.graduation.toLowerCase().includes('bc')) || (p?.rank && p.rank.toLowerCase().includes('bc'));
                                                         const warName = p?.war_name || p?.name.split(' ')[0];
+                                                        const bcTurno = (isBC && p?.id) ? findBcTurno(dateStr, p.id) : null;
 
                                                         return (
                                                             <div
                                                                 key={idx}
-                                                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate border flex items-center justify-between ${
+                                                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate border flex items-center justify-between gap-1 ${
                                                                     dayEscala?.manual_override
                                                                         ? 'bg-amber-50 text-amber-900 border-amber-300'
                                                                         : isBC
                                                                         ? 'bg-orange-50/70 text-orange-950 border-orange-200 hover:bg-orange-100/70'
                                                                         : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200/80'
                                                                 }`}
-                                                                title={dayEscala?.manual_override ? `Troca / Alteração de Escala: ${dayEscala.override_reason || ''}` : `${isBC ? 'BC ' : (p?.graduation || '') + ' '}${p?.name}`}
+                                                                title={
+                                                                    dayEscala?.manual_override
+                                                                        ? `Troca / Alteração de Escala: ${dayEscala.override_reason || ''}`
+                                                                        : isBC
+                                                                        ? `Bombeiro Comunitário: ${p?.name} ${bcTurno ? `• Turno: ${bcTurno.label} (${bcTurno.horarios})` : ''}`
+                                                                        : `${p?.graduation || ''} ${p?.name}`
+                                                                }
                                                             >
-                                                                <span className="truncate">
+                                                                <span className="truncate flex items-center gap-1 min-w-0">
                                                                     {!isBC && p?.graduation && (
-                                                                        <strong className="text-stone-900 mr-1">{p.graduation}</strong>
+                                                                        <strong className="text-stone-900 shrink-0">{p.graduation}</strong>
                                                                     )}
-                                                                    {warName}
+                                                                    <span className="truncate">{warName}</span>
                                                                 </span>
-                                                                {dayEscala?.manual_override && (
-                                                                    <span className="text-[8px] font-black uppercase text-amber-600 ml-1 px-1 bg-amber-100 rounded" title={dayEscala.override_reason}>
-                                                                        TROCA
-                                                                    </span>
-                                                                )}
+
+                                                                <div className="flex items-center gap-1 shrink-0">
+                                                                    {isBC && bcTurno && (
+                                                                        <span
+                                                                            className={`text-[8px] font-black uppercase px-1 py-0.2 rounded border ${bcTurno.badgeCls}`}
+                                                                            title={`Turno escolhido: ${bcTurno.horarios}`}
+                                                                        >
+                                                                            {bcTurno.shortLabel}
+                                                                        </span>
+                                                                    )}
+                                                                    {dayEscala?.manual_override && (
+                                                                        <span className="text-[8px] font-black uppercase text-amber-600 px-1 bg-amber-100 rounded" title={dayEscala.override_reason}>
+                                                                            TROCA
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         );
                                                     })}
@@ -534,6 +638,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                     {selectedDayDetails.escalados.map((p, idx) => {
                                         const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
                                         const warName = p.war_name || p.name.split(' ')[0];
+                                        const bcTurno = (isBC && p.id) ? findBcTurno(selectedDayDetails.dateStr, p.id) : null;
 
                                         return (
                                             <div key={idx} className="p-3 flex items-center justify-between bg-white hover:bg-blue-50/40 transition-colors">
@@ -544,20 +649,25 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                         {idx + 1}
                                                     </span>
                                                     <div>
-                                                        <div className="font-black text-sm text-stone-900 flex items-center gap-1.5">
+                                                        <div className="font-black text-sm text-stone-900 flex items-center gap-1.5 flex-wrap">
                                                             {!isBC && p.graduation && (
                                                                 <span className="text-xs font-extrabold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                                                                     {p.graduation}
                                                                 </span>
                                                             )}
-                                                            {warName}
+                                                            <span>{warName}</span>
                                                             {isBC && (
-                                                                <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-1.5 py-0.2 rounded border border-orange-200">
+                                                                <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded border border-orange-200">
                                                                     BC
                                                                 </span>
                                                             )}
+                                                            {isBC && bcTurno && (
+                                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${bcTurno.badgeCls}`}>
+                                                                    {bcTurno.label} ({bcTurno.horarios})
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                        <div className="text-[11px] text-stone-500">{p.name} {p.role ? `• ${p.role}` : ''}</div>
+                                                        <div className="text-[11px] text-stone-500 mt-0.5">{p.name} {p.role ? `• ${p.role}` : ''}</div>
                                                     </div>
                                                 </div>
 
