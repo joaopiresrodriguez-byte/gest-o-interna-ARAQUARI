@@ -107,8 +107,6 @@ export const CautelaService = {
         .from('fleet')
         .update({
           status: 'cautelado',
-          is_cautelado: true,
-          cautela_ativa_id: data.id,
         })
         .eq('id', payload.item_id);
 
@@ -118,8 +116,6 @@ export const CautelaService = {
           .from('fleet')
           .update({
             status: 'cautelado',
-            is_cautelado: true,
-            cautela_ativa_id: data.id,
           })
           .eq('name', payload.item_nome);
       }
@@ -165,8 +161,6 @@ export const CautelaService = {
         .from('fleet')
         .update({
           status: 'active',
-          is_cautelado: false,
-          cautela_ativa_id: null,
         })
         .eq('id', itemId);
 
@@ -177,8 +171,6 @@ export const CautelaService = {
             .from('fleet')
             .update({
               status: 'active',
-              is_cautelado: false,
-              cautela_ativa_id: null,
             })
             .eq('name', data.item_nome);
         }
@@ -215,8 +207,6 @@ export const CautelaService = {
         .from('fleet')
         .update({
           status: 'active',
-          is_cautelado: false,
-          cautela_ativa_id: null,
         })
         .eq('id', itemId);
 
@@ -227,8 +217,6 @@ export const CautelaService = {
             .from('fleet')
             .update({
               status: 'active',
-              is_cautelado: false,
-              cautela_ativa_id: null,
             })
             .eq('name', data.item_nome);
         }

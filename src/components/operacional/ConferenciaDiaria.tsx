@@ -922,16 +922,30 @@ const ConferenciaDiaria: React.FC = () => {
 
         const allPersonnel = (personnelRes.data || []) as any[];
 
-        // 1. Militares da Escala do dia (somente os IDs presentes na escala publicada no B1)
+        // Helper para checar se é Bombeiro Comunitário
+        const isBC = (p: any) =>
+          p.type === 'BC' ||
+          (p.graduation && p.graduation.toLowerCase().includes('bc')) ||
+          (p.graduation && p.graduation.toLowerCase().includes('comunitário')) ||
+          (p.rank && p.rank.toLowerCase().includes('bc')) ||
+          (p.rank && p.rank.toLowerCase().includes('comunitário'));
+
+        // 1. Militares da Escala do dia (somente Bombeiros Militares regulares, excluindo BCs)
         const idsMilitares: number[] = (escalaRes.data?.militares || []).map(Number);
-        const mils = allPersonnel.filter(p => idsMilitares.includes(Number(p.id)));
+        const mils = allPersonnel.filter(p => idsMilitares.includes(Number(p.id)) && !isBC(p));
         setEfetivoMilitares(mils);
 
         // 2. Bombeiros Comunitários selecionados para o dia (bc_selecionados)
-        // Sem fallback: se nenhum BC foi escalado para hoje, o grupo fica vazio.
+        // Sem duplicidade com o Grupo 1
         const idsBCs = (bcSelRes.data || []).map((b: any) => Number(b.bombeiro_id));
-        const bcs = allPersonnel.filter(p => idsBCs.includes(Number(p.id)));
-        setEfetivoBCs(bcs);
+        const bcs = allPersonnel.filter(p => idsBCs.includes(Number(p.id)) && isBC(p));
+        // Fallback: se houver BCs na tabela escalas mas não em bc_selecionados
+        if (bcs.length === 0) {
+          const bcsDaEscala = allPersonnel.filter(p => idsMilitares.includes(Number(p.id)) && isBC(p));
+          setEfetivoBCs(bcsDaEscala);
+        } else {
+          setEfetivoBCs(bcs);
+        }
 
         setLoading(false);
       })
@@ -1294,7 +1308,7 @@ const ConferenciaDiaria: React.FC = () => {
                     />
                     <div className="min-w-0 flex-1">
                       <span className="text-[10px] font-black text-cyan-400 uppercase block">{efetivo.rank || 'BC'}</span>
-                      <h5 className="text-xs font-bold text-white truncate">{efetivo.name}</h5>
+                      <h5 className="text-xs font-bold text-white truncate" title={efetivo.name}>{efetivo.war_name || efetivo.name}</h5>
                       <p className="text-[10px] text-slate-400 font-mono truncate">Matrícula: {efetivo.matricula || '—'}</p>
                     </div>
                   </div>

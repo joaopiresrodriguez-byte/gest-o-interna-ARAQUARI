@@ -61,6 +61,7 @@ interface ItemCardProps {
   item: Vehicle;
   notices: PendingNotice[];
   pendenciasB4?: any[];
+  isCautelado?: boolean;
   profile: any;
   onSelect: (item: Vehicle) => void;
   onEdit?: (item: Vehicle) => void;
@@ -74,6 +75,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   item,
   notices,
   pendenciasB4 = [],
+  isCautelado = false,
   profile,
   onSelect,
   onEdit,
@@ -91,10 +93,16 @@ const ItemCard: React.FC<ItemCardProps> = ({
     (item.type === 'Viatura' && p.viatura_nome && p.viatura_nome.toLowerCase().includes(item.name.toLowerCase()))
   );
 
+  const estaEmprestado = isCautelado || item.status === 'cautelado' || item.is_cautelado;
+
   return (
     <div
       className={`bg-white rounded-xl border p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative group ${
-        itemPendenciasB4.length > 0 ? 'border-red-400 ring-1 ring-red-300' : 'border-rustic-border'
+        estaEmprestado
+          ? 'border-blue-400 ring-2 ring-blue-400/40 shadow-sm bg-blue-50/10'
+          : itemPendenciasB4.length > 0
+          ? 'border-red-400 ring-1 ring-red-300'
+          : 'border-rustic-border'
       }`}
       onClick={() => onSelect(item)}
     >
@@ -103,14 +111,14 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-            item.status === 'cautelado' || item.is_cautelado
+          <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase flex items-center gap-1 ${
+            estaEmprestado
               ? 'bg-blue-600 text-white shadow-xs'
               : item.status === 'active'
               ? 'bg-green-100 text-green-700'
               : 'bg-red-100 text-red-700'
           }`}>
-            {item.status === 'cautelado' || item.is_cautelado ? '🔒 CAUTELADO' : item.status === 'active' ? 'Ativo' : 'Inativo'}
+            {estaEmprestado ? '🔒 EMPRESTADO' : item.status === 'active' ? 'Ativo' : 'Inativo'}
           </span>
           {itemPendenciasB4.length > 0 && (
             <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded shadow-xs flex items-center gap-1 animate-pulse">
@@ -497,11 +505,12 @@ const PatrimonioB4: React.FC = () => {
   }, []);
 
   const [pendenciasB4, setPendenciasB4] = useState<any[]>([]);
+  const [cautelasAtivas, setCautelasAtivas] = useState<any[]>([]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [fleetData, noticesData, purchasesData, missionsData, personnelData, checklistsData, trainingsData, histB4Res] = await Promise.all([
+      const [fleetData, noticesData, purchasesData, missionsData, personnelData, checklistsData, trainingsData, histB4Res, cautelasRes] = await Promise.all([
         SupabaseService.getFleet(),
         SupabaseService.getPendingNotices(),
         SupabaseService.getPurchases(),
@@ -509,7 +518,8 @@ const PatrimonioB4: React.FC = () => {
         SupabaseService.getPersonnel(),
         SupabaseService.getDailyChecklists(),
         SupabaseService.getTrainings(),
-        supabase.from('historico_conferencias_b4').select('*').eq('resolvido', false)
+        supabase.from('historico_conferencias_b4').select('*').eq('resolvido', false),
+        supabase.from('cautelas').select('id, item_id, item_nome, status').eq('status', 'ativo')
       ]);
       setFleet(fleetData);
       setInitialNotices(noticesData);
@@ -519,6 +529,7 @@ const PatrimonioB4: React.FC = () => {
       setDailyChecklists(checklistsData);
       setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
       setPendenciasB4(histB4Res.data || []);
+      setCautelasAtivas(cautelasRes.data || []);
     } catch (error) {
       console.error("Error loading B4 data:", error);
     } finally {
@@ -1394,21 +1405,29 @@ const PatrimonioB4: React.FC = () => {
                               <div className="flex-1 h-px bg-rustic-border/40" />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                              {visibleItems.map(item => (
-                                <ItemCard
-                                  key={item.id}
-                                  item={item}
-                                  notices={notices}
-                                  pendenciasB4={pendenciasB4}
-                                  profile={profile}
-                                  onSelect={setSelectedItem}
-                                  onEdit={abrirEdicaoFleetItem}
-                                  onDelete={handleDeleteItem}
-                                  onResolve={handleResolveNotice}
-                                  onGerenciarCompartimentos={setGerenciarCompViatura}
-                                  onVisualizarViatura={setVisualizarViaturaObj}
-                                />
-                              ))}
+                              {visibleItems.map(item => {
+                                const isItemCautelado = item.status === 'cautelado' || item.is_cautelado || cautelasAtivas.some(c =>
+                                  (c.item_id && c.item_id === item.id) ||
+                                  (c.item_nome && item.name && c.item_nome.toLowerCase().trim() === item.name.toLowerCase().trim())
+                                );
+
+                                return (
+                                  <ItemCard
+                                    key={item.id}
+                                    item={item}
+                                    notices={notices}
+                                    pendenciasB4={pendenciasB4}
+                                    isCautelado={isItemCautelado}
+                                    profile={profile}
+                                    onSelect={setSelectedItem}
+                                    onEdit={abrirEdicaoFleetItem}
+                                    onDelete={handleDeleteItem}
+                                    onResolve={handleResolveNotice}
+                                    onGerenciarCompartimentos={setGerenciarCompViatura}
+                                    onVisualizarViatura={setVisualizarViaturaObj}
+                                  />
+                                );
+                              })}
                             </div>
                             {!isExpanded && remainingCount > 0 && (
                               <div className="mt-4 text-center">
@@ -1448,22 +1467,30 @@ const PatrimonioB4: React.FC = () => {
                             <span className="text-[10px] text-red-600/70 font-semibold">Suas atividades de responsabilidade</span>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                            {meusItens.map(item => (
-                              <div key={item.id} className="ring-2 ring-red-400/50 ring-offset-2 rounded-2xl">
-                                <ItemCard
-                                  item={item}
-                                  notices={notices}
-                                  pendenciasB4={pendenciasB4}
-                                  profile={profile}
-                                  onSelect={setSelectedItem}
-                                  onEdit={abrirEdicaoFleetItem}
-                                  onDelete={handleDeleteItem}
-                                  onResolve={handleResolveNotice}
-                                  onGerenciarCompartimentos={setGerenciarCompViatura}
-                                  onVisualizarViatura={setVisualizarViaturaObj}
-                                />
-                              </div>
-                            ))}
+                            {meusItens.map(item => {
+                              const isItemCautelado = item.status === 'cautelado' || item.is_cautelado || cautelasAtivas.some(c =>
+                                (c.item_id && c.item_id === item.id) ||
+                                (c.item_nome && item.name && c.item_nome.toLowerCase().trim() === item.name.toLowerCase().trim())
+                              );
+
+                              return (
+                                <div key={item.id} className="ring-2 ring-red-400/50 ring-offset-2 rounded-2xl">
+                                  <ItemCard
+                                    item={item}
+                                    notices={notices}
+                                    pendenciasB4={pendenciasB4}
+                                    isCautelado={isItemCautelado}
+                                    profile={profile}
+                                    onSelect={setSelectedItem}
+                                    onEdit={abrirEdicaoFleetItem}
+                                    onDelete={handleDeleteItem}
+                                    onResolve={handleResolveNotice}
+                                    onGerenciarCompartimentos={setGerenciarCompViatura}
+                                    onVisualizarViatura={setVisualizarViaturaObj}
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -1489,21 +1516,29 @@ const PatrimonioB4: React.FC = () => {
                               </div>
                             )}
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                              {visibleItems.map(item => (
-                                <ItemCard
-                                  key={item.id}
-                                  item={item}
-                                  notices={notices}
-                                  pendenciasB4={pendenciasB4}
-                                  profile={profile}
-                                  onSelect={setSelectedItem}
-                                  onEdit={abrirEdicaoFleetItem}
-                                  onDelete={handleDeleteItem}
-                                  onResolve={handleResolveNotice}
-                                  onGerenciarCompartimentos={setGerenciarCompViatura}
-                                  onVisualizarViatura={setVisualizarViaturaObj}
-                                />
-                              ))}
+                              {visibleItems.map(item => {
+                                const isItemCautelado = item.status === 'cautelado' || item.is_cautelado || cautelasAtivas.some(c =>
+                                  (c.item_id && c.item_id === item.id) ||
+                                  (c.item_nome && item.name && c.item_nome.toLowerCase().trim() === item.name.toLowerCase().trim())
+                                );
+
+                                return (
+                                  <ItemCard
+                                    key={item.id}
+                                    item={item}
+                                    notices={notices}
+                                    pendenciasB4={pendenciasB4}
+                                    isCautelado={isItemCautelado}
+                                    profile={profile}
+                                    onSelect={setSelectedItem}
+                                    onEdit={abrirEdicaoFleetItem}
+                                    onDelete={handleDeleteItem}
+                                    onResolve={handleResolveNotice}
+                                    onGerenciarCompartimentos={setGerenciarCompViatura}
+                                    onVisualizarViatura={setVisualizarViaturaObj}
+                                  />
+                                );
+                              })}
                               {filteredFleet.length === 0 && (
                                 <div className="col-span-3 text-center py-16 text-gray-400">
                                   <span className="material-symbols-outlined text-[48px] mb-2">search_off</span>
