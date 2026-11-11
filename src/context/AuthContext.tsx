@@ -46,6 +46,10 @@ const AuthContext = createContext<AuthContextType>({
     setIsPasswordRecovery: () => { },
 });
 
+// Limite de tempo de sessão: 24 horas (em milissegundos)
+const SESSION_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+const SESSION_START_KEY = 'cbmsc_session_start_time';
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
@@ -53,6 +57,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [profileError, setProfileError] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+
+    const checkSessionExpiration = (): boolean => {
+        const startTimeStr = localStorage.getItem(SESSION_START_KEY);
+        if (!startTimeStr) return false;
+        const startTime = parseInt(startTimeStr, 10);
+        if (isNaN(startTime)) return false;
+        const now = Date.now();
+        if (now - startTime >= SESSION_MAX_DURATION_MS) {
+            console.warn('[Segurança] Sessão atingiu o limite de 24 horas. Desconectando usuário...');
+            localStorage.removeItem(SESSION_START_KEY);
+            supabase.auth.signOut().catch(() => {});
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            return true;
+        }
+        return false;
+    };
 
     const fetchProfile = async (userId: string) => {
         try {
@@ -83,6 +105,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (!mounted) return;
 
             const currentUser = session?.user ?? null;
+
+            // Se há usuário autenticado, verificar ou iniciar controle de 24 horas de sessão
+            if (currentUser) {
+                const isExpired = checkSessionExpiration();
+                if (isExpired) return;
+
+                if (!localStorage.getItem(SESSION_START_KEY)) {
+                    localStorage.setItem(SESSION_START_KEY, Date.now().toString());
+                }
+            } else {
+                localStorage.removeItem(SESSION_START_KEY);
+            }
+
             setSession(session);
             setUser(currentUser);
 
@@ -129,14 +164,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Start auth state listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             console.log("Auth Event:", _event, session?.user?.email);
+            if (_event === 'SIGNED_IN') {
+                localStorage.setItem(SESSION_START_KEY, Date.now().toString());
+            } else if (_event === 'SIGNED_OUT') {
+                localStorage.removeItem(SESSION_START_KEY);
+            }
+
             if (_event === 'PASSWORD_RECOVERY') {
                 setIsPasswordRecovery(true);
             }
             handleAuthChange(session);
         });
 
+        // Intervalo periódico para expirar a sessão após 24h caso a aba fique aberta
+        const sessionInterval = setInterval(() => {
+            checkSessionExpiration();
+        }, 60 * 1000); // Checa a cada 1 minuto
+
         return () => {
             mounted = false;
+            clearInterval(sessionInterval);
             subscription.unsubscribe();
         };
     }, []);
@@ -146,6 +193,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const signOut = async () => {
+        localStorage.removeItem(SESSION_START_KEY);
         await supabase.auth.signOut();
     };
 

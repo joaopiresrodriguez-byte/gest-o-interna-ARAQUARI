@@ -91,16 +91,27 @@ export const LogisticsService = {
         if (!rows || !Array.isArray(rows)) return [];
 
         return rows.map((row: any) => {
-            const photo = row.photo_url || row.foto_url || row.photo || row.imagem || row.url || '';
+            const rawPhoto = row.photo_url || row.foto_url || row.photo || row.imagem || row.url || '';
             const nf = row.fiscal_note_number || row.numero_nota_fiscal || row.nf_number || row.nf || row.nota_fiscal || 'S/N';
             const date = row.receipt_date || row.data_recebimento || row.created_at || row.date || '';
             const obs = row.notes || row.observacoes || row.description || row.obs || '';
             const createdBy = row.created_by || row.user || row.usuario || '';
             const cadastradoPor = row.cadastrado_por || row.registered_by || row.responsavel || createdBy || '';
 
+            // Suporte para fotos duplas (produto e nota fiscal separadas por |||)
+            let fotoProduto = rawPhoto;
+            let fotoNF = rawPhoto;
+            if (rawPhoto.includes('|||')) {
+                const parts = rawPhoto.split('|||');
+                fotoProduto = parts[0] || '';
+                fotoNF = parts[1] || parts[0] || '';
+            }
+
             return {
                 id: row.id || `rec-${Math.random()}`,
-                photo_url: photo,
+                photo_url: rawPhoto,
+                foto_produto_url: fotoProduto,
+                foto_nf_url: fotoNF,
                 fiscal_note_number: String(nf),
                 receipt_date: date,
                 notes: obs,
@@ -193,6 +204,32 @@ export const LogisticsService = {
             await receiptsBase.delete(id);
         } catch (error) {
             console.error('Error deleting receipt:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Atualizar recibo de produto
+     */
+    updateProductReceipt: async (id: string, updates: Partial<ProductReceipt>): Promise<ProductReceipt> => {
+        try {
+            const updatePayload: any = {};
+            if (updates.fiscal_note_number !== undefined) updatePayload.fiscal_note_number = updates.fiscal_note_number;
+            if (updates.notes !== undefined) updatePayload.notes = updates.notes;
+            if (updates.photo_url !== undefined) updatePayload.photo_url = updates.photo_url;
+            if (updates.receipt_date !== undefined) updatePayload.receipt_date = updates.receipt_date;
+
+            const { data, error } = await supabase
+                .from('product_receipts')
+                .update(updatePayload)
+                .eq('id', id)
+                .select('*')
+                .single();
+
+            if (error) throw error;
+            return data as ProductReceipt;
+        } catch (error) {
+            console.error('Error updating product receipt:', error);
             throw error;
         }
     },

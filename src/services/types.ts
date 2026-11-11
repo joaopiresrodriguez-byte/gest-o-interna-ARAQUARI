@@ -374,6 +374,9 @@ export interface ProductReceipt {
     created_at?: string;
     created_by?: string;
     cadastrado_por?: string;
+    // Campos auxiliares computados para suporte a upload duplo
+    foto_produto_url?: string;
+    foto_nf_url?: string;
 }
 
 export interface ChecklistItem {

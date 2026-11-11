@@ -506,10 +506,12 @@ const Operacional: React.FC = () => {
   // Receipt states
   const [receipts, setReceipts] = useState<ProductReceipt[]>([]);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptInvoiceFile, setReceiptInvoiceFile] = useState<File | null>(null);
   const [receiptNF, setReceiptNF] = useState("");
   const [receiptObs, setReceiptObs] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [selectedReceiptModal, setSelectedReceiptModal] = useState<ProductReceipt | null>(null);
+  const [modalActivePhoto, setModalActivePhoto] = useState<'produto' | 'nf'>('nf');
 
   // Daily Missions states
   const [missions, setMissions] = useState<DailyMission[]>([]);
@@ -611,28 +613,42 @@ const Operacional: React.FC = () => {
   // ============ RECEIPT HANDLERS ============
 
   const handleRegisterReceipt = useCallback(async () => {
-    if (!receiptFile || !receiptNF) {
-      toast.error("Selecione uma foto e insira o Nº da Nota Fiscal.");
+    if ((!receiptFile && !receiptInvoiceFile) || !receiptNF.trim()) {
+      toast.error("Anexe pelo menos uma foto (Produto ou Nota Fiscal) e insira o Nº da Nota Fiscal.");
       return;
     }
     setIsUploading(true);
     try {
-      // Sanitiza o nome do arquivo para evitar erros no Supabase Storage (acentos, espaços e caracteres especiais)
-      const cleanFileName = receiptFile.name
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `${Date.now()}_${cleanFileName}`;
+      const uploadSingleFile = async (file: File, prefix: string) => {
+        const cleanFileName = file.name
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${Date.now()}_${prefix}_${cleanFileName}`;
+        try {
+          await SupabaseService.uploadFile('produto-fotos', fileName, file);
+        } catch (uploadErr) {
+          console.warn(`Storage upload warn (${prefix}):`, uploadErr);
+        }
+        return SupabaseService.getPublicUrl('produto-fotos', fileName);
+      };
 
-      let publicUrl = '';
-      try {
-        await SupabaseService.uploadFile('produto-fotos', fileName, receiptFile);
-        publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
-      } catch (uploadErr) {
-        console.warn("Storage upload warn (tentando prosseguir com url fallback se necessário):", uploadErr);
-        // Tenta obter a URL mesmo em alerta de sobrescrita/existência
-        publicUrl = SupabaseService.getPublicUrl('produto-fotos', fileName);
+      let urlProduto = '';
+      let urlNF = '';
+
+      if (receiptFile) {
+        urlProduto = await uploadSingleFile(receiptFile, 'prod');
       }
+      if (receiptInvoiceFile) {
+        urlNF = await uploadSingleFile(receiptInvoiceFile, 'nf');
+      }
+
+      // Se apenas uma foto foi enviada, usa ela para ambas as visualizações
+      if (!urlProduto && urlNF) urlProduto = urlNF;
+      if (!urlNF && urlProduto) urlNF = urlProduto;
+
+      // Armazena no campo photo_url: urlProduto ||| urlNF
+      const combinedPhotoUrl = urlProduto !== urlNF ? `${urlProduto}|||${urlNF}` : urlProduto;
 
       // Buscar nome de guerra/graduação do usuário logado para o recibo
       let responsavelNomeGuerra = user?.email || 'N/A';
@@ -653,9 +669,9 @@ const Operacional: React.FC = () => {
       }
 
       const newReceipt = await SupabaseService.addProductReceipt({
-        photo_url: publicUrl,
-        fiscal_note_number: receiptNF,
-        notes: receiptObs,
+        photo_url: combinedPhotoUrl,
+        fiscal_note_number: receiptNF.trim(),
+        notes: receiptObs.trim(),
         receipt_date: new Date().toISOString(),
         created_by: user?.email || 'N/A',
         cadastrado_por: responsavelNomeGuerra
@@ -664,10 +680,12 @@ const Operacional: React.FC = () => {
       // Optimistic update: adiciona imediatamente ao estado local
       const optimisticRec: ProductReceipt = {
         id: (newReceipt as any)?.id || `tmp-${Date.now()}`,
-        photo_url: publicUrl,
-        fiscal_note_number: receiptNF,
+        photo_url: combinedPhotoUrl,
+        foto_produto_url: urlProduto,
+        foto_nf_url: urlNF,
+        fiscal_note_number: receiptNF.trim(),
         receipt_date: new Date().toISOString(),
-        notes: receiptObs,
+        notes: receiptObs.trim(),
         created_at: new Date().toISOString(),
         created_by: user?.email || 'N/A',
         cadastrado_por: responsavelNomeGuerra
@@ -678,11 +696,12 @@ const Operacional: React.FC = () => {
 
       // Show notification modal (vinculado ao WhatsApp +55 47 3481-7549)
       const notifData = NotificationService.getReceiptNotificationData({
-        nf: receiptNF, obs: receiptObs, photoUrl: publicUrl, user: responsavelNomeGuerra
+        nf: receiptNF.trim(), obs: receiptObs.trim(), photoUrl: urlNF || urlProduto, user: responsavelNomeGuerra
       });
       setNotifModal({ open: true, data: notifData, type: 'receipt' });
 
       setReceiptFile(null);
+      setReceiptInvoiceFile(null);
       setReceiptNF("");
       setReceiptObs("");
 
@@ -695,7 +714,7 @@ const Operacional: React.FC = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [receiptFile, receiptNF, receiptObs, user?.email, loadAllData]);
+  }, [receiptFile, receiptInvoiceFile, receiptNF, receiptObs, user?.email, loadAllData]);
 
   // ============ COMPUTED VALUES ============
 
@@ -1028,20 +1047,43 @@ const Operacional: React.FC = () => {
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                   <div className="space-y-4">
-                    <label className={`flex flex-col items-center justify-center h-40 border-2 border-dashed rounded-xl cursor-pointer transition-all relative overflow-hidden ${receiptFile ? 'border-secondary-green bg-green-50' : 'border-gray-300 bg-stone-50 hover:bg-stone-100'}`}>
-                      {receiptFile ? (
-                        <div className="flex flex-col items-center text-secondary-green">
-                          <span className="material-symbols-outlined text-4xl mb-1">check_circle</span>
-                          <span className="text-xs font-bold truncate max-w-[200px]">{receiptFile.name}</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center text-gray-400">
-                          <span className="material-symbols-outlined text-4xl mb-1">add_a_photo</span>
-                          <span className="text-xs font-medium">Foto dos Produtos</span>
-                        </div>
-                      )}
-                      <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files && setReceiptFile(e.target.files[0])} />
-                    </label>
+                    {/* Campos de Upload: Foto do Produto e Foto da NF */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className={`flex flex-col items-center justify-center h-36 border-2 border-dashed rounded-xl cursor-pointer transition-all relative overflow-hidden ${receiptFile ? 'border-secondary-green bg-green-50' : 'border-gray-300 bg-stone-50 hover:bg-stone-100'}`}>
+                        {receiptFile ? (
+                          <div className="flex flex-col items-center text-secondary-green p-2 text-center">
+                            <span className="material-symbols-outlined text-3xl mb-1">check_circle</span>
+                            <span className="text-[11px] font-bold truncate max-w-[140px]">{receiptFile.name}</span>
+                            <span className="text-[9px] text-gray-500 mt-0.5">Produto Anexado</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center text-gray-400 p-2 text-center">
+                            <span className="material-symbols-outlined text-3xl mb-1">inventory_2</span>
+                            <span className="text-xs font-semibold text-gray-700">Foto do Produto</span>
+                            <span className="text-[10px] text-gray-400">Clique para anexar</span>
+                          </div>
+                        )}
+                        <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files && setReceiptFile(e.target.files[0])} />
+                      </label>
+
+                      <label className={`flex flex-col items-center justify-center h-36 border-2 border-dashed rounded-xl cursor-pointer transition-all relative overflow-hidden ${receiptInvoiceFile ? 'border-secondary-green bg-green-50' : 'border-gray-300 bg-stone-50 hover:bg-stone-100'}`}>
+                        {receiptInvoiceFile ? (
+                          <div className="flex flex-col items-center text-secondary-green p-2 text-center">
+                            <span className="material-symbols-outlined text-3xl mb-1">check_circle</span>
+                            <span className="text-[11px] font-bold truncate max-w-[140px]">{receiptInvoiceFile.name}</span>
+                            <span className="text-[9px] text-gray-500 mt-0.5">NF Anexada</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center text-gray-400 p-2 text-center">
+                            <span className="material-symbols-outlined text-3xl mb-1">receipt_long</span>
+                            <span className="text-xs font-semibold text-gray-700">Foto da Nota Fiscal</span>
+                            <span className="text-[10px] text-gray-400">Clique para anexar</span>
+                          </div>
+                        )}
+                        <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files && setReceiptInvoiceFile(e.target.files[0])} />
+                      </label>
+                    </div>
+
                     <Input value={receiptNF} onChange={setReceiptNF} placeholder="Nº da Nota Fiscal" />
                     <TextArea value={receiptObs} onChange={setReceiptObs} placeholder="Observações (Opcional)" rows={3} />
                     {isEditor ? (
@@ -1184,25 +1226,65 @@ const Operacional: React.FC = () => {
                 </div>
               )}
 
-              {/* Image Viewer */}
-              <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-700 flex flex-col items-center justify-center p-3 relative group min-h-[300px]">
-                <img
-                  src={selectedReceiptModal.photo_url}
-                  alt={`Nota Fiscal ${selectedReceiptModal.fiscal_note_number}`}
-                  className="max-h-[480px] w-auto object-contain rounded-lg shadow-md"
-                />
-                <div className="mt-3 flex items-center gap-3">
-                  <a
-                    href={selectedReceiptModal.photo_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
-                  >
-                    <span className="material-symbols-outlined text-sm">open_in_new</span>
-                    Abrir imagem em tamanho real
-                  </a>
-                </div>
-              </div>
+              {/* Image Viewer com Abas (Nota Fiscal / Produto) */}
+              {(() => {
+                const fotoProduto = selectedReceiptModal.foto_produto_url || (selectedReceiptModal.photo_url.includes('|||') ? selectedReceiptModal.photo_url.split('|||')[0] : selectedReceiptModal.photo_url);
+                const fotoNF = selectedReceiptModal.foto_nf_url || (selectedReceiptModal.photo_url.includes('|||') ? selectedReceiptModal.photo_url.split('|||')[1] : selectedReceiptModal.photo_url);
+                const currentImgUrl = modalActivePhoto === 'produto' ? fotoProduto : fotoNF;
+                const hasBoth = Boolean(fotoProduto && fotoNF && fotoProduto !== fotoNF);
+
+                return (
+                  <div className="space-y-3">
+                    {hasBoth && (
+                      <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+                        <button
+                          type="button"
+                          onClick={() => setModalActivePhoto('nf')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            modalActivePhoto === 'nf'
+                              ? 'bg-rustic-brown text-white shadow-xs'
+                              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+                          Nota Fiscal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setModalActivePhoto('produto')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            modalActivePhoto === 'produto'
+                              ? 'bg-rustic-brown text-white shadow-xs'
+                              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">inventory_2</span>
+                          Foto do Produto
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-700 flex flex-col items-center justify-center p-3 relative group min-h-[300px]">
+                      <img
+                        src={currentImgUrl}
+                        alt={`Recebimento NF ${selectedReceiptModal.fiscal_note_number} (${modalActivePhoto === 'produto' ? 'Produto' : 'Nota Fiscal'})`}
+                        className="max-h-[480px] w-auto object-contain rounded-lg shadow-md"
+                      />
+                      <div className="mt-3 flex items-center gap-3">
+                        <a
+                          href={currentImgUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
+                        >
+                          <span className="material-symbols-outlined text-sm">open_in_new</span>
+                          Abrir {modalActivePhoto === 'produto' ? 'foto do produto' : 'nota fiscal'} em tamanho real
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}
