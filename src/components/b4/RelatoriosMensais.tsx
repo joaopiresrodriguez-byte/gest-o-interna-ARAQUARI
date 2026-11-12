@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import {
   gerarRelatorioMensal,
@@ -11,6 +11,7 @@ import {
   buscarMissoesEInstrucoesGuarnicao,
   ItemMissaoInstrucaoGuarnicao
 } from '../../services/b4RelatorioService';
+import { ATIVIDADES_B4 } from '../../config/atividadesB4';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -52,9 +53,11 @@ const RelatoriosMensais: React.FC = () => {
   // Aba ativa de relatório: 'inventario' ou 'guarnicao_missoes'
   const [abaAtiva, setAbaAtiva] = useState<'inventario' | 'guarnicao_missoes'>('inventario');
 
-  // Inventário das 3 tabelas (b4_vehicles, b4_compartimentos_viaturas, b4_locais_equipamentos/checklist_itens)
+  // Inventário Consolidado (fleet, cautelas ativas, compartimentos_viatura, locais_equipamento)
   const [inventario, setInventario] = useState<InventarioItem[]>([]);
   const [filtroLocal, setFiltroLocal] = useState<string>('todos');
+  const [filtroAtividade, setFiltroAtividade] = useState<string>('todos');
+  const [buscaTexto, setBuscaTexto] = useState<string>('');
 
   // Missões e Instruções da Guarnição
   const [missoesGuarnicao, setMissoesGuarnicao] = useState<ItemMissaoInstrucaoGuarnicao[]>([]);
@@ -80,10 +83,9 @@ const RelatoriosMensais: React.FC = () => {
     return 'bg-stone-100 text-stone-800 border-stone-300';
   };
 
-
-  const carregarInventario = useCallback(async (local: string) => {
+  const carregarInventario = useCallback(async (local: string, atividade: string) => {
     try {
-      const data = await buscarInventarioConsolidado(local);
+      const data = await buscarInventarioConsolidado(local, atividade);
       setInventario(data);
     } catch (err: any) {
       console.error('Erro ao carregar inventário:', err);
@@ -110,9 +112,9 @@ const RelatoriosMensais: React.FC = () => {
 
   useEffect(() => {
     loadHistorico();
-    carregarInventario(filtroLocal);
+    carregarInventario(filtroLocal, filtroAtividade);
     carregarMissoesGuarnicao(mes, ano, filtroGuarnicao);
-  }, [loadHistorico, carregarInventario, filtroLocal, carregarMissoesGuarnicao, mes, ano, filtroGuarnicao]);
+  }, [loadHistorico, carregarInventario, filtroLocal, filtroAtividade, carregarMissoesGuarnicao, mes, ano, filtroGuarnicao]);
 
 
   const handleGerar = async () => {
@@ -121,7 +123,7 @@ const RelatoriosMensais: React.FC = () => {
       const resultado = await gerarRelatorioMensal(mes, ano);
       setRelatorio(resultado);
       await salvarRelatorio(resultado);
-      await carregarInventario(filtroLocal);
+      await carregarInventario(filtroLocal, filtroAtividade);
 
       toast.success(`Relatório de ${MESES[mes - 1]}/${ano} gerado com sucesso!`);
       loadHistorico();
@@ -155,33 +157,46 @@ const RelatoriosMensais: React.FC = () => {
 
     // Table of Inventory with alerts in RED
     if (abaAtiva === 'inventario') {
-      const tableBody = inventario.map(item => [
-        item.nome,
-        item.tomboPatrimonio,
-        item.tipo,
-        item.localViatura + (item.compartimento ? ` (${item.compartimento})` : ''),
-        item.quantidade.toString(),
-        item.estadoConservacao
-      ]);
+      const tableBody = inventarioFiltrado.map(item => {
+        let localDesc = item.localViatura;
+        if (item.compartimento) {
+          localDesc = item.viaturaNome 
+            ? `${item.viaturaNome} > Comp: ${item.compartimento}`
+            : `${item.localViatura} > Comp: ${item.compartimento}`;
+        }
+        const atvsStr = item.atividades && item.atividades.length > 0 ? item.atividades.join(', ') : '-';
+        return [
+          item.nome,
+          item.tomboPatrimonio,
+          item.tipo,
+          atvsStr,
+          localDesc,
+          item.quantidade.toString(),
+          item.estadoConservacao
+        ];
+      });
 
       autoTable(doc, {
         startY: 54,
-        head: [['Item / Equipamento', 'Tombo/Placa', 'Tipo', 'Local / Viatura / Compartimento', 'Qtd', 'Estado']],
+        head: [['Item / Equipamento', 'Tombo/Placa', 'Tipo', 'Atividade', 'Local / Viatura (Compartimento)', 'Qtd', 'Estado']],
         body: tableBody,
-        styles: { fontSize: 8 },
+        styles: { fontSize: 7 },
         headStyles: { fillColor: [30, 41, 59], textColor: 255 },
         didParseCell: (data) => {
           if (data.section === 'body') {
             const itemIndex = data.row.index;
-            const item = inventario[itemIndex];
-            if (item && item.statusAlerta !== 'normal') {
-              data.cell.styles.textColor = [185, 28, 28];
+            const item = inventarioFiltrado[itemIndex];
+            if (item && item.isEmprestado) {
+              data.cell.styles.textColor = [194, 65, 12]; // âmbar/laranja
+              data.cell.styles.fontStyle = 'bold';
+            } else if (item && item.statusAlerta !== 'normal') {
+              data.cell.styles.textColor = [185, 28, 28]; // vermelho
               data.cell.styles.fontStyle = 'bold';
             }
           }
         }
       });
-      doc.save(`INVENTARIO_PATRIMONIAL_B4_${MESES[rel.mes - 1].toLowerCase()}_${rel.ano}.pdf`);
+      doc.save(`INVENTARIO_PATRIMONIAL_B4_${filtroAtividade !== 'todos' ? filtroAtividade.toUpperCase() + '_' : ''}${MESES[rel.mes - 1].toLowerCase()}_${rel.ano}.pdf`);
       toast.success('PDF do Inventário exportado!');
     } else {
       const tableBody = missoesGuarnicao.map(item => [
@@ -216,16 +231,20 @@ const RelatoriosMensais: React.FC = () => {
   const exportarTSV = async () => {
     try {
       if (abaAtiva === 'inventario') {
-        const items = await buscarInventarioConsolidado(filtroLocal);
+        const items = await buscarInventarioConsolidado(filtroLocal, filtroAtividade);
         const headers = [
           'ID',
           'Nome do Item / Equipamento',
           'Tombo / Patrimônio / Placa',
           'Tipo',
+          'Atividades',
           'Local ou Viatura',
           'Compartimento',
+          'Viatura Abrigo',
           'Quantidade',
-          'Estado de Conservação / Condição',
+          'Estado',
+          'Emprestado / Cautelado',
+          'Solicitante Cautela',
           'Status Alerta',
           'Detalhes / Observações'
         ];
@@ -235,10 +254,14 @@ const RelatoriosMensais: React.FC = () => {
           item.nome,
           item.tomboPatrimonio,
           item.tipo,
+          item.atividades.join(', ') || 'N/A',
           item.localViatura,
           item.compartimento || 'N/A',
+          item.viaturaNome || 'N/A',
           item.quantidade,
           item.estadoConservacao,
+          item.isEmprestado ? 'SIM' : 'NÃO',
+          item.cautelaInfo?.solicitante || 'N/A',
           item.statusAlerta !== 'normal' ? `[ALERTA: ${item.statusAlerta.toUpperCase()}]` : 'OK',
           item.detalhes || ''
         ].map(val => String(val).replace(/\t|\n/g, ' ')).join('\t'));
@@ -247,7 +270,7 @@ const RelatoriosMensais: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `INVENTARIO_PATRIMONIAL_B4_${filtroLocal.toUpperCase()}_${new Date().toISOString().split('T')[0]}.tsv`;
+        a.download = `INVENTARIO_PATRIMONIAL_B4_${filtroAtividade.toUpperCase()}_${filtroLocal.toUpperCase()}_${new Date().toISOString().split('T')[0]}.tsv`;
         a.click();
         URL.revokeObjectURL(url);
         toast.success('Inventário TSV exportado com sucesso!');
@@ -293,7 +316,23 @@ const RelatoriosMensais: React.FC = () => {
 
   const activeReport = viewingReport?.dados || relatorio;
 
-  const locsUnicos = Array.from(new Set(inventario.map(i => i.localViatura))).sort();
+  const locsUnicos = useMemo(() => {
+    return Array.from(new Set(inventario.map(i => i.localViatura).filter(Boolean))).sort();
+  }, [inventario]);
+
+  // Itens filtrados no frontend por busca rápida de texto
+  const inventarioFiltrado = useMemo(() => {
+    if (!buscaTexto.trim()) return inventario;
+    const termo = buscaTexto.toLowerCase().trim();
+    return inventario.filter(item =>
+      item.nome.toLowerCase().includes(termo) ||
+      item.tomboPatrimonio.toLowerCase().includes(termo) ||
+      item.localViatura.toLowerCase().includes(termo) ||
+      (item.compartimento && item.compartimento.toLowerCase().includes(termo)) ||
+      (item.viaturaNome && item.viaturaNome.toLowerCase().includes(termo)) ||
+      (item.cautelaInfo?.solicitante && item.cautelaInfo.solicitante.toLowerCase().includes(termo))
+    );
+  }, [inventario, buscaTexto]);
 
   return (
     <div className="space-y-8">
@@ -436,22 +475,58 @@ const RelatoriosMensais: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {abaAtiva === 'inventario' ? (
-              <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
-                <span className="material-symbols-outlined text-stone-400 text-[18px]">filter_alt</span>
-                <label className="text-xs font-bold text-rustic-brown">Filtrar Local/Viatura:</label>
-                <select
-                  value={filtroLocal}
-                  onChange={e => setFiltroLocal(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer"
-                >
-                  <option value="todos">Visão Geral (Todos)</option>
-                  {locsUnicos.map(loc => (
-                    <option key={loc} value={loc}>{loc}</option>
-                  ))}
-                </select>
-              </div>
+              <>
+                {/* Busca Rápida */}
+                <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5 min-w-[200px]">
+                  <span className="material-symbols-outlined text-stone-400 text-[18px]">search</span>
+                  <input
+                    type="text"
+                    placeholder="Buscar nome, tombo, local..."
+                    value={buscaTexto}
+                    onChange={e => setBuscaTexto(e.target.value)}
+                    className="bg-transparent text-xs font-medium text-rustic-brown outline-none w-full placeholder:text-stone-400"
+                  />
+                  {buscaTexto && (
+                    <button onClick={() => setBuscaTexto('')} className="text-stone-400 hover:text-stone-600">
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Filtro Atividade de Atuação */}
+                <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
+                  <span className="material-symbols-outlined text-amber-600 text-[18px]">category</span>
+                  <label className="text-xs font-bold text-rustic-brown whitespace-nowrap">Atividade:</label>
+                  <select
+                    value={filtroAtividade}
+                    onChange={e => setFiltroAtividade(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer max-w-[160px]"
+                  >
+                    <option value="todos">Todas as Atividades</option>
+                    {ATIVIDADES_B4.map(atv => (
+                      <option key={atv} value={atv}>{atv}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro Local / Viatura */}
+                <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
+                  <span className="material-symbols-outlined text-stone-400 text-[18px]">filter_alt</span>
+                  <label className="text-xs font-bold text-rustic-brown whitespace-nowrap">Local/Viatura:</label>
+                  <select
+                    value={filtroLocal}
+                    onChange={e => setFiltroLocal(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer max-w-[160px]"
+                  >
+                    <option value="todos">Visão Geral (Todos)</option>
+                    {locsUnicos.map(loc => (
+                      <option key={loc} value={loc}>{loc}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
             ) : (
               <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5">
                 <span className="material-symbols-outlined text-stone-400 text-[18px]">groups</span>
@@ -475,64 +550,169 @@ const RelatoriosMensais: React.FC = () => {
         {/* Content based on Active Tab */}
         {abaAtiva === 'inventario' ? (
           <div className="overflow-x-auto">
+            <div className="flex items-center justify-between pb-2 text-xs text-rustic-brown/70 font-medium">
+              <span>
+                Exibindo <strong>{inventarioFiltrado.length}</strong> itens
+                {inventarioFiltrado.length !== inventario.length && ` (filtrados de ${inventario.length})`}
+              </span>
+              <div className="flex items-center gap-3 text-[11px]">
+                <span className="flex items-center gap-1 font-semibold text-green-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span> Ativo
+                </span>
+                <span className="flex items-center gap-1 font-semibold text-amber-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Emprestado (Cautela)
+                </span>
+                <span className="flex items-center gap-1 font-semibold text-red-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> Manutenção / Baixado
+                </span>
+              </div>
+            </div>
+
             <table className="w-full text-left text-sm border-collapse">
               <thead>
                 <tr className="bg-stone-50 text-[10px] font-black uppercase tracking-wider text-rustic-brown/60 border-b border-rustic-border">
                   <th className="py-3 px-4">Item / Equipamento</th>
-                  <th className="py-3 px-4">Tombo / Placa</th>
+                  <th className="py-3 px-4">Placa / Patrimônio</th>
                   <th className="py-3 px-4">Tipo</th>
-                  <th className="py-3 px-4">Local / Viatura (Compartimento)</th>
+                  <th className="py-3 px-4">Atividade de Atuação</th>
+                  <th className="py-3 px-4">Local / Viatura & Compartimento</th>
                   <th className="py-3 px-4 text-center">Qtd</th>
-                  <th className="py-3 px-4 text-center">Estado / Alerta</th>
+                  <th className="py-3 px-4 text-center">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-rustic-border/30">
-                {inventario.length === 0 ? (
+                {inventarioFiltrado.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-stone-400 italic">
-                      Nenhum bem patrimonial encontrado para o filtro selecionado.
+                    <td colSpan={7} className="py-8 text-center text-stone-400 italic">
+                      Nenhum bem patrimonial encontrado para os filtros selecionados.
                     </td>
                   </tr>
                 ) : (
-                  inventario.map((item, idx) => {
+                  inventarioFiltrado.map((item, idx) => {
                     const hasAlert = item.statusAlerta !== 'normal';
                     return (
                       <tr
                         key={item.id || idx}
-                        className={`hover:bg-stone-50/70 transition-colors ${hasAlert ? 'bg-red-50/50' : ''}`}
+                        className={`hover:bg-stone-50/70 transition-colors ${
+                          item.isEmprestado 
+                            ? 'bg-amber-50/40' 
+                            : hasAlert 
+                              ? 'bg-red-50/50' 
+                              : ''
+                        }`}
                       >
+                        {/* Item */}
                         <td className="py-3 px-4 font-bold text-rustic-brown">
                           <div className="flex items-center gap-2">
-                            <span className={`material-symbols-outlined text-[16px] ${hasAlert ? 'text-red-600' : 'text-stone-400'}`}>
-                              {item.tipo === 'Viatura' ? 'local_shipping' : item.tipo === 'Compartimento' ? 'grid_view' : 'build'}
+                            <span className={`material-symbols-outlined text-[16px] ${
+                              item.isEmprestado ? 'text-amber-600' : hasAlert ? 'text-red-600' : 'text-stone-400'
+                            }`}>
+                              {item.tipo === 'Viatura' ? 'local_shipping' : 'build'}
                             </span>
-                            <span>{item.nome}</span>
+                            <div>
+                              <span>{item.nome}</span>
+                              {item.detalhes && (
+                                <p className="text-[10px] font-normal text-stone-500 truncate max-w-xs">{item.detalhes}</p>
+                              )}
+                            </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-xs font-mono font-bold text-rustic-brown/70">{item.tomboPatrimonio}</td>
+
+                        {/* Placa / Patrimônio */}
+                        <td className="py-3 px-4 text-xs font-mono font-bold text-rustic-brown/70">
+                          {item.tomboPatrimonio}
+                        </td>
+
+                        {/* Tipo */}
                         <td className="py-3 px-4 text-xs">
-                          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-stone-100 text-rustic-brown border border-rustic-border/40">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${
+                            item.tipo === 'Viatura'
+                              ? 'bg-slate-100 text-slate-800 border-slate-300'
+                              : item.tipo === 'Equipamento'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-stone-100 text-stone-700 border-stone-300'
+                          }`}>
                             {item.tipo}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-rustic-brown font-medium">
-                          {item.localViatura}
-                          {item.compartimento && (
-                            <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-200">
-                              {item.compartimento}
-                            </span>
+
+                        {/* Atividades */}
+                        <td className="py-3 px-4 text-xs">
+                          {item.atividades && item.atividades.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {item.atividades.map((atv, i) => (
+                                <span
+                                  key={i}
+                                  className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200"
+                                >
+                                  {atv}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-stone-400 italic">-</span>
                           )}
                         </td>
+
+                        {/* Local / Viatura & Compartimento */}
+                        <td className="py-3 px-4 text-xs text-rustic-brown font-medium">
+                          {item.viaturaNome ? (
+                            <div>
+                              <span className="font-bold text-slate-800">{item.viaturaNome}</span>
+                              {item.compartimento && (
+                                <div className="mt-0.5">
+                                  <span className="text-[10px] text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-semibold inline-flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[11px]">grid_view</span>
+                                    Comp: {item.compartimento}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <span>{item.localViatura}</span>
+                              {item.compartimento && (
+                                <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-200 font-semibold">
+                                  {item.compartimento}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Quantidade */}
                         <td className="py-3 px-4 text-xs font-black text-center">{item.quantidade}</td>
+
+                        {/* Estado (Ativo / Emprestado / Manutenção) */}
                         <td className="py-3 px-4 text-center">
-                          <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 ${
-                            hasAlert
-                              ? 'bg-red-100 text-red-700 border border-red-300 shadow-sm'
-                              : 'bg-green-100 text-green-700 border border-green-200'
-                          }`}>
-                            {hasAlert && <span className="material-symbols-outlined text-[12px]">error</span>}
-                            {item.estadoConservacao}
-                          </span>
+                          {item.isEmprestado ? (
+                            <div className="inline-flex flex-col items-center">
+                              <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 bg-amber-100 text-amber-800 border border-amber-300 shadow-sm">
+                                <span className="material-symbols-outlined text-[12px]">assignment_return</span>
+                                Emprestado
+                              </span>
+                              {item.cautelaInfo?.solicitante && (
+                                <span className="text-[9px] text-amber-800 font-bold mt-0.5 max-w-[120px] truncate" title={`Com: ${item.cautelaInfo.solicitante}`}>
+                                  com {item.cautelaInfo.solicitante.split(' ')[0]}
+                                </span>
+                              )}
+                            </div>
+                          ) : item.statusAlerta === 'manutencao' ? (
+                            <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 bg-red-100 text-red-700 border border-red-300 shadow-sm">
+                              <span className="material-symbols-outlined text-[12px]">build</span>
+                              Manutenção
+                            </span>
+                          ) : item.statusAlerta === 'baixado' ? (
+                            <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 bg-stone-200 text-stone-700 border border-stone-300">
+                              <span className="material-symbols-outlined text-[12px]">archive</span>
+                              Inativo
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1 bg-green-100 text-green-700 border border-green-200">
+                              <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                              Ativo
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
