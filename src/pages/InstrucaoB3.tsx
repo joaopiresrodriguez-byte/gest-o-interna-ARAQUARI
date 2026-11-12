@@ -10,6 +10,8 @@ import SubmoduloCadastroWhatsapp from '../components/b3/SubmoduloCadastroWhatsap
 import SubmoduloSolicitacoesApoio from '../components/b3/SubmoduloSolicitacoesApoio';
 import { b3SolicitacoesService } from '../services/b3SolicitacoesService';
 import { supabase } from '../services/supabase';
+import { ModalEditarInstrucao } from '../components/shared/ModalEditarInstrucao';
+import { STATUS_INSTRUCAO, STATUS_RESULTADO_INSTRUCAO, atualizarInstrucao } from '../services/instrucoesService';
 
 
 const InstrucaoB3: React.FC = () => {
@@ -17,6 +19,11 @@ const InstrucaoB3: React.FC = () => {
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [trainingToEdit, setTrainingToEdit] = useState<Training | null>(null);
+  const [trainingResultModal, setTrainingResultModal] = useState<Training | null>(null);
+  const [resStatus, setResStatus] = useState<string>('concluida');
+  const [resObservacoes, setResObservacoes] = useState<string>('');
+  const [resSalvando, setResSalvando] = useState<boolean>(false);
 
   const { profile, user } = useAuth();
 
@@ -904,7 +911,9 @@ const InstrucaoB3: React.FC = () => {
                 <span className="text-xs font-bold opacity-60">Próximos 7 dias</span>
               </div>
               <div className="p-6 space-y-4">
-                {trainings.map(t => (
+                {trainings.map(t => {
+                  const statusInfo = STATUS_INSTRUCAO[t.status] || STATUS_INSTRUCAO.Scheduled;
+                  return (
                   <div key={t.id} className="flex flex-col bg-white/5 rounded-xl p-4 border border-white/5 hover:bg-white/10 transition-all group gap-3">
                     <div className="flex items-center gap-4">
                       <div className="flex flex-col items-center justify-center size-14 bg-white text-[#2D2926] rounded-xl flex-shrink-0">
@@ -912,9 +921,17 @@ const InstrucaoB3: React.FC = () => {
                         <span className="text-2xl font-black leading-none">{t.date.split('-')[2]}</span>
                       </div>
                       <div className="flex flex-1 flex-col truncate">
-                        <h5 className="text-base font-black truncate">
-                          {t.tema || t.materia?.tema || t.materia?.name || "Treinamento"}
-                        </h5>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h5 className="text-base font-black truncate">
+                            {t.tema || t.materia?.tema || t.materia?.name || "Treinamento"}
+                          </h5>
+                          <span
+                            className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase"
+                            style={{ backgroundColor: statusInfo.fundo, color: statusInfo.cor }}
+                          >
+                            {statusInfo.icone} {statusInfo.label}
+                          </span>
+                        </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm opacity-70">
                           <span className="flex items-center gap-1 whitespace-nowrap">
                             <span className="material-symbols-outlined text-[16px]">schedule</span>
@@ -924,17 +941,51 @@ const InstrucaoB3: React.FC = () => {
                             <span className="material-symbols-outlined text-[16px]">person</span>
                             {t.instructor}
                           </span>
+                          {t.completed_by && (
+                            <span className="text-emerald-400 font-bold text-xs flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[14px]">verified</span>
+                              {t.completed_by}
+                            </span>
+                          )}
                         </div>
+                        {t.observacoes && (
+                          <div className="mt-1 text-xs opacity-80 italic bg-white/5 px-2 py-1 rounded">
+                            <strong>Obs:</strong> {t.observacoes}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         {profile?.p_instrucao === 'editor' && (
-                          <button
-                            onClick={() => handleDeleteTraining(t.id!)}
-                            className="size-9 rounded-full border border-white/20 flex items-center justify-center opacity-40 hover:opacity-100 hover:bg-red-500 transition-all"
-                            title="Remover Treinamento"
-                          >
-                            <span className="material-symbols-outlined text-sm">delete</span>
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setTrainingToEdit(t)}
+                              className="size-8 rounded-lg bg-blue-500/20 hover:bg-blue-500 text-blue-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                              title="Editar Instrução Marcada"
+                            >
+                              <span className="material-symbols-outlined text-sm">edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTrainingResultModal(t);
+                                setResStatus(t.status || 'concluida');
+                                setResObservacoes(t.observacoes || '');
+                              }}
+                              className="size-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                              title="Registrar Resultado / Observação"
+                            >
+                              <span className="material-symbols-outlined text-sm">edit_note</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTraining(t.id!)}
+                              className="size-8 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                              title="Remover Treinamento"
+                            >
+                              <span className="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -969,7 +1020,8 @@ const InstrucaoB3: React.FC = () => {
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 {trainings.length === 0 && <p className="text-center opacity-40 italic py-4">Nenhum treinamento agendado.</p>}
               </div>
             </section>
@@ -1417,6 +1469,115 @@ const InstrucaoB3: React.FC = () => {
           </div>
         </div>
       </ModalEdicao>
+
+      {/* Modal de Edição da Instrução Marcada */}
+      <ModalEditarInstrucao
+        isOpen={!!trainingToEdit}
+        onClose={() => setTrainingToEdit(null)}
+        instrucao={trainingToEdit}
+        materiasList={materias}
+        onSuccess={() => loadData()}
+      />
+
+      {/* Modal de Conclusão / Resultado da Instrução */}
+      {trainingResultModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 my-8">
+            <div className="bg-gradient-to-r from-emerald-800 to-slate-900 px-6 py-4 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-2xl text-emerald-400">assignment_turned_in</span>
+                <div>
+                  <h3 className="font-bold text-base">Registrar Resultado da Instrução</h3>
+                  <p className="text-xs text-slate-300 truncate max-w-xs">{trainingResultModal.tema || trainingResultModal.materia?.name || 'Instrução'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTrainingResultModal(null)}
+                type="button"
+                className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-xl block">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
+                  Status Final da Instrução
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {STATUS_RESULTADO_INSTRUCAO.map((item) => {
+                    const selected = resStatus === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setResStatus(item.key)}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                        style={{
+                          border: selected ? `2px solid ${item.cor}` : '2px solid #e2e8f0',
+                          background: selected ? item.fundo : 'white',
+                          color: selected ? item.cor : '#64748b',
+                        }}
+                      >
+                        <span>{item.icone}</span>
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
+                  Observações / Justificativas
+                </label>
+                <textarea
+                  value={resObservacoes}
+                  onChange={(e) => setResObservacoes(e.target.value)}
+                  rows={3}
+                  placeholder="Relate os tópicos ministrados, militares presentes ou motivo de cancelamento..."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-emerald-500 outline-none resize-vertical"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setTrainingResultModal(null)}
+                  disabled={resSalvando}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={resSalvando}
+                  onClick={async () => {
+                    setResSalvando(true);
+                    try {
+                      await atualizarInstrucao(trainingResultModal.id!, {
+                        status: resStatus,
+                        observacoes: resObservacoes,
+                      });
+                      toast.success('Resultado da instrução registrado com sucesso!');
+                      setTrainingResultModal(null);
+                      loadData();
+                    } catch (err: any) {
+                      toast.error('Erro ao salvar resultado: ' + (err?.message || 'Tente novamente'));
+                    } finally {
+                      setResSalvando(false);
+                    }
+                  }}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  {resSalvando ? 'Salvando...' : 'Confirmar Resultado'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

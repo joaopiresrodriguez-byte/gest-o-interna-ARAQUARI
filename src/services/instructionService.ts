@@ -259,6 +259,21 @@ export const InstructionService = {
     },
 
     /**
+     * Atualizar treinamento
+     */
+    updateTraining: async (id: string, updates: Partial<Training>): Promise<Training> => {
+        try {
+            const { materia, ...cleanUpdates } = updates;
+            const updated = await trainingsBase.update(id, cleanUpdates as Partial<Training>);
+            triggerSync('training_schedule', id).catch(() => {});
+            return updated;
+        } catch (error) {
+            console.error('Error updating training:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Deletar treinamento
      */
     deleteTraining: async (id: string): Promise<void> => {

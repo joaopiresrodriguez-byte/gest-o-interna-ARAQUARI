@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { SupabaseService, ProductReceipt, DailyMission, Training } from '../services/SupabaseService';
+import { SupabaseService, ProductReceipt, DailyMission, Training, MateriaInstrucao } from '../services/SupabaseService';
 import { OperationalService } from '../services/operationalService';
 import { NotificationService } from '../services/NotificationService';
 import { toast } from 'sonner';
@@ -10,6 +10,9 @@ import ConferenciaDiaria from '../components/operacional/ConferenciaDiaria';
 import SecaoCautelasOperacional from '../components/operacional/SecaoCautelasOperacional';
 import HistoricoConferencias from '../components/b4/HistoricoConferencias';
 import { DailyMissionModal } from '../components/shared/DailyMissionModal';
+import { CardInstrucao } from '../components/shared/CardInstrucao';
+import { ModalEditarInstrucao } from '../components/shared/ModalEditarInstrucao';
+import { atualizarInstrucao } from '../services/instrucoesService';
 
 // ============ SUB-COMPONENTS ============
 
@@ -516,7 +519,9 @@ const Operacional: React.FC = () => {
   // Daily Missions states
   const [missions, setMissions] = useState<DailyMission[]>([]);
   const [trainings, setTrainings] = useState<Training[]>([]);
+  const [materiasList, setMateriasList] = useState<MateriaInstrucao[]>([]);
   const [missionToEdit, setMissionToEdit] = useState<DailyMission | null>(null);
+  const [instrucaoToEdit, setInstrucaoToEdit] = useState<Training | null>(null);
   const [missionForm, setMissionForm] = useState({
     title: '', description: '', mission_date: new Date().toISOString().split('T')[0],
     start_time: '', end_time: '', priority: 'media' as DailyMission['priority'],
@@ -546,17 +551,19 @@ const Operacional: React.FC = () => {
         return [] as typeof receipts;
       });
 
-      const [recs, missionsData, trainingsData, escalaData] = await Promise.all([
+      const [recs, missionsData, trainingsData, escalaData, matData] = await Promise.all([
         receiptsPromise,
         OperationalService.getDailyMissions({ mes: mesAtual }),
         SupabaseService.getTrainings(),
-        SupabaseService.getEscalaByDate(todayStr)
+        SupabaseService.getEscalaByDate(todayStr),
+        SupabaseService.getMateriasInstrucao().catch(() => [] as MateriaInstrucao[])
       ]);
 
       setReceipts(recs);
       setEscalaHoje(escalaData);
       setMissions(missionsData);
-      setTrainings(trainingsData.filter(t => t.status === 'Scheduled' || t.status === 'Canceled' || t.status === 'Cancelado'));
+      setTrainings(trainingsData || []);
+      setMateriasList(matData || []);
     } catch (error) {
       console.error("Error loading operational data:", error);
     } finally {
@@ -607,6 +614,28 @@ const Operacional: React.FC = () => {
       loadAllData();
     } catch {
       toast.error('Erro ao excluir missão.');
+    }
+  }, [loadAllData]);
+
+  const handleUpdateTrainingStatus = useCallback(async (id: string, status: string) => {
+    try {
+      await atualizarInstrucao(id, { status });
+      toast.success('Status da instrução atualizado.');
+      loadAllData();
+    } catch (error) {
+      console.error("Error updating training status:", error);
+      toast.error("Erro ao atualizar status da instrução.");
+    }
+  }, [loadAllData]);
+
+  const handleDeleteTraining = useCallback(async (id: string) => {
+    if (!confirm('Excluir esta instrução marcada?')) return;
+    try {
+      await SupabaseService.deleteTraining(id);
+      toast.success('Instrução excluída.');
+      loadAllData();
+    } catch {
+      toast.error('Erro ao excluir instrução.');
     }
   }, [loadAllData]);
 
@@ -903,58 +932,29 @@ const Operacional: React.FC = () => {
               {unifiedMissions.map((item, idx) => {
                 const todayStr = new Date().toISOString().split('T')[0];
 
-                // Render training item
+                // Render training item with full actions (edit, delete, result/conclusion)
                 if (item.type === 'training') {
                   const t = item.data as Training;
-                  const materiaName = t.tema || (t.materia as any)?.tema || (t.materia as any)?.name || t.materia_id || 'Instrução';
-                  const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
                   const isFuture = Boolean(t.date && t.date > todayStr);
 
                   return (
-                    <div key={`training-${t.id || idx}`} className={`rounded-xl border shadow-sm p-5 transition-all ${isFuture ? 'bg-slate-50 border-slate-200 opacity-75' : isCanceled ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-blue-50 border-blue-200 hover:shadow-md'}`}>
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isFuture ? 'bg-slate-200 text-slate-600' : isCanceled ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>
-                            <span className="material-symbols-outlined">school</span>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <p className={`font-bold text-base truncate ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{materiaName}</p>
-                              {isFuture && (
-                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
-                                  FUTURO
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${isCanceled ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>Instrução</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isCanceled ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                {isCanceled ? 'Cancelada' : 'Agendada'}
-                              </span>
-                              {t.date && (
-                                <span className="text-[10px] text-gray-500 font-bold flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                  {new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                </span>
-                              )}
-                              {t.time && (
-                                <span className="text-[10px] text-gray-500 font-bold">
-                                  <span className="material-symbols-outlined text-[12px] align-middle">schedule</span> {t.time}
-                                </span>
-                              )}
-                              {t.instructor && (
-                                <span className="text-[10px] text-gray-500 font-bold">
-                                  <span className="material-symbols-outlined text-[12px] align-middle">person</span> {t.instructor}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <span className="text-[10px] text-blue-500 font-bold">Gerenciar em B3</span>
-                        </div>
-                      </div>
-                    </div>
+                    <CardInstrucao
+                      key={`training-${t.id || idx}`}
+                      instrucao={t}
+                      isEditor={isEditor}
+                      isFuture={isFuture}
+                      materiasList={materiasList}
+                      onAtualizar={loadAllData}
+                      onEditarCompleto={!isFuture ? (inst) => {
+                        setInstrucaoToEdit(inst);
+                      } : undefined}
+                      onIniciar={
+                        !isFuture && (t.status === 'Scheduled' || t.status === 'agendada')
+                          ? () => handleUpdateTrainingStatus(t.id!, 'em_andamento')
+                          : undefined
+                      }
+                      onExcluir={!isFuture ? () => handleDeleteTraining(t.id!) : undefined}
+                    />
                   );
                 }
 
@@ -1361,6 +1361,14 @@ const Operacional: React.FC = () => {
           setMissionToEdit(null);
           loadAllData();
         }}
+      />
+
+      <ModalEditarInstrucao
+        isOpen={!!instrucaoToEdit}
+        onClose={() => setInstrucaoToEdit(null)}
+        instrucao={instrucaoToEdit}
+        materiasList={materiasList}
+        onSuccess={() => loadAllData()}
       />
     </div>
   );

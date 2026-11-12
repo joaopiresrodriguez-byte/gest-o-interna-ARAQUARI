@@ -206,6 +206,19 @@ export const OperationalService = {
     },
 
     /**
+     * Atualizar treinamento
+     */
+    updateTraining: async (id: string, updates: Partial<Training>): Promise<Training> => {
+        try {
+            const { materia, ...cleanUpdates } = updates;
+            return await trainingsBase.update(id, cleanUpdates as Partial<Training>);
+        } catch (error) {
+            console.error('Error updating training:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Deletar treinamento
      */
     deleteTraining: async (id: string): Promise<void> => {

@@ -300,6 +300,10 @@ export interface Training {
     instructor: string;
     tema?: string;
     status: string;
+    observacoes?: string;
+    completed_by?: string;
+    editado_por_nome?: string;
+    editado_em?: string;
     materia?: MateriaInstrucao;
 }
 

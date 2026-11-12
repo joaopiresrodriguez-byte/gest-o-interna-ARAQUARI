@@ -48,6 +48,7 @@ const timeAgo = (isoDate: string) => {
 import { DailyMissionModal } from '../components/shared/DailyMissionModal';
 import { ConcluirMissaoModal } from '../components/shared/ConcluirMissaoModal';
 import { STATUS_MISSAO } from '../services/missoesService';
+import { STATUS_INSTRUCAO, STATUS_RESULTADO_INSTRUCAO, atualizarInstrucao } from '../services/instrucoesService';
 
 const DashboardAvisos: React.FC = () => {
   const { user, profile } = useAuth();
@@ -67,9 +68,13 @@ const DashboardAvisos: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [expandido, setExpandido] = useState(false);
 
-  // Estados dos modais de missão
+  // Estados dos modais de missão e instrução
   const [isNewMissionModalOpen, setIsNewMissionModalOpen] = useState(false);
   const [selectedMissionForConclusion, setSelectedMissionForConclusion] = useState<DailyMission | null>(null);
+  const [selectedTrainingForConclusion, setSelectedTrainingForConclusion] = useState<Training | null>(null);
+  const [tStatus, setTStatus] = useState<string>('concluida');
+  const [tObservacoes, setTObservacoes] = useState<string>('');
+  const [tSalvando, setTSalvando] = useState<boolean>(false);
 
   // Exibir por padrão apenas 1 ASU + 1 ABTR + 1 AR (ou primeiras ativas)
   const TIPOS_DESTAQUE = ['ASU', 'ABTR', 'AR'];
@@ -609,6 +614,8 @@ const DashboardAvisos: React.FC = () => {
                         const t = item.data as Training;
                         const materiaName = t.tema || (t.materia as any)?.tema || (t.materia as any)?.name || t.materia_id || 'Instrução';
                         const isCanceled = t.status === 'Canceled' || t.status === 'Cancelado';
+                        const statusInfo = STATUS_INSTRUCAO[t.status] || STATUS_INSTRUCAO.Scheduled;
+
                         return (
                           <div key={`training-${t.id || idx}`} className={`flex items-start gap-4 p-4 hover:bg-blue-50/40 transition-colors ${isCanceled ? 'bg-gray-50/50 border-l-2 border-gray-400 opacity-60' : 'bg-blue-50/20 border-l-2 border-blue-400'}`}>
                             <div className="w-6 h-6 mt-0.5 rounded flex items-center justify-center flex-shrink-0">
@@ -617,15 +624,18 @@ const DashboardAvisos: React.FC = () => {
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className={`font-medium ${isCanceled ? 'text-gray-500 line-through' : 'text-blue-900'}`}>{materiaName}</p>
-                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${isCanceled ? 'bg-gray-200 text-gray-700' : 'bg-blue-100 text-blue-700'}`}>
-                                  {isCanceled ? 'Instrução Cancelada' : 'Instrução Agendada'}
+                                <span
+                                  className="text-[8px] font-black px-1.5 py-0.5 rounded uppercase"
+                                  style={{ backgroundColor: statusInfo.fundo, color: statusInfo.cor }}
+                                >
+                                  {statusInfo.icone} {statusInfo.label}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-3 mt-1">
+                              <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 {t.time && (
                                   <span className={`text-[10px] font-bold flex items-center gap-1 ${isCanceled ? 'text-gray-400' : 'text-blue-600'}`}>
                                     <span className="material-symbols-outlined text-[14px]">schedule</span>
-                                    {t.time}
+                                    {t.time}{t.end_time ? ` - ${t.end_time}` : ''}
                                   </span>
                                 )}
                                 {t.instructor && (
@@ -634,8 +644,35 @@ const DashboardAvisos: React.FC = () => {
                                     {t.instructor}
                                   </span>
                                 )}
+                                {t.completed_by && (
+                                  <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                    <span className="material-symbols-outlined text-[14px]">verified</span>
+                                    {t.completed_by}
+                                  </span>
+                                )}
                               </div>
+                              {t.observacoes && (
+                                <div className="mt-1.5 p-2 bg-blue-50/70 border border-blue-200/60 rounded text-[11px] text-blue-950">
+                                  <strong>Obs:</strong> {t.observacoes}
+                                </div>
+                              )}
                             </div>
+
+                            {isEditor && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedTrainingForConclusion(t);
+                                  setTStatus(t.status || 'concluida');
+                                  setTObservacoes(t.observacoes || '');
+                                }}
+                                className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                                title="Registrar Resultado / Observação da Instrução"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                                Resultado
+                              </button>
+                            )}
                           </div>
                         );
                       }
@@ -1235,6 +1272,108 @@ const DashboardAvisos: React.FC = () => {
         mission={selectedMissionForConclusion}
         onSuccess={() => loadData()}
       />
+
+      {/* Modal de Conclusão / Resultado da Instrução */}
+      {selectedTrainingForConclusion && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 my-8">
+            <div className="bg-gradient-to-r from-blue-900 to-slate-900 px-6 py-4 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-2xl text-blue-400">assignment_turned_in</span>
+                <div>
+                  <h3 className="font-bold text-base">Registrar Resultado da Instrução</h3>
+                  <p className="text-xs text-slate-300 truncate max-w-xs">
+                    {selectedTrainingForConclusion.tema || selectedTrainingForConclusion.materia?.name || 'Instrução'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedTrainingForConclusion(null)}
+                type="button"
+                className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-xl block">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
+                  Status Final da Instrução
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {STATUS_RESULTADO_INSTRUCAO.map((item) => {
+                    const selected = tStatus === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setTStatus(item.key)}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                        style={{
+                          border: selected ? `2px solid ${item.cor}` : '2px solid #e2e8f0',
+                          background: selected ? item.fundo : 'white',
+                          color: selected ? item.cor : '#64748b',
+                        }}
+                      >
+                        <span>{item.icone}</span>
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
+                  Observações / Justificativas
+                </label>
+                <textarea
+                  value={tObservacoes}
+                  onChange={(e) => setTObservacoes(e.target.value)}
+                  rows={3}
+                  placeholder="Relate os tópicos ministrados, militares presentes ou justificativas..."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-vertical"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTrainingForConclusion(null)}
+                  disabled={tSalvando}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 font-bold rounded-xl text-xs hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={tSalvando}
+                  onClick={async () => {
+                    setTSalvando(true);
+                    try {
+                      await atualizarInstrucao(selectedTrainingForConclusion.id!, {
+                        status: tStatus,
+                        observacoes: tObservacoes,
+                      });
+                      toast.success('Resultado da instrução registrado com sucesso!');
+                      setSelectedTrainingForConclusion(null);
+                      loadData();
+                    } catch (err: any) {
+                      toast.error('Erro ao salvar resultado: ' + (err?.message || 'Tente novamente'));
+                    } finally {
+                      setTSalvando(false);
+                    }
+                  }}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-colors shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  {tSalvando ? 'Salvando...' : 'Confirmar Resultado'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
