@@ -58,18 +58,66 @@ export const getBcTurnoInfo = (inicio?: string, fim?: string, totalHoras?: numbe
     };
 };
 
+// Categorias de CNH elegíveis para Condutor de Emergência
+const CATEGORIAS_CONDUTOR_ELEGIVEIS = ['C', 'AC', 'AD', 'D', 'AE'];
+
+/**
+ * Retorna a graduação do Bombeiro Militar normalizada ou 'Sd' como fallback se for militar regular sem graduação preenchida.
+ */
+export const getMilitarGraduation = (p?: Partial<Personnel> | null): string => {
+    if (!p) return '';
+    const raw = (p.graduation || p.rank || '').trim();
+    if (raw) {
+        // Se já tiver alguma graduação preenchida, normaliza formato
+        let clean = raw.replace(/\s*BM$/i, '').trim();
+        clean = clean.replace(/(\d+)[°º]\s*Sgt/i, '$1º Sgt');
+        clean = clean.replace(/Sub\s*-?\s*Ten/i, 'Sub Ten');
+        clean = clean.replace(/Ten\s*-?\s*Cel/i, 'Ten Cel');
+        clean = clean.replace(/Asp(\s*Of)?/i, 'Asp Of');
+        return clean;
+    }
+    // Se for BM (ou não for BC) e a graduação estiver vazia, o padrão de praça de ingresso é Sd
+    const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
+    if (!isBC) {
+        return 'Sd';
+    }
+    return '';
+};
+
+/**
+ * Verifica se um Bombeiro Comunitário é condutor habilitado:
+ * Possui CNH C, AC, AD, D ou AE E CVE ativo (Sim).
+ */
+export const isBcCondutorHabilitado = (p?: Partial<Personnel> | null): boolean => {
+    if (!p) return false;
+    const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
+    if (!isBC) return false;
+
+    // Verificar se CVE está ativo (Sim ou Ativo)
+    const cveRaw = (p.cve_active || '').trim().toUpperCase();
+    const cveAtivo = cveRaw === 'SIM' || cveRaw === 'ATIVO';
+    if (!cveAtivo) return false;
+
+    // Verificar se a categoria da CNH é C, AC, AD, D ou AE
+    const cnhRaw = (p.cnh_category || p.cnh || '').trim().toUpperCase();
+    // Limpar espaços ou barras se houver (ex: 'Cat D', 'D', 'AD')
+    const cnhLimpa = cnhRaw.replace(/[^A-Z]/g, '');
+    return CATEGORIAS_CONDUTOR_ELEGIVEIS.includes(cnhLimpa);
+};
+
 // Helper para exibição padronizada do nome:
-// Bombeiro Comunitário (BC): BC NomeDeGuerra CNH Categoria (ex: BC ROQUE CNH D)
-// Bombeiro Militar (BM): Graduação + Nome de Guerra (ex: Cb JUDSON)
+// Bombeiro Comunitário (BC): BC NomeDeGuerra COND. (se condutor apto) ou BC NomeDeGuerra
+// Bombeiro Militar (BM): Graduação + Nome de Guerra (ex: Sd ANTON, Cb JUDSON)
 export const formatPersonnelName = (p?: Personnel | null): string => {
     if (!p) return '';
     const warName = p.war_name || p.name.split(' ')[0];
     const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
     if (isBC) {
-        const cnhCat = p.cnh_category || p.cnh || '—';
-        return `BC ${warName} CNH ${cnhCat}`;
+        const isCond = isBcCondutorHabilitado(p);
+        return isCond ? `BC ${warName} COND.` : `BC ${warName}`;
     }
-    return `${p.graduation || ''} ${warName}`.trim();
+    const grad = getMilitarGraduation(p);
+    return `${grad} ${warName}`.trim();
 };
 
 const CORES: Record<string, { bg: string; text: string; hex: string; pillBg: string; borderHex: string }> = {
@@ -535,7 +583,8 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                         const isBC = p?.type === 'BC' || (p?.graduation && p.graduation.toLowerCase().includes('bc')) || (p?.rank && p.rank.toLowerCase().includes('bc'));
                                                         const warName = p?.war_name || p?.name.split(' ')[0];
                                                         const bcTurno = (isBC && p?.id) ? findBcTurno(dateStr, p.id) : null;
-                                                        const cnhCat = p?.cnh_category || p?.cnh || '—';
+                                                        const isCond = isBC && isBcCondutorHabilitado(p);
+                                                        const gradMilitar = !isBC ? getMilitarGraduation(p) : '';
                                                         const altInfo = p?.id ? getPersonnelAlteracao(dateStr, p.id) : { tipo: null };
 
                                                         // Definir estilos de acordo com a modalidade de alteração daquele militar
@@ -550,8 +599,8 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                         const tooltipTitle = altInfo.descricao
                                                             ? `[Alteração de Escala] ${altInfo.descricao} • ${p?.name}`
                                                             : isBC
-                                                            ? `Bombeiro Comunitário: ${p?.name} (CNH ${cnhCat}) ${bcTurno ? `• Turno: ${bcTurno.label} (${bcTurno.horarios})` : ''}`
-                                                            : `${p?.graduation || ''} ${p?.name}`;
+                                                            ? `Bombeiro Comunitário: ${p?.name}${isCond ? ` (CONDUTOR DE EMERGÊNCIA - CNH ${p?.cnh_category || p?.cnh || ''} / CVE Ativo)` : ''} ${bcTurno ? `• Turno: ${bcTurno.label} (${bcTurno.horarios})` : ''}`
+                                                            : `${gradMilitar} ${p?.name}`;
 
                                                         return (
                                                             <div
@@ -561,15 +610,19 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                             >
                                                                 <span className="truncate flex items-center gap-1 min-w-0">
                                                                     {isBC ? (
-                                                                        <span className="truncate">
+                                                                        <span className="truncate flex items-center">
                                                                             <strong className="text-orange-950 shrink-0 mr-1">BC</strong>
-                                                                            <span>{warName}</span>
-                                                                            <span className="ml-1 text-[9px] font-extrabold text-stone-600">CNH {cnhCat}</span>
+                                                                            <span className="truncate">{warName}</span>
+                                                                            {isCond && (
+                                                                                <span className="ml-1 text-[8.5px] font-black uppercase px-1 py-0.2 rounded bg-amber-500 text-white shadow-2xs border border-amber-600 shrink-0 tracking-wide">
+                                                                                    COND.
+                                                                                </span>
+                                                                            )}
                                                                         </span>
                                                                     ) : (
                                                                         <>
-                                                                            {p?.graduation && (
-                                                                                <strong className="text-stone-900 shrink-0">{p.graduation}</strong>
+                                                                            {gradMilitar && (
+                                                                                <strong className="text-stone-900 shrink-0">{gradMilitar}</strong>
                                                                             )}
                                                                             <span className="truncate">{warName}</span>
                                                                         </>
@@ -646,6 +699,10 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                 <div className="flex items-center gap-1.5 font-bold text-orange-950">
                                     <span className="w-3 h-3 rounded bg-orange-300 border border-orange-500 shadow-2xs"></span>
                                     Transf. Guarnição (Laranja Cenoura)
+                                </div>
+                                <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                                    <span className="text-[8px] font-black uppercase px-1 py-0.2 rounded bg-amber-500 text-white border border-amber-600 shadow-2xs">COND.</span>
+                                    Condutor de Emergência (BC)
                                 </div>
                             </div>
                         </div>
@@ -791,7 +848,8 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                         const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
                                         const warName = p.war_name || p.name.split(' ')[0];
                                         const bcTurno = (isBC && p.id) ? findBcTurno(selectedDayDetails.dateStr, p.id) : null;
-                                        const cnhCat = p.cnh_category || p.cnh || '—';
+                                        const isCond = isBC && isBcCondutorHabilitado(p);
+                                        const gradMilitar = !isBC ? getMilitarGraduation(p) : '';
                                         const altInfo = p.id ? getPersonnelAlteracao(selectedDayDetails.dateStr, p.id) : { tipo: null };
 
                                         return (
@@ -810,15 +868,17 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                                         BC
                                                                     </span>
                                                                     <span>{warName}</span>
-                                                                    <span className="text-xs font-extrabold text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">
-                                                                        CNH {cnhCat}
-                                                                    </span>
+                                                                    {isCond && (
+                                                                        <span className="text-[10px] font-black uppercase text-white bg-amber-500 px-2 py-0.5 rounded shadow-2xs border border-amber-600 tracking-wider">
+                                                                            COND.
+                                                                        </span>
+                                                                    )}
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    {p.graduation && (
+                                                                    {gradMilitar && (
                                                                         <span className="text-xs font-extrabold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                                                                            {p.graduation}
+                                                                            {gradMilitar}
                                                                         </span>
                                                                     )}
                                                                     <span>{warName}</span>
@@ -835,7 +895,14 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="text-[11px] text-stone-500 mt-0.5">{p.name} {p.role ? `• ${p.role}` : ''}</div>
+                                                        <div className="text-[11px] text-stone-500 mt-0.5">
+                                                            {p.name} {p.role ? `• ${p.role}` : ''}
+                                                            {isBC && (p.cnh_category || p.cnh) && (
+                                                                <span className="ml-1 text-stone-400">
+                                                                    • CNH {p.cnh_category || p.cnh} (CVE: {p.cve_active || 'Não'})
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
 
