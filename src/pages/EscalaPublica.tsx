@@ -64,20 +64,20 @@ export const EscalaPublica: React.FC = () => {
   const mesExtenso = `${meses[parseInt(mes, 10) - 1] || mes} de ${ano}`;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-3 sm:p-6 md:p-8 selection:bg-red-500 selection:text-white">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-2 sm:p-6 md:p-8 selection:bg-red-500 selection:text-white">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
 
         {/* CABEÇALHO */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-950/80 border border-red-800/60 rounded-full text-red-400 text-xs font-bold uppercase tracking-wider mb-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-950/80 border border-red-800/60 rounded-full text-red-400 text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-2">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                 CBMSC Araquari — 3º/1ª/7ºBBM
               </div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white">Escala Operacional Publicada</h1>
+              <h1 className="text-xl sm:text-3xl font-black text-white">Escala Operacional Publicada</h1>
               <p className="text-slate-400 text-xs sm:text-sm mt-1">
                 Visualização oficial de serviço — Mês de <strong className="text-red-400">{mesExtenso}</strong>
               </p>
@@ -86,7 +86,7 @@ export const EscalaPublica: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => ScaleReportingService.generateMonthlyScalePDF(month, escalas, personnelList, vacations)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-red-950/50"
+                className="w-full sm:w-auto px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-lg shadow-red-950/50"
               >
                 <span>📄</span> Baixar PDF Oficial
               </button>
@@ -114,7 +114,7 @@ export const EscalaPublica: React.FC = () => {
         )}
 
         {/* RODAPÉ */}
-        <div className="text-center text-xs text-slate-500 pt-4 pb-8">
+        <div className="text-center text-xs text-slate-500 pt-3 pb-8">
           Corpo de Bombeiros Militar de Santa Catarina — Araquari • Atualizado em tempo real pelo sistema interno.
         </div>
 

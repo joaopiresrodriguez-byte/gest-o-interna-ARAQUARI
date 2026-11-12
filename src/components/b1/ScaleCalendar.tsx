@@ -221,7 +221,8 @@ export interface EscalaAlteracaoInfo {
 }
 
 const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnelList, vacations, bcSelecionados: propBcSelecionados, onDayClick, onMonthChange }) => {
-    const [viewMode, setViewMode] = useState<'grid' | 'matrix'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list' | 'matrix'>('grid');
+    const [filtroNome, setFiltroNome] = useState<string>('');
     const [internalBcSelecionados, setInternalBcSelecionados] = useState<BcSelecionado[]>([]);
     const [escalaAlteracoes, setEscalaAlteracoes] = useState<any[]>([]);
     const [serviceSwaps, setServiceSwaps] = useState<any[]>([]);
@@ -492,200 +493,274 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
 
     return (
         <div className="bg-white border border-stone-300 rounded-xl overflow-hidden shadow-md">
-            {/* Header de Ações e Navegação */}
-            <div className="p-4 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+            {/* Header de Ações, Filtro de Busca e Navegação */}
+            <div className="p-3 sm:p-4 bg-stone-50 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                {/* Abas de Visualização (Grid / Plantões Mobile / Matriz) */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+                        className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
                             viewMode === 'grid'
                                 ? 'bg-blue-700 text-white shadow-sm'
                                 : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
                         }`}
+                        title="Visão Mensal em Grade (7 colunas)"
                     >
                         <span className="material-symbols-outlined text-sm">grid_on</span>
-                        Calendário Mensal (Grid)
+                        <span>Grade Mensal</span>
+                    </button>
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+                            viewMode === 'list'
+                                ? 'bg-blue-700 text-white shadow-sm ring-2 ring-blue-400'
+                                : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
+                        }`}
+                        title="Visão em Lista / Plantões do Mês (ideal para celular)"
+                    >
+                        <span className="material-symbols-outlined text-sm">view_agenda</span>
+                        <span>Plantões (Lista)</span>
                     </button>
                     <button
                         onClick={() => setViewMode('matrix')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+                        className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
                             viewMode === 'matrix'
                                 ? 'bg-blue-700 text-white shadow-sm'
                                 : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
                         }`}
+                        title="Matriz por Militar"
                     >
                         <span className="material-symbols-outlined text-sm">view_timeline</span>
-                        Matriz por Militar
+                        <span className="hidden sm:inline">Matriz por Militar</span>
+                        <span className="sm:hidden">Matriz</span>
                     </button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => changeMonth(-1)}
-                        className="px-3 py-1.5 bg-white border border-stone-300 hover:bg-stone-100 text-stone-700 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors shadow-xs"
-                    >
-                        <span className="material-symbols-outlined text-sm">chevron_left</span>
-                        Anterior
-                    </button>
-                    <input
-                        type="month"
-                        value={month}
-                        onChange={e => e.target.value && onMonthChange?.(e.target.value)}
-                        className="h-8 px-2 bg-white border border-stone-300 text-xs font-bold rounded-lg text-stone-800"
-                    />
-                    <button
-                        onClick={() => changeMonth(1)}
-                        className="px-3 py-1.5 bg-white border border-stone-300 hover:bg-stone-100 text-stone-700 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors shadow-xs"
-                    >
-                        Próximo
-                        <span className="material-symbols-outlined text-sm">chevron_right</span>
-                    </button>
+                {/* Filtro por nome e Controles de Mês */}
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Campo de Busca Rápida por Nome */}
+                    <div className="relative flex items-center bg-white border border-stone-300 rounded-lg px-2 py-1 shadow-2xs w-full sm:w-auto">
+                        <span className="material-symbols-outlined text-stone-400 text-sm mr-1">search</span>
+                        <input
+                            type="text"
+                            placeholder="Buscar militar/BC..."
+                            value={filtroNome}
+                            onChange={e => setFiltroNome(e.target.value)}
+                            className="text-xs font-medium text-stone-800 bg-transparent outline-none w-full sm:w-28 focus:sm:w-36 transition-all placeholder:text-stone-400"
+                        />
+                        {filtroNome && (
+                            <button onClick={() => setFiltroNome('')} className="text-stone-400 hover:text-stone-600">
+                                <span className="material-symbols-outlined text-xs">close</span>
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 w-full sm:w-auto justify-between sm:justify-start">
+                        <button
+                            onClick={() => changeMonth(-1)}
+                            className="px-2.5 py-1.5 bg-white border border-stone-300 hover:bg-stone-100 text-stone-700 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors shadow-xs"
+                            title="Mês Anterior"
+                        >
+                            <span className="material-symbols-outlined text-sm">chevron_left</span>
+                            <span className="hidden sm:inline">Anterior</span>
+                        </button>
+                        <input
+                            type="month"
+                            value={month}
+                            onChange={e => e.target.value && onMonthChange?.(e.target.value)}
+                            className="h-8 px-2 bg-white border border-stone-300 text-xs font-bold rounded-lg text-stone-800"
+                        />
+                        <button
+                            onClick={() => changeMonth(1)}
+                            className="px-2.5 py-1.5 bg-white border border-stone-300 hover:bg-stone-100 text-stone-700 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors shadow-xs"
+                            title="Próximo Mês"
+                        >
+                            <span className="hidden sm:inline">Próximo</span>
+                            <span className="material-symbols-outlined text-sm">chevron_right</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* LAYOUT MENSAL TIPO FOLHA DE CALENDÁRIO (CONFORME IMAGEM DE REFERÊNCIA) */}
             {viewMode === 'grid' && (
-                <div className="p-6 bg-white space-y-4">
+                <div className="p-2 sm:p-4 md:p-6 bg-white space-y-3 sm:space-y-4">
                     {/* Topo do Calendário: Título do Mês à esquerda + Mini Calendários à direita */}
-                    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 pb-2 border-b border-stone-100">
+                    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-2 md:gap-4 pb-2 border-b border-stone-100">
                         <div>
-                            <h1 className="text-4xl md:text-5xl font-extrabold text-[#2554a3] tracking-tight lowercase">
+                            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-[#2554a3] tracking-tight lowercase">
                                 {monthNames[monthNum - 1]} <span className="font-bold">{year}</span>
                             </h1>
+                            <p className="text-[11px] text-stone-400 mt-0.5 md:hidden">
+                                💡 Arraste para o lado para ver todos os dias da semana ou toque no dia para ver a guarnição completa.
+                            </p>
                         </div>
-                        <div className="flex items-center gap-3 self-end">
+                        <div className="hidden md:flex items-center gap-3 self-end">
                             {renderMiniCalendar(prevMonthYear, prevMonthNum)}
                             {renderMiniCalendar(nextMonthYear, nextMonthNum)}
                         </div>
                     </div>
 
-                    {/* Grade Principal do Mês (7 Colunas: segunda-feira a domingo) */}
-                    <div className="border-2 border-[#1e40af] rounded-lg overflow-hidden shadow-sm">
-                        {/* Header das colunas dos dias da semana */}
-                        <div className="grid grid-cols-7 bg-[#1e40af] text-white text-center text-xs md:text-sm font-extrabold py-2 border-b border-[#1e40af]">
-                            <div>segunda-feira</div>
-                            <div>terça-feira</div>
-                            <div>quarta-feira</div>
-                            <div>quinta-feira</div>
-                            <div>sexta-feira</div>
-                            <div>sábado</div>
-                            <div>domingo</div>
-                        </div>
+                    {/* Dica de rolagem horizontal visível apenas em telas menores */}
+                    <div className="md:hidden flex items-center justify-between px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg text-[10px] font-bold text-blue-900">
+                        <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-xs text-blue-600 animate-pulse">swipe</span>
+                            Deslize horizontalmente para navegar nos 7 dias
+                        </span>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className="text-primary font-black underline text-[10px]"
+                        >
+                            Ver em Lista
+                        </button>
+                    </div>
 
-                        {/* Células dos Dias */}
-                        <div className="grid grid-cols-7 bg-blue-300/40 gap-[1px]">
-                            {getGridWeeks().map((cell, index) => {
-                                const isSunday = index % 7 === 6;
-                                const isFirstDay = cell.dayNum === 1;
-                                const dateStr = cell.dayNum
-                                    ? `${year}-${String(monthNum).padStart(2, '0')}-${String(cell.dayNum).padStart(2, '0')}`
-                                    : '';
+                    {/* Grade Principal do Mês com Scroll Horizontal Seguro no Mobile (min-w de 780px para garantir 110px por dia) */}
+                    <div className="overflow-x-auto rounded-lg border-2 border-[#1e40af] shadow-sm scrollbar-thin">
+                        <div className="min-w-[800px]">
+                            {/* Header das colunas dos dias da semana */}
+                            <div className="grid grid-cols-7 bg-[#1e40af] text-white text-center text-xs md:text-sm font-extrabold py-2 border-b border-[#1e40af]">
+                                <div><span className="sm:hidden">Seg</span><span className="hidden sm:inline">segunda-feira</span></div>
+                                <div><span className="sm:hidden">Ter</span><span className="hidden sm:inline">terça-feira</span></div>
+                                <div><span className="sm:hidden">Qua</span><span className="hidden sm:inline">quarta-feira</span></div>
+                                <div><span className="sm:hidden">Qui</span><span className="hidden sm:inline">quinta-feira</span></div>
+                                <div><span className="sm:hidden">Sex</span><span className="hidden sm:inline">sexta-feira</span></div>
+                                <div><span className="sm:hidden">Sáb</span><span className="hidden sm:inline">sábado</span></div>
+                                <div><span className="sm:hidden">Dom</span><span className="hidden sm:inline">domingo</span></div>
+                            </div>
 
-                                const safeEscalas = Array.isArray(escalas) ? escalas : [];
-                                const safePersonnel = Array.isArray(personnelList) ? personnelList : [];
-                                const safeVacations = Array.isArray(vacations) ? vacations : [];
+                            {/* Células dos Dias */}
+                            <div className="grid grid-cols-7 bg-blue-300/40 gap-[1px]">
+                                {getGridWeeks().map((cell, index) => {
+                                    const isSunday = index % 7 === 6;
+                                    const isFirstDay = cell.dayNum === 1;
+                                    const dateStr = cell.dayNum
+                                        ? `${year}-${String(monthNum).padStart(2, '0')}-${String(cell.dayNum).padStart(2, '0')}`
+                                        : '';
 
-                                // Buscar dados da escala do dia
-                                const dayEscala = cell.dayNum ? safeEscalas.find(e => e && e.data === dateStr) : null;
-                                const teamLetter = dayEscala ? getTurmaLetter(dayEscala.turma, dayEscala.equipe) : null;
-                                const teamInfo = teamLetter ? CORES[teamLetter] : null;
+                                    const safeEscalas = Array.isArray(escalas) ? escalas : [];
+                                    const safePersonnel = Array.isArray(personnelList) ? personnelList : [];
+                                    const safeVacations = Array.isArray(vacations) ? vacations : [];
 
-                                // Buscar bombeiros escalados no dia (excluindo os que estiverem em férias/afastamento na data)
-                                const escaladosBrutos = (dayEscala?.militares && Array.isArray(dayEscala.militares))
-                                    ? dayEscala.militares
-                                        .filter(id => {
-                                            const emAfastamento = safeVacations.some(v =>
-                                                v && v.personnel_id === id &&
-                                                v.start_date && v.end_date &&
-                                                dateStr >= v.start_date &&
-                                                dateStr <= v.end_date
-                                            );
-                                            return !emAfastamento;
-                                        })
-                                        .map(id => safePersonnel.find(p => p && p.id === id))
-                                        .filter(Boolean) as Personnel[]
-                                    : [];
+                                    // Buscar dados da escala do dia
+                                    const dayEscala = cell.dayNum ? safeEscalas.find(e => e && e.data === dateStr) : null;
+                                    const teamLetter = dayEscala ? getTurmaLetter(dayEscala.turma, dayEscala.equipe) : null;
+                                    const teamInfo = teamLetter ? CORES[teamLetter] : null;
 
-                                // Ordenar: militares primeiro por graduação militar, depois BCs por grau comunitário
-                                const escaladosNoDia = sortEscaladosPorGraduacao(escaladosBrutos);
+                                    // Buscar bombeiros escalados no dia (excluindo os que estiverem em férias/afastamento na data)
+                                    const escaladosBrutos = (dayEscala?.militares && Array.isArray(dayEscala.militares))
+                                        ? dayEscala.militares
+                                            .filter(id => {
+                                                const emAfastamento = safeVacations.some(v =>
+                                                    v && v.personnel_id === id &&
+                                                    v.start_date && v.end_date &&
+                                                    dateStr >= v.start_date &&
+                                                    dateStr <= v.end_date
+                                                );
+                                                return !emAfastamento;
+                                            })
+                                            .map(id => safePersonnel.find(p => p && p.id === id))
+                                            .filter(Boolean) as Personnel[]
+                                        : [];
 
-                                return (
-                                    <div
-                                        key={index}
-                                        onClick={() => cell.dayNum && onDayClick?.(dateStr, escaladosNoDia[0]?.id || 0)}
-                                        className={`min-h-[105px] md:min-h-[125px] p-1.5 flex flex-col justify-start transition-all relative ${
-                                            cell.inMonth
-                                                ? 'bg-white hover:bg-blue-50/50 cursor-pointer'
-                                                : 'bg-slate-50/70'
-                                        }`}
-                                    >
-                                        {cell.dayNum && (
-                                            <>
-                                                {/* Número do Dia */}
-                                                <div className="flex items-center justify-between w-full mb-1">
-                                                    <span className={`text-sm md:text-base font-extrabold ${
-                                                        isFirstDay || isSunday ? 'text-red-600' : 'text-stone-900'
-                                                    }`}>
-                                                        {cell.dayNum}
-                                                    </span>
+                                    // Ordenar: militares primeiro por graduação militar, depois BCs por grau comunitário
+                                    const escaladosNoDia = sortEscaladosPorGraduacao(escaladosBrutos);
 
-                                                    {teamLetter && teamInfo && (
-                                                        <span
-                                                            className="text-[9px] font-black px-1.5 py-0.5 rounded border shadow-2xs"
-                                                            style={{
-                                                                backgroundColor: teamInfo.pillBg,
-                                                                color: teamInfo.hex,
-                                                                borderColor: teamInfo.borderHex
-                                                            }}
-                                                        >
-                                                            Gua {teamLetter}
+                                    // Verificar se o filtro por nome coincide com alguém escalado neste dia
+                                    const termoBusca = filtroNome.trim().toLowerCase();
+                                    const hasFilterMatch = termoBusca && escaladosNoDia.some(p =>
+                                        (p.war_name && p.war_name.toLowerCase().includes(termoBusca)) ||
+                                        (p.name && p.name.toLowerCase().includes(termoBusca))
+                                    );
+
+                                    return (
+                                        <div
+                                            key={index}
+                                            onClick={() => cell.dayNum && onDayClick?.(dateStr, escaladosNoDia[0]?.id || 0)}
+                                            className={`min-h-[115px] md:min-h-[125px] p-1.5 flex flex-col justify-start transition-all relative ${
+                                                cell.inMonth
+                                                    ? hasFilterMatch
+                                                        ? 'bg-amber-100/90 ring-2 ring-amber-400 cursor-pointer shadow-sm'
+                                                        : 'bg-white hover:bg-blue-50/50 cursor-pointer'
+                                                    : 'bg-slate-50/70'
+                                            }`}
+                                        >
+                                            {cell.dayNum && (
+                                                <>
+                                                    {/* Número do Dia */}
+                                                    <div className="flex items-center justify-between w-full mb-1">
+                                                        <span className={`text-sm md:text-base font-extrabold ${
+                                                            isFirstDay || isSunday ? 'text-red-600' : 'text-stone-900'
+                                                        }`}>
+                                                            {cell.dayNum}
                                                         </span>
-                                                    )}
-                                                </div>
 
-                                                {/* Militares Escalados no Dia */}
-                                                <div className="space-y-1 overflow-y-auto max-h-[85px] scrollbar-thin">
-                                                    {escaladosNoDia.slice(0, 4).map((p, idx) => {
-                                                        const isBC = p?.type === 'BC' || (p?.graduation && p.graduation.toLowerCase().includes('bc')) || (p?.rank && p.rank.toLowerCase().includes('bc'));
-                                                        const warName = p?.war_name || p?.name.split(' ')[0];
-                                                        const bcTurno = (isBC && p?.id) ? findBcTurno(dateStr, p.id) : null;
-                                                        const isCond = isBC && isBcCondutorHabilitado(p);
-                                                        const gradMilitar = !isBC ? getMilitarGraduation(p) : '';
-                                                        const altInfo = p?.id ? getPersonnelAlteracao(dateStr, p.id) : { tipo: null };
-
-                                                        // Definir estilos de acordo com a modalidade de alteração daquele militar
-                                                        // Sem alteração: segue padrão BC (laranja claro) ou BM (cinza pedra)
-                                                        let containerCls = 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200/80';
-                                                        if (altInfo.badgeStyle) {
-                                                            containerCls = altInfo.badgeStyle;
-                                                        } else if (isBC) {
-                                                            containerCls = 'bg-orange-50/70 text-orange-950 border-orange-200 hover:bg-orange-100/70';
-                                                        }
-
-                                                        const tooltipTitle = altInfo.descricao
-                                                            ? `[Alteração de Escala] ${altInfo.descricao} • ${p?.name}`
-                                                            : isBC
-                                                            ? `Bombeiro Comunitário: ${p?.name}${isCond ? ` (CONDUTOR DE EMERGÊNCIA - CNH ${p?.cnh_category || p?.cnh || ''} / CVE Ativo)` : ''} ${bcTurno ? `• Turno: ${bcTurno.label} (${bcTurno.horarios})` : ''}`
-                                                            : `${gradMilitar} ${p?.name}`;
-
-                                                        return (
-                                                            <div
-                                                                key={idx}
-                                                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate border flex items-center justify-between gap-1 transition-colors ${containerCls}`}
-                                                                title={tooltipTitle}
+                                                        {teamLetter && teamInfo && (
+                                                            <span
+                                                                className="text-[9px] font-black px-1.5 py-0.5 rounded border shadow-2xs"
+                                                                style={{
+                                                                    backgroundColor: teamInfo.pillBg,
+                                                                    color: teamInfo.hex,
+                                                                    borderColor: teamInfo.borderHex
+                                                                }}
                                                             >
-                                                                <span className="truncate flex items-center gap-1 min-w-0">
-                                                                    {isBC ? (
-                                                                        <span className="truncate flex items-center">
-                                                                            <strong className="text-orange-950 shrink-0 mr-1">BC</strong>
-                                                                            <span className="truncate">{warName}</span>
-                                                                            {isCond && (
-                                                                                <span className="ml-1 text-[8.5px] font-black uppercase px-1 py-0.2 rounded bg-amber-500 text-white shadow-2xs border border-amber-600 shrink-0 tracking-wide">
-                                                                                    COND.
-                                                                                </span>
-                                                                            )}
-                                                                        </span>
-                                                                    ) : (
+                                                                Gua {teamLetter}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Militares Escalados no Dia */}
+                                                    <div className="space-y-1 overflow-y-auto max-h-[90px] scrollbar-thin">
+                                                        {escaladosNoDia.slice(0, 4).map((p, idx) => {
+                                                            const isBC = p?.type === 'BC' || (p?.graduation && p.graduation.toLowerCase().includes('bc')) || (p?.rank && p.rank.toLowerCase().includes('bc'));
+                                                            const warName = p?.war_name || p?.name.split(' ')[0];
+                                                            const bcTurno = (isBC && p?.id) ? findBcTurno(dateStr, p.id) : null;
+                                                            const isCond = isBC && isBcCondutorHabilitado(p);
+                                                            const gradMilitar = !isBC ? getMilitarGraduation(p) : '';
+                                                            const altInfo = p?.id ? getPersonnelAlteracao(dateStr, p.id) : { tipo: null };
+
+                                                            const isItemMatched = termoBusca && (
+                                                                (p?.war_name && p.war_name.toLowerCase().includes(termoBusca)) ||
+                                                                (p?.name && p.name.toLowerCase().includes(termoBusca))
+                                                            );
+
+                                                            // Definir estilos de acordo com a modalidade de alteração daquele militar
+                                                            let containerCls = isItemMatched
+                                                                ? 'bg-amber-200 text-amber-950 border-amber-400 font-extrabold ring-1 ring-amber-500'
+                                                                : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200/80';
+
+                                                            if (!isItemMatched) {
+                                                                if (altInfo.badgeStyle) {
+                                                                    containerCls = altInfo.badgeStyle;
+                                                                } else if (isBC) {
+                                                                    containerCls = 'bg-orange-50/70 text-orange-950 border-orange-200 hover:bg-orange-100/70';
+                                                                }
+                                                            }
+
+                                                            const tooltipTitle = altInfo.descricao
+                                                                ? `[Alteração de Escala] ${altInfo.descricao} • ${p?.name}`
+                                                                : isBC
+                                                                ? `Bombeiro Comunitário: ${p?.name}${isCond ? ` (CONDUTOR DE EMERGÊNCIA - CNH ${p?.cnh_category || p?.cnh || ''} / CVE Ativo)` : ''} ${bcTurno ? `• Turno: ${bcTurno.label} (${bcTurno.horarios})` : ''}`
+                                                                : `${gradMilitar} ${p?.name}`;
+
+                                                            return (
+                                                                <div
+                                                                    key={idx}
+                                                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate border flex items-center justify-between gap-1 transition-colors ${containerCls}`}
+                                                                    title={tooltipTitle}
+                                                                >
+                                                                    <span className="truncate flex items-center gap-1 min-w-0">
+                                                                        {isBC ? (
+                                                                            <span className="truncate flex items-center">
+                                                                                <strong className="text-orange-950 shrink-0 mr-1">BC</strong>
+                                                                                <span className="truncate">{warName}</span>
+                                                                                {isCond && (
+                                                                                    <span className="ml-1 text-[8.5px] font-black uppercase px-1 py-0.2 rounded bg-amber-500 text-white shadow-2xs border border-amber-600 shrink-0 tracking-wide">
+                                                                                        COND.
+                                                                                    </span>
+                                                                                )}
+                                                                            </span>
+                                                                        ) : (
                                                                         <>
                                                                             {gradMilitar && (
                                                                                 <strong className="text-stone-900 shrink-0">{gradMilitar}</strong>
@@ -735,47 +810,238 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                             })}
                         </div>
                     </div>
+                </div>
 
-                    {/* Rodapé e Legenda */}
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pt-3 border-t border-stone-200 text-xs text-stone-500 font-medium">
-                        <div className="flex flex-wrap items-center gap-4">
-                            {/* Guarnições */}
-                            <div className="flex flex-wrap items-center gap-3">
-                                {Object.entries(CORES).map(([letra, cor]) => (
-                                    <div key={letra} className="flex items-center gap-1.5 font-bold">
-                                        <span className="w-3 h-3 rounded border shadow-2xs" style={{ backgroundColor: cor.pillBg, borderColor: cor.borderHex }}></span>
-                                        Guarnição {letra}
+                {/* Rodapé e Legenda */}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pt-3 border-t border-stone-200 text-xs text-stone-500 font-medium">
+                    <div className="flex flex-wrap items-center gap-4">
+                        {/* Guarnições */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {Object.entries(CORES).map(([letra, cor]) => (
+                                <div key={letra} className="flex items-center gap-1.5 font-bold">
+                                    <span className="w-3 h-3 rounded border shadow-2xs" style={{ backgroundColor: cor.pillBg, borderColor: cor.borderHex }}></span>
+                                    Guarnição {letra}
+                                </div>
+                            ))}
+                        </div>
+
+                        <span className="hidden md:inline text-stone-300">|</span>
+
+                        {/* Legenda de Alterações de Escala */}
+                        <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                            <span className="font-extrabold text-stone-700">Alterações:</span>
+                            <div className="flex items-center gap-1.5 font-bold text-sky-950">
+                                <span className="w-3 h-3 rounded bg-sky-200 border border-sky-400 shadow-2xs"></span>
+                                Troca Mútua (Azul Céu)
+                            </div>
+                            <div className="flex items-center gap-1.5 font-bold text-teal-950">
+                                <span className="w-3 h-3 rounded bg-teal-200 border border-teal-400 shadow-2xs"></span>
+                                Troca Individual (Verde Água)
+                            </div>
+                            <div className="flex items-center gap-1.5 font-bold text-orange-950">
+                                <span className="w-3 h-3 rounded bg-orange-300 border border-orange-500 shadow-2xs"></span>
+                                Transf. Guarnição (Laranja Cenoura)
+                            </div>
+                            <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                                <span className="text-[8px] font-black uppercase px-1 py-0.2 rounded bg-amber-500 text-white border border-amber-600 shadow-2xs">COND.</span>
+                                Condutor de Emergência (BC)
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="text-[10px] text-stone-400 font-mono shrink-0">
+                        CBMSC — 3º/7ºBBM (Araquari)
+                    </div>
+                </div>
+            </div>
+            )}
+
+            {/* VISÃO PLANTÕES DIÁRIOS (LISTA VERTICAL OTIMIZADA PARA SMARTPHONES / MOBILE) */}
+            {viewMode === 'list' && (
+                <div className="p-3 sm:p-5 bg-white space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-stone-200">
+                        <div>
+                            <h2 className="text-xl sm:text-2xl font-black text-[#2554a3]">
+                                Plantões de {monthNames[monthNum - 1]} de {year}
+                            </h2>
+                            <p className="text-xs text-stone-500">
+                                Visualização dia a dia com nomes completos, ideal para leitura vertical no celular.
+                            </p>
+                        </div>
+                        <span className="text-xs font-black text-stone-600 bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200">
+                            {daysInMonth} dias
+                        </span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                        {days.map(d => {
+                            const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                            const dateObj = new Date(year, monthNum - 1, d);
+                            const diaSemana = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+
+                            const safeEscalas = Array.isArray(escalas) ? escalas : [];
+                            const safePersonnel = Array.isArray(personnelList) ? personnelList : [];
+                            const safeVacations = Array.isArray(vacations) ? vacations : [];
+
+                            const dayEscala = safeEscalas.find(e => e && e.data === dateStr);
+                            const teamLetter = dayEscala ? getTurmaLetter(dayEscala.turma, dayEscala.equipe) : null;
+                            const teamInfo = teamLetter ? CORES[teamLetter] : null;
+
+                            const escaladosBrutos = (dayEscala?.militares && Array.isArray(dayEscala.militares))
+                                ? dayEscala.militares
+                                    .filter(id => {
+                                        const emAfastamento = safeVacations.some(v =>
+                                            v && v.personnel_id === id &&
+                                            v.start_date && v.end_date &&
+                                            dateStr >= v.start_date &&
+                                            dateStr <= v.end_date
+                                        );
+                                        return !emAfastamento;
+                                    })
+                                    .map(id => safePersonnel.find(p => p && p.id === id))
+                                    .filter(Boolean) as Personnel[]
+                                : [];
+
+                            const escaladosNoDia = sortEscaladosPorGraduacao(escaladosBrutos);
+
+                            const termoBusca = filtroNome.trim().toLowerCase();
+                            const hasFilterMatch = termoBusca && escaladosNoDia.some(p =>
+                                (p.war_name && p.war_name.toLowerCase().includes(termoBusca)) ||
+                                (p.name && p.name.toLowerCase().includes(termoBusca))
+                            );
+
+                            return (
+                                <div
+                                    key={d}
+                                    className={`p-3 rounded-xl border transition-all ${
+                                        hasFilterMatch
+                                            ? 'bg-amber-50/90 border-amber-400 shadow-sm ring-1 ring-amber-400'
+                                            : 'bg-stone-50/60 hover:bg-stone-50 border-stone-200'
+                                    }`}
+                                >
+                                    {/* Topo do Card Diário */}
+                                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-200/60">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-8 h-8 rounded-lg bg-[#1e40af] text-white flex items-center justify-center font-black text-sm shadow-2xs">
+                                                {String(d).padStart(2, '0')}
+                                            </span>
+                                            <div>
+                                                <span className="font-bold text-sm text-stone-900 capitalize block leading-tight">
+                                                    {diaSemana}
+                                                </span>
+                                                <span className="text-[10px] text-stone-400">
+                                                    {String(d).padStart(2, '0')}/{String(monthNum).padStart(2, '0')}/{year}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            {teamLetter && teamInfo && (
+                                                <span
+                                                    className="text-xs font-black px-2.5 py-1 rounded-lg border shadow-2xs"
+                                                    style={{
+                                                        backgroundColor: teamInfo.pillBg,
+                                                        color: teamInfo.hex,
+                                                        borderColor: teamInfo.borderHex
+                                                    }}
+                                                >
+                                                    Guarnição {teamLetter}
+                                                </span>
+                                            )}
+                                            {escaladosNoDia.length > 0 && (
+                                                <button
+                                                    onClick={() => setSelectedDayDetails({
+                                                        dateStr,
+                                                        dayNum: d,
+                                                        teamLetter,
+                                                        escalados: escaladosNoDia,
+                                                        dayEscala
+                                                    })}
+                                                    className="px-2 py-1 bg-white hover:bg-stone-100 text-[11px] font-bold text-stone-700 rounded-lg border border-stone-300 transition-colors"
+                                                >
+                                                    Ver Detalhes
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
 
-                            <span className="hidden md:inline text-stone-300">|</span>
+                                    {/* Lista de Militares Escalados no Plantão */}
+                                    {escaladosNoDia.length === 0 ? (
+                                        <p className="text-xs text-stone-400 italic py-1">Nenhum militar registrado nesta data.</p>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
+                                            {escaladosNoDia.map((p, idx) => {
+                                                const isBC = p?.type === 'BC' || (p?.graduation && p.graduation.toLowerCase().includes('bc')) || (p?.rank && p.rank.toLowerCase().includes('bc'));
+                                                const warName = p?.war_name || p?.name.split(' ')[0];
+                                                const bcTurno = (isBC && p?.id) ? findBcTurno(dateStr, p.id) : null;
+                                                const isCond = isBC && isBcCondutorHabilitado(p);
+                                                const gradMilitar = !isBC ? getMilitarGraduation(p) : '';
+                                                const altInfo = p?.id ? getPersonnelAlteracao(dateStr, p.id) : { tipo: null };
 
-                            {/* Legenda de Alterações de Escala */}
-                            <div className="flex flex-wrap items-center gap-3 text-[11px]">
-                                <span className="font-extrabold text-stone-700">Alterações:</span>
-                                <div className="flex items-center gap-1.5 font-bold text-sky-950">
-                                    <span className="w-3 h-3 rounded bg-sky-200 border border-sky-400 shadow-2xs"></span>
-                                    Troca Mútua (Azul Céu)
-                                </div>
-                                <div className="flex items-center gap-1.5 font-bold text-teal-950">
-                                    <span className="w-3 h-3 rounded bg-teal-200 border border-teal-400 shadow-2xs"></span>
-                                    Troca Individual (Verde Água)
-                                </div>
-                                <div className="flex items-center gap-1.5 font-bold text-orange-950">
-                                    <span className="w-3 h-3 rounded bg-orange-300 border border-orange-500 shadow-2xs"></span>
-                                    Transf. Guarnição (Laranja Cenoura)
-                                </div>
-                                <div className="flex items-center gap-1.5 font-bold text-amber-950">
-                                    <span className="text-[8px] font-black uppercase px-1 py-0.2 rounded bg-amber-500 text-white border border-amber-600 shadow-2xs">COND.</span>
-                                    Condutor de Emergência (BC)
-                                </div>
-                            </div>
-                        </div>
+                                                const isItemMatched = termoBusca && (
+                                                    (p?.war_name && p.war_name.toLowerCase().includes(termoBusca)) ||
+                                                    (p?.name && p.name.toLowerCase().includes(termoBusca))
+                                                );
 
-                        <div className="text-[10px] text-stone-400 font-mono shrink-0">
-                            CBMSC — 3º/7ºBBM (Araquari)
-                        </div>
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        className={`p-2 rounded-lg border flex items-center justify-between text-xs transition-colors ${
+                                                            isItemMatched
+                                                                ? 'bg-amber-100 border-amber-300 text-amber-950 font-bold'
+                                                                : altInfo.badgeStyle
+                                                                ? altInfo.badgeStyle
+                                                                : isBC
+                                                                ? 'bg-orange-50/80 border-orange-200 text-orange-950'
+                                                                : 'bg-white border-stone-200 text-stone-800'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                            <span className="w-5 h-5 rounded-full bg-stone-200/80 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                                                {idx + 1}
+                                                            </span>
+                                                            <span className="truncate">
+                                                                {isBC ? (
+                                                                    <>
+                                                                        <strong className="text-orange-950 mr-1">BC</strong>
+                                                                        <span className="font-extrabold">{warName}</span>
+                                                                        {isCond && (
+                                                                            <span className="ml-1 text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500 text-white shadow-2xs border border-amber-600">
+                                                                                COND.
+                                                                            </span>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        {gradMilitar && (
+                                                                            <strong className="text-stone-900 mr-1">{gradMilitar}</strong>
+                                                                        )}
+                                                                        <span className="font-extrabold">{warName}</span>
+                                                                    </>
+                                                                )}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                                                            {isBC && bcTurno && (
+                                                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${bcTurno.badgeCls}`}>
+                                                                    {bcTurno.shortLabel}
+                                                                </span>
+                                                            )}
+                                                            {altInfo.descricao && (
+                                                                <span className="text-[9px] font-semibold text-sky-800 bg-sky-100 px-1.5 py-0.5 rounded border border-sky-200">
+                                                                    Troca
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -861,18 +1127,18 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
             {/* MODAL DETALHADO: GUARNICAO COMPLETA DO DIA */}
             {selectedDayDetails && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-2 sm:p-4 animate-in fade-in duration-150"
                     onClick={() => setSelectedDayDetails(null)}
                 >
                     <div
-                        className="bg-white rounded-2xl shadow-2xl border border-stone-200 max-w-lg w-full overflow-hidden text-stone-900"
+                        className="bg-white rounded-2xl shadow-2xl border border-stone-200 max-w-lg w-full max-h-[92vh] flex flex-col overflow-hidden text-stone-900"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header Modal */}
-                        <div className="bg-[#1e40af] text-white p-4 flex items-center justify-between">
+                        <div className="bg-[#1e40af] text-white p-3.5 sm:p-4 flex items-center justify-between shrink-0">
                             <div>
                                 <span className="text-[10px] font-black uppercase tracking-wider text-blue-200">Guarnição de Serviço</span>
-                                <h3 className="text-lg font-black flex items-center gap-2">
+                                <h3 className="text-base sm:text-lg font-black flex items-center gap-2">
                                     <span>Dia {String(selectedDayDetails.dayNum).padStart(2, '0')}/{String(monthNum).padStart(2, '0')}/{year}</span>
                                     {selectedDayDetails.teamLetter && (
                                         <span className="text-xs bg-white text-[#1e40af] font-black px-2 py-0.5 rounded-full shadow-xs">
@@ -891,7 +1157,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                         </div>
 
                         {/* Conteúdo */}
-                        <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
+                        <div className="p-3 sm:p-5 overflow-y-auto space-y-3 sm:space-y-4">
                             {selectedDayDetails.dayEscala?.manual_override && (
                                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
                                     <div className="font-bold flex items-center gap-1.5 mb-1">
