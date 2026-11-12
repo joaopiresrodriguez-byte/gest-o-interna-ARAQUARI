@@ -23,6 +23,13 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
   const [historico, setHistorico] = useState<any[]>([]);
   const [guarnicoesList, setGuarnicoesList] = useState<any[]>([]);
 
+  // Filtro de mês para o Histórico de Alterações (Padrão: mês atual YYYY-MM)
+  const mesAtualStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const [filtroMesHistorico, setFiltroMesHistorico] = useState<string>(mesAtualStr);
+
   // Form State — Modalidade 1 (Mútua)
   const [militarAId, setMilitarAId] = useState<number | ''>('');
   const [diaA, setDiaA] = useState('');
@@ -62,6 +69,19 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
   useEffect(() => {
     loadData();
   }, []);
+
+  // Filtragem do histórico de alterações pelo mês selecionado
+  const historicoFiltrado = historico.filter(h => {
+    if (filtroMesHistorico === 'todos') return true;
+
+    // Extrair data da alteração a partir dos campos disponíveis
+    const dataRef = h.dia_original_a || h.dia_original_b || h.data_vigencia || h.criado_em || h.created_at;
+    if (!dataRef) return true;
+
+    // dataRef pode ser 'YYYY-MM-DD' ou 'YYYY-MM-DDTHH:mm:ss...'
+    const mesRegistro = String(dataRef).substring(0, 7);
+    return mesRegistro === filtroMesHistorico;
+  });
 
   // Verificar férias/afastamento de um militar em uma data
   const checarAfastamento = (militarId: number, data: string) => {
@@ -624,11 +644,52 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
       )}
 
       {/* BLOCO 4: TABELA DE HISTÓRICO DE ALTERAÇÕES */}
-      <div className="pt-4 border-t border-stone-100">
-        <h4 className="text-xs font-black uppercase tracking-wider text-rustic-brown/70 mb-3 flex items-center gap-2">
-          <span className="material-symbols-outlined text-[16px] text-stone-400">history</span>
-          Histórico Auditável de Alterações de Escala (`escala_alteracoes`)
-        </h4>
+      <div className="pt-4 border-t border-stone-100 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h4 className="text-xs font-black uppercase tracking-wider text-rustic-brown/70 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[16px] text-stone-400">history</span>
+              Histórico Auditável de Alterações de Escala (`escala_alteracoes`)
+            </h4>
+            <p className="text-[11px] text-stone-500">
+              {filtroMesHistorico === 'todos'
+                ? `Exibindo todas as alterações registradas (${historicoFiltrado.length})`
+                : `Exibindo alterações do mês de referência (${historicoFiltrado.length} de ${historico.length})`}
+            </p>
+          </div>
+
+          {/* Filtro de Meses */}
+          <div className="flex items-center gap-2 bg-stone-50 border border-rustic-border rounded-xl px-3 py-1.5 shrink-0">
+            <span className="material-symbols-outlined text-stone-400 text-[18px]">calendar_month</span>
+            <label className="text-[11px] font-bold text-rustic-brown">Mês:</label>
+            <input
+              type="month"
+              value={filtroMesHistorico === 'todos' ? '' : filtroMesHistorico}
+              onChange={e => setFiltroMesHistorico(e.target.value || 'todos')}
+              className="bg-transparent text-xs font-bold text-rustic-brown outline-none cursor-pointer"
+            />
+            {filtroMesHistorico !== mesAtualStr && (
+              <button
+                type="button"
+                onClick={() => setFiltroMesHistorico(mesAtualStr)}
+                className="text-[10px] font-bold text-primary hover:underline ml-1"
+                title="Voltar para o mês atual"
+              >
+                Mês Atual
+              </button>
+            )}
+            {filtroMesHistorico !== 'todos' ? (
+              <button
+                type="button"
+                onClick={() => setFiltroMesHistorico('todos')}
+                className="text-[10px] font-bold text-stone-500 hover:text-stone-800 ml-1 px-1.5 py-0.5 rounded bg-stone-200"
+                title="Ver todos os meses anteriores"
+              >
+                Ver Todos
+              </button>
+            ) : null}
+          </div>
+        </div>
 
         <div className="overflow-x-auto border border-rustic-border rounded-xl">
           <table className="w-full text-left text-xs">
@@ -642,14 +703,14 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-rustic-border/30">
-              {historico.length === 0 ? (
+              {historicoFiltrado.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-stone-400 italic">
-                    Nenhuma alteração registrada até o momento.
+                  <td colSpan={5} className="py-8 text-center text-stone-400 italic">
+                    Nenhuma alteração registrada {filtroMesHistorico !== 'todos' ? `para o mês ${filtroMesHistorico}` : 'até o momento'}.
                   </td>
                 </tr>
               ) : (
-                historico.map((h, idx) => {
+                historicoFiltrado.map((h, idx) => {
                   // Resolver identificadores de militares envolvidos
                   const milA = h.militar_a || personnelList.find(p => p.id === Number(h.militar_a_id));
                   const milB = h.militar_b || personnelList.find(p => p.id === Number(h.militar_b_id));

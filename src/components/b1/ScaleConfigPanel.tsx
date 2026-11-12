@@ -133,58 +133,6 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
                 </div>
             )}
 
-            {/* ─── Seleção do Período de Projeção & Publicação ─── */}
-            <div className="p-4 bg-stone-50 border border-stone-200 rounded-xl space-y-3">
-                <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-stone-700 text-[18px]">date_range</span>
-                    <span className="font-black text-xs uppercase text-stone-700">Período da Projeção de Escala</span>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    {([
-                        { value: 'atual' as const, label: 'Apenas 1 Mês' },
-                        { value: '3meses' as const, label: 'Próximos 3 Meses' },
-                        { value: '6meses' as const, label: 'Próximos 6 Meses' },
-                        { value: 'custom' as const, label: 'Personalizado' },
-                    ]).map(opt => (
-                        <button
-                            key={opt.value}
-                            onClick={() => setPeriodo(opt.value)}
-                            className={`px-3 py-2 rounded-lg text-[11px] font-bold transition-all border ${
-                                periodo === opt.value
-                                    ? 'bg-primary text-white border-primary shadow-md'
-                                    : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
-                </div>
-
-                {periodo === 'custom' && (
-                    <div className="grid grid-cols-2 gap-4 pt-2">
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-stone-500 block mb-1">Mês Inicial:</label>
-                            <input
-                                type="month"
-                                value={customStart}
-                                onChange={e => setCustomStart(e.target.value)}
-                                className="w-full h-10 px-3 rounded-lg border border-stone-200 text-sm font-bold bg-white"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black uppercase text-stone-500 block mb-1">Mês Final:</label>
-                            <input
-                                type="month"
-                                value={customEnd}
-                                onChange={e => setCustomEnd(e.target.value)}
-                                className="w-full h-10 px-3 rounded-lg border border-stone-200 text-sm font-bold bg-white"
-                            />
-                        </div>
-                    </div>
-                )}
-            </div>
-
             {/* ─── Período de publicação no Google Calendar ─── */}
             {onSyncCalendar && (
                 <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-3">
@@ -212,7 +160,7 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
                         <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="" />
                         {calendarSyncing
                             ? 'Sincronizando...'
-                            : `Sincronizar Google Calendar (${periodoLabel()})`
+                            : `Sincronizar Google Calendar (${month})`
                         }
                     </button>
                 </div>
@@ -230,7 +178,7 @@ const ScaleConfigPanel: React.FC<ScaleConfigPanelProps> = ({
                     disabled={stats.membros === 0}
                     className={`px-8 py-3.5 font-black text-xs rounded-xl transition-all uppercase tracking-widest ${stats.membros === 0 ? 'bg-stone-300 text-stone-500 cursor-not-allowed' : 'bg-primary text-white hover:shadow-lg shadow-primary/20'}`}
                 >
-                    Projetar e Publicar Escala ({periodoLabel()})
+                    Projetar e Publicar Escala
                 </button>
             </div>
         </div>

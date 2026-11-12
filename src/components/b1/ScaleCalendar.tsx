@@ -120,6 +120,69 @@ export const formatPersonnelName = (p?: Personnel | null): string => {
     return `${grad} ${warName}`.trim();
 };
 
+/**
+ * Ordenação de escalados no dia:
+ * 1º Militares Regulares (BM) ordenados por antiguidade de graduação (Oficiais -> Sub Ten -> Sargentos -> Cabos -> Soldados).
+ * 2º Bombeiros Comunitários (BC) ordenados por sua graduação interna (Grau mais alto -> mais novo) e nome.
+ */
+export const sortEscaladosPorGraduacao = (lista: Personnel[]): Personnel[] => {
+    const militares: Personnel[] = [];
+    const comunitarios: Personnel[] = [];
+
+    lista.forEach(p => {
+        const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
+        if (isBC) {
+            comunitarios.push(p);
+        } else {
+            militares.push(p);
+        }
+    });
+
+    // Ordem de militares BM
+    const ranksBMOrder: Record<string, number> = {
+        'Cel': 0, 'Ten Cel': 1, 'Maj': 2, 'Cap': 3, '1º Ten': 4, '2º Ten': 5, 'Asp Of': 6,
+        'Sub Ten': 7, '1º Sgt': 8, '2º Sgt': 9, '3º Sgt': 10, 'Cb': 11, 'Sd': 12
+    };
+
+    militares.sort((a, b) => {
+        const gradA = getMilitarGraduation(a);
+        const gradB = getMilitarGraduation(b);
+        const scoreA = ranksBMOrder[gradA] !== undefined ? ranksBMOrder[gradA] : 99;
+        const scoreB = ranksBMOrder[gradB] !== undefined ? ranksBMOrder[gradB] : 99;
+        if (scoreA !== scoreB) return scoreA - scoreB;
+
+        const nameA = a.war_name || a.name || '';
+        const nameB = b.war_name || b.name || '';
+        return nameA.localeCompare(nameB, 'pt-BR');
+    });
+
+    // Ordem de Bombeiros Comunitários BC (grau maior / ordem decrescente, seguido de nome)
+    comunitarios.sort((a, b) => {
+        const ordemA = typeof a.bc_graduacao_ordem === 'number' && a.bc_graduacao_ordem > 0
+            ? a.bc_graduacao_ordem
+            : (() => {
+                const m = (a.graduation || a.rank || '').match(/(\d+)[°º]?\s*Grau/i);
+                return m ? parseInt(m[1], 10) : 1;
+            })();
+
+        const ordemB = typeof b.bc_graduacao_ordem === 'number' && b.bc_graduacao_ordem > 0
+            ? b.bc_graduacao_ordem
+            : (() => {
+                const m = (b.graduation || b.rank || '').match(/(\d+)[°º]?\s*Grau/i);
+                return m ? parseInt(m[1], 10) : 1;
+            })();
+
+        // Maior grau primeiro (ordem decrescente: 10º Grau -> 1º Grau)
+        if (ordemA !== ordemB) return ordemB - ordemA;
+
+        const nameA = a.war_name || a.name || '';
+        const nameB = b.war_name || b.name || '';
+        return nameA.localeCompare(nameB, 'pt-BR');
+    });
+
+    return [...militares, ...comunitarios];
+};
+
 const CORES: Record<string, { bg: string; text: string; hex: string; pillBg: string; borderHex: string }> = {
   A: { bg: 'bg-emerald-600', text: 'text-emerald-700', hex: '#16a34a', pillBg: '#dcfce7', borderHex: '#86efac' }, // VERDE
   B: { bg: 'bg-blue-600', text: 'text-blue-700', hex: '#2563eb', pillBg: '#dbeafe', borderHex: '#93c5fd' },   // AZUL
@@ -528,7 +591,7 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                 const teamInfo = teamLetter ? CORES[teamLetter] : null;
 
                                 // Buscar bombeiros escalados no dia (excluindo os que estiverem em férias/afastamento na data)
-                                const escaladosNoDia = (dayEscala?.militares && Array.isArray(dayEscala.militares))
+                                const escaladosBrutos = (dayEscala?.militares && Array.isArray(dayEscala.militares))
                                     ? dayEscala.militares
                                         .filter(id => {
                                             const emAfastamento = safeVacations.some(v =>
@@ -542,6 +605,9 @@ const ScaleCalendar: React.FC<ScaleCalendarProps> = ({ month, escalas, personnel
                                         .map(id => safePersonnel.find(p => p && p.id === id))
                                         .filter(Boolean) as Personnel[]
                                     : [];
+
+                                // Ordenar: militares primeiro por graduação militar, depois BCs por grau comunitário
+                                const escaladosNoDia = sortEscaladosPorGraduacao(escaladosBrutos);
 
                                 return (
                                     <div

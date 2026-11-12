@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Personnel, Vacation, SigrhExport, B1Course, RankHistory, DisciplinaryRecord } from '../../services/types';
+import React, { useState, useEffect } from 'react';
+import { Personnel, Vacation, SigrhExport, B1Course, RankHistory, DisciplinaryRecord, Escala } from '../../services/types';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { toast } from 'sonner';
 import { supabase } from '../../services/supabase';
@@ -10,6 +10,7 @@ import { ExtratoMensalB1 } from './ExtratoMensalB1';
 interface Props {
     personnelList: Personnel[];
     vacations: Vacation[];
+    escalas?: Escala[];
     exports: SigrhExport[];
     courses?: B1Course[];
     rankHistories?: RankHistory[];
@@ -20,6 +21,7 @@ interface Props {
 const ExportSection: React.FC<Props> = ({
     personnelList,
     vacations,
+    escalas = [],
     courses = [],
     rankHistories = [],
     disciplinaryRecords = [],
@@ -43,6 +45,108 @@ const ExportSection: React.FC<Props> = ({
     const [asuSocorrista1Id, setAsuSocorrista1Id] = useState<string>('');
     const [asuSocorrista2Id, setAsuSocorrista2Id] = useState<string>('');
     const [observacoesChefe, setObservacoesChefe] = useState<string>('');
+
+    // Preenchimento automático das funções do DOCUMENTO 2 de acordo com a escala publicada do dia
+    useEffect(() => {
+        if (!escalaDate) return;
+
+        const carregarEscalaDoDia = async () => {
+            try {
+                // 1. Tentar encontrar escala já em memória
+                let dayEscala = escalas.find(e => e.data === escalaDate);
+
+                // 2. Se não estiver em memória, buscar no Supabase
+                if (!dayEscala) {
+                    const { data } = await supabase
+                        .from('escalas')
+                        .select('*')
+                        .eq('data', escalaDate)
+                        .maybeSingle();
+                    if (data) dayEscala = data as Escala;
+                }
+
+                if (!dayEscala || !Array.isArray(dayEscala.militares) || dayEscala.militares.length === 0) {
+                    return;
+                }
+
+                // Filtrar os militares escalados no dia que não estão em férias
+                const militaresIds = dayEscala.militares.filter(id => {
+                    const emFerias = vacations.some(
+                        v => v.personnel_id === id &&
+                        v.start_date && v.end_date &&
+                        escalaDate >= v.start_date &&
+                        escalaDate <= v.end_date
+                    );
+                    return !emFerias;
+                });
+
+                const listaEscalados = militaresIds
+                    .map(id => personnelList.find(p => p.id === id))
+                    .filter(Boolean) as Personnel[];
+
+                if (listaEscalados.length === 0) return;
+
+                // Separar em militares e comunitários
+                const bms = listaEscalados.filter(p => p.type !== 'BC');
+                const bcs = listaEscalados.filter(p => p.type === 'BC');
+
+                // Ordem hierárquica dos BMs
+                const ranksBMOrder: Record<string, number> = {
+                    'Cel': 0, 'Ten Cel': 1, 'Maj': 2, 'Cap': 3, '1º Ten': 4, '2º Ten': 5, 'Asp Of': 6,
+                    'Sub Ten': 7, '1º Sgt': 8, '2º Sgt': 9, '3º Sgt': 10, 'Cb': 11, 'Sd': 12
+                };
+                const normalizeGrad = (p: Personnel) => {
+                    const g = (p.graduation || p.rank || '').replace(/\s*BM$/i, '').trim();
+                    return g.replace(/(\d+)[°º]\s*Sgt/i, '$1º Sgt');
+                };
+
+                bms.sort((a, b) => {
+                    const sA = ranksBMOrder[normalizeGrad(a)] ?? 99;
+                    const sB = ranksBMOrder[normalizeGrad(b)] ?? 99;
+                    return sA - sB;
+                });
+
+                // Auto-preenchimento das 7 posições baseado na graduação e ordem
+                // 1. Chefe do Socorro: militar mais graduado
+                const chefe = bms[0] || listaEscalados[0];
+                if (chefe) setChefeSocorroId(String(chefe.id));
+
+                // 2. Motorista ABTR: quem tem CNH D/E e CVE ativo, ou 2º mais graduado
+                const motoristasPossiveis = listaEscalados.filter(p =>
+                    (p.cve_active === 'Sim' || p.cve_active === 'Ativo') &&
+                    (p.cnh_category?.includes('D') || p.cnh_category?.includes('E') || p.cnh?.includes('D') || p.cnh?.includes('E'))
+                );
+
+                const motABTR = motoristasPossiveis.find(p => p.id !== chefe?.id) || bms[1] || listaEscalados[1];
+                if (motABTR) setAbtrMotoristaId(String(motABTR.id));
+
+                // 3. Motorista ASU
+                const motASU = motoristasPossiveis.find(p => p.id !== chefe?.id && p.id !== motABTR?.id) || bms[2] || listaEscalados[2];
+                if (motASU) setAsuMotoristaId(String(motASU.id));
+
+                // 4. Socorrista 1 ASU
+                const soc1 = listaEscalados.find(p => p.id !== chefe?.id && p.id !== motABTR?.id && p.id !== motASU?.id);
+                if (soc1) setAsuSocorrista1Id(String(soc1.id));
+
+                // 5. Resgatista 1 ABTR
+                const resg1 = listaEscalados.find(p => p.id !== chefe?.id && p.id !== motABTR?.id && p.id !== motASU?.id && p.id !== soc1?.id);
+                if (resg1) setAbtrResgatista1Id(String(resg1.id));
+
+                // 6. Socorrista 2 ASU
+                const soc2 = listaEscalados.find(p => p.id !== chefe?.id && p.id !== motABTR?.id && p.id !== motASU?.id && p.id !== soc1?.id && p.id !== resg1?.id);
+                if (soc2) setAsuSocorrista2Id(String(soc2.id));
+
+                // 7. Resgatista 2 ABTR
+                const resg2 = listaEscalados.find(p => p.id !== chefe?.id && p.id !== motABTR?.id && p.id !== motASU?.id && p.id !== soc1?.id && p.id !== resg1?.id && p.id !== soc2?.id);
+                if (resg2) setAbtrResgatista2Id(String(resg2.id));
+
+            } catch (err) {
+                console.warn('Erro ao carregar escala do dia para o Documento 2:', err);
+            }
+        };
+
+        carregarEscalaDoDia();
+    }, [escalaDate, escalas, personnelList, vacations]);
 
     // EXPORTAÇÃO CSV — ESCALA DE MILITARES (BM)
     const exportarEscalaBMCSV = async () => {
@@ -664,17 +768,29 @@ const ExportSection: React.FC<Props> = ({
         const getPersonLabel = (id: string) => {
             const p = personnelList.find(item => String(item.id) === id);
             if (!p) return '';
-            return `${p.graduation || p.rank || 'BM'} Mtcl ${p.matricula || '719831-0'} ${p.war_name || p.name}`;
+            const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
+            const warName = (p.war_name || p.name.split(' ')[0]).toUpperCase();
+            if (isBC) {
+                return `BC ${warName}`;
+            }
+            let grad = (p.graduation || p.rank || 'Sd').replace(/\s*BM$/i, '').trim();
+            grad = grad.replace(/(\d+)[°º]\s*Sgt/i, '$1º Sgt');
+            if (grad === 'Sd') grad = 'Sd BM';
+            else if (grad === 'Cb') grad = 'Cb BM';
+            else if (grad.includes('Sgt')) grad = `${grad} BM`;
+            else if (grad.includes('Ten')) grad = `${grad} BM`;
+            else grad = `${grad} BM`;
+            return `${grad} ${warName}`.trim();
         };
 
-        const chefeName = getPersonLabel(chefeSocorroId) || 'Sd Mtcl 719831-0 Anton';
-        const abtrMot = getPersonLabel(abtrMotoristaId) || 'Sd Mtcl 719737-3 de Melo';
-        const abtrResg1 = getPersonLabel(abtrResgatista1Id) || '';
-        const abtrResg2 = getPersonLabel(abtrResgatista2Id) || '';
+        const chefeName = getPersonLabel(chefeSocorroId);
+        const abtrMot = getPersonLabel(abtrMotoristaId);
+        const abtrResg1 = getPersonLabel(abtrResgatista1Id);
+        const abtrResg2 = getPersonLabel(abtrResgatista2Id);
 
-        const asuMot = getPersonLabel(asuMotoristaId) || 'Sd Mtcl 719868-0 Elias';
-        const asuSoc1 = getPersonLabel(asuSocorrista1Id) || '';
-        const asuSoc2 = getPersonLabel(asuSocorrista2Id) || '';
+        const asuMot = getPersonLabel(asuMotoristaId);
+        const asuSoc1 = getPersonLabel(asuSocorrista1Id);
+        const asuSoc2 = getPersonLabel(asuSocorrista2Id);
 
         let html = `<!DOCTYPE html>
 <html>
@@ -682,18 +798,122 @@ const ExportSection: React.FC<Props> = ({
 <meta charset="utf-8">
 <title>Escala de Serviço 24 x 72 - SGPe CBMSC</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size: 11px; margin: 20px; color: #000; }
-  .header-box { border: 1px solid #000; padding: 10px; text-align: center; margin-bottom: 20px; font-weight: bold; }
-  .main-title { text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 5px; }
-  .sub-title { text-align: center; font-size: 12px; margin-bottom: 20px; }
-  .table-box { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-  .table-box th, .table-box td { border: 1px solid #000; padding: 5px 8px; font-size: 11px; }
-  .table-box th { background-color: #f2f2f2; text-align: center; }
-  .red-signed { color: red; font-size: 9px; font-weight: bold; }
-  .obs-box { border: 1px solid #000; width: 100%; min-height: 80px; padding: 10px; margin-bottom: 30px; font-size: 10px; }
-  .signatures-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
-  .signatures-table td { width: 50%; text-align: center; vertical-align: top; border: none; }
-  @media print { @page { size: A4 landscape; margin: 10mm; } }
+  @page {
+    size: A4 landscape;
+    margin: 15mm 18mm;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body {
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    font-size: 11px;
+    line-height: 1.35;
+    margin: 0;
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+  .header-box {
+    border: 1.5px solid #000;
+    padding: 12px 10px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 11.5px;
+    line-height: 1.45;
+    margin-bottom: 24px;
+    text-transform: uppercase;
+  }
+  .main-title {
+    text-align: center;
+    font-size: 13.5px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .sub-title {
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 22px;
+  }
+  .table-box {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+  .table-box th, .table-box td {
+    border: 1px solid #000;
+    padding: 6px 10px;
+    font-size: 11px;
+    height: 24px;
+  }
+  .table-box th {
+    background-color: #fff;
+    font-weight: bold;
+    text-align: center;
+  }
+  .table-box td.funcao {
+    font-weight: normal;
+  }
+  .table-box td.militar {
+    font-weight: normal;
+  }
+  .table-box td.rubrica {
+    text-align: left;
+    white-space: nowrap;
+  }
+  .red-signed {
+    color: #d32f2f;
+    font-size: 9.5px;
+    font-weight: bold;
+    letter-spacing: 0.2px;
+  }
+  .obs-title {
+    font-weight: bold;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    margin-top: 18px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .obs-box {
+    border: 1.5px solid #000;
+    width: 100%;
+    min-height: 90px;
+    padding: 10px 12px;
+    margin-bottom: 24px;
+    font-size: 11px;
+    white-space: pre-wrap;
+  }
+  .data-local {
+    font-size: 11px;
+    margin-bottom: 40px;
+  }
+  .signatures-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 30px;
+  }
+  .signatures-table td {
+    width: 50%;
+    text-align: center;
+    vertical-align: top;
+    border: none;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .signatures-table .sig-line {
+    display: inline-block;
+    width: 280px;
+    border-top: 1px solid #000;
+    margin-top: 4px;
+    margin-bottom: 5px;
+  }
 </style>
 </head>
 <body>
@@ -701,85 +921,98 @@ const ExportSection: React.FC<Props> = ({
 <div className="header-box">
   ESTADO DE SANTA CATARINA<br>
   CORPO DE BOMBEIROS MILITAR<br>
-  7º BATALHÃO DE BOMBEIROS MILITAR<br>
-  3º PELOTÃO DE BOMBEIROS MILITAR DE ARAQUARI
+  16º BATALHÃO DE BOMBEIROS MILITAR<br>
+  2º PELOTÃO DE BOMBEIROS MILITAR DE ARAQUARI
 </div>
 
 <div className="main-title">ESCALA DE SERVIÇO 24 X 72</div>
 <div className="sub-title">${formatFullDay(d)} para ${formatFullDay(nextD)}</div>
 
 <!-- Chefe do Socorro -->
-<table className="table-box" style="width: 50%; margin-bottom: 15px;">
+<table className="table-box" style="width: 58%; margin-bottom: 18px;">
   <thead>
-    <tr><th colspan="2">Chefe do Socorro</th></tr>
-    <tr><th style="width:30%">Função</th><th style="width:70%">Rubrica</th></tr>
+    <tr>
+      <th colspan="3" style="text-align: center;">Chefe do Socorro</th>
+    </tr>
+    <tr>
+      <th style="width: 32%; text-align: left;">Função</th>
+      <th style="width: 36%; text-align: left;">Militar</th>
+      <th style="width: 32%; text-align: left;">Rubrica</th>
+    </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Chefe Socorro</td>
-      <td>
-        ${chefeName} 
-        <span className="red-signed" style="float:right">(ASSINADO DIGITALMENTE)</span>
-      </td>
+      <td className="funcao">Chefe Socorro</td>
+      <td className="militar">${chefeName}</td>
+      <td className="rubrica">${chefeName ? '<span class="red-signed">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
     </tr>
   </tbody>
 </table>
 
-<!-- Viaturas ABTR e ASU -->
+<!-- Viaturas ABTR e ASU Lado a Lado -->
 <table className="table-box">
   <thead>
     <tr>
-      <th colspan="2" style="width:50%">ABTR-265</th>
-      <th colspan="2" style="width:50%">ASU-552</th>
+      <th colspan="3" style="width: 50%; text-align: center;">ABTR-265</th>
+      <th colspan="3" style="width: 50%; text-align: center;">ASU-552</th>
     </tr>
     <tr>
-      <th style="width:15%">Função</th><th style="width:35%">Rubrica</th>
-      <th style="width:15%">Funç:</th><th style="width:35%">Rubrica</th>
+      <th style="width: 16%; text-align: left;">Função</th>
+      <th style="width: 18%; text-align: left;">Militar</th>
+      <th style="width: 16%; text-align: left;">Rubrica</th>
+      <th style="width: 16%; text-align: left;">Função</th>
+      <th style="width: 18%; text-align: left;">Militar</th>
+      <th style="width: 16%; text-align: left;">Rubrica</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Motorista</td>
-      <td>${abtrMot} ${abtrMot ? '<span class="red-signed" style="float:right">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
-      <td>Motorista</td>
-      <td>${asuMot} ${asuMot ? '<span class="red-signed" style="float:right">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
+      <td className="funcao">Motorista</td>
+      <td className="militar">${abtrMot}</td>
+      <td className="rubrica">${abtrMot ? '<span class="red-signed">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
+      <td className="funcao">Motorista</td>
+      <td className="militar">${asuMot}</td>
+      <td className="rubrica">${asuMot ? '<span class="red-signed">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
     </tr>
     <tr>
-      <td>Resgatista 1</td>
-      <td>${abtrResg1}</td>
-      <td>Socorrista 1</td>
-      <td>${asuSoc1}</td>
+      <td className="funcao">Resgatista 1</td>
+      <td className="militar">${abtrResg1}</td>
+      <td className="rubrica">${abtrResg1 ? '<span class="red-signed">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
+      <td className="funcao">Socorrista 1</td>
+      <td className="militar">${asuSoc1}</td>
+      <td className="rubrica">${asuSoc1 ? '<span class="red-signed">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
     </tr>
     <tr>
-      <td>Resgatista 2</td>
-      <td>${abtrResg2}</td>
-      <td>Socorrista 2</td>
-      <td>${asuSoc2}</td>
+      <td className="funcao">Resgatista 2</td>
+      <td className="militar">${abtrResg2}</td>
+      <td className="rubrica">${abtrResg2 ? '<span class="red-signed">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
+      <td className="funcao">Socorrista 2</td>
+      <td className="militar">${asuSoc2}</td>
+      <td className="rubrica">${asuSoc2 ? '<span class="red-signed">(ASSINADO DIGITALMENTE)</span>' : ''}</td>
     </tr>
   </tbody>
 </table>
 
-<!-- Observações -->
-<div style="font-weight: bold; text-align: center; margin-bottom: 5px;">OBSERVAÇÕES ESPECÍFICAS PARA O CHEFE DE SOCORRO</div>
-<div className="obs-box">
-  ${observacoesChefe || ''}
-</div>
+<!-- Observações Específicas -->
+<div className="obs-title">OBSERVAÇÕES ESPECÍFICAS PARA O CHEFE DE SOCORRO</div>
+<div className="obs-box">${observacoesChefe || ''}</div>
 
-<div>Araquari, ${formatFullDay(d)} de ${d.getFullYear()}.</div>
+<div className="data-local">Araquari, ${formatFullDay(d)} de ${d.getFullYear()}.</div>
 
+<!-- Assinaturas -->
 <table className="signatures-table">
   <tr>
     <td>
       <div className="red-signed">(ASSINADO DIGITALMENTE)</div>
-      ____________________________________________<br>
+      <div className="sig-line"></div><br>
       <b>3º Sargento João Vitor Pires Rodrigues</b><br>
-      B1 do 2º/2ª/16ºBBM
+      AUX B1 do 2º/2º/16ºBBM
     </td>
     <td>
       <div className="red-signed">(ASSINADO DIGITALMENTE)</div>
-      ____________________________________________<br>
+      <div className="sig-line"></div><br>
       <b>1º Tenente BM Runan Aguirre Suares</b><br>
-      Cmt do 2º/2ª/16ºBBM
+      Cmt do 2º/2º/16ºBBM
     </td>
   </tr>
 </table>
@@ -838,35 +1071,19 @@ const ExportSection: React.FC<Props> = ({
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex flex-col justify-between space-y-3">
+                    <div className="max-w-xl">
+                        <div className="bg-stone-50 p-5 rounded-xl border border-stone-200 flex flex-col justify-between space-y-4">
                             <div>
-                                <span className="font-bold text-sm text-gray-800 block">Planilha Unificada (.TSV)</span>
-                                <span className="text-[10px] text-gray-500">Formato tabulado ideal para importação e planilhas com 32 colunas completas.</span>
+                                <span className="font-bold text-base text-gray-800 block">Planilha Unificada (.TSV)</span>
+                                <span className="text-xs text-gray-500 mt-1 block">Formato tabulado ideal para importação e planilhas com 32 colunas cadastrais completas.</span>
                             </div>
                             <button
                                 onClick={generateSIGRHFullData}
-                                className="w-full py-3 bg-primary text-white font-black text-xs rounded-xl hover:brightness-110 shadow-md flex items-center justify-center gap-2"
+                                className="w-full py-3.5 bg-primary text-white font-black text-xs rounded-xl hover:brightness-110 shadow-md flex items-center justify-center gap-2 tracking-wider uppercase"
                             >
                                 <span className="material-symbols-outlined text-base">file_download</span>
-                                EXPORTAR SIGRH (.TSV)
+                                EXPORTAR PLANILHA SIGRH (.TSV)
                             </button>
-                        </div>
-
-                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex flex-col justify-between space-y-3">
-                            <div>
-                                <span className="font-bold text-sm text-gray-800 block">Relatório Cadastral em PDF</span>
-                                <span className="text-[10px] text-gray-500">Documento impresso formatado com cabeçalho da unidade e blocos de dados.</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => generateSIGRHPDF()}
-                                    className="flex-1 py-3 bg-stone-800 text-white font-black text-xs rounded-xl hover:bg-stone-900 shadow-md flex items-center justify-center gap-1.5"
-                                >
-                                    <span className="material-symbols-outlined text-base">print</span>
-                                    PDF GERAL (TODOS)
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1009,17 +1226,20 @@ const ExportSection: React.FC<Props> = ({
                                     <h4 className="font-black text-base text-gray-800">DOCUMENTO 2 — Escala de Serviço 24x72</h4>
                                 </div>
                                 <p className="text-xs text-gray-500 mb-3">
-                                    Destinado ao <b>efetivo operacional</b>. Fiel ao modelo do 3º Pelotão de Araquari (ABTR-265 e ASU-552 + Chefe do Socorro).
+                                    Destinado ao <b>efetivo operacional</b> (2º Pelotão de Bombeiros Militar de Araquari). Os nomes são <b>preenchidos automaticamente</b> de acordo com a escala publicada do dia, permitindo ajustar quem assume cada função.
                                 </p>
 
                                 <div className="space-y-3 text-xs">
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-500 block mb-1">Data do Serviço:</label>
+                                    <div className="bg-white p-2.5 rounded-xl border border-rustic-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-gray-500 block">Data do Serviço:</label>
+                                            <span className="text-[11px] text-stone-400">Troca de data carrega a escala publicada correspondente</span>
+                                        </div>
                                         <input
                                             type="date"
                                             value={escalaDate}
                                             onChange={e => setEscalaDate(e.target.value)}
-                                            className="w-full h-9 px-3 rounded-lg border border-rustic-border bg-white"
+                                            className="h-9 px-3 rounded-lg border border-rustic-border bg-stone-50 font-bold text-xs"
                                         />
                                     </div>
 

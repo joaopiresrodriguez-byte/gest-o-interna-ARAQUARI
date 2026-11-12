@@ -2043,7 +2043,13 @@ const PessoalB1: React.FC = () => {
 
               {/* TAB: EXTRATOS */}
               {tab === 'EXTRATOS' && (
-                <ExportSection personnelList={personnelList} vacations={vacations} exports={sigrhExports} onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }} />
+                <ExportSection
+                  personnelList={personnelList}
+                  vacations={vacations}
+                  escalas={escalas}
+                  exports={sigrhExports}
+                  onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }}
+                />
               )}
 
               {/* TAB: DASHBOARD */}
