@@ -74,14 +74,68 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
   const historicoFiltrado = historico.filter(h => {
     if (filtroMesHistorico === 'todos') return true;
 
-    // Extrair data da alteração a partir dos campos disponíveis
+    // dataRef pode ser 'YYYY-MM-DD' ou 'YYYY-MM-DDTHH:mm:ss...'
     const dataRef = h.dia_original_a || h.dia_original_b || h.data_vigencia || h.criado_em || h.created_at;
     if (!dataRef) return true;
 
-    // dataRef pode ser 'YYYY-MM-DD' ou 'YYYY-MM-DDTHH:mm:ss...'
     const mesRegistro = String(dataRef).substring(0, 7);
     return mesRegistro === filtroMesHistorico;
   });
+
+  // Mapeamento ordinal retroativo e inteligente para todas as trocas
+  const mapOrdinalTrocas = React.useMemo(() => {
+    const ordenado = [...historico].sort((a, b) => {
+      const tA = new Date(a.criado_em || a.created_at || 0).getTime();
+      const tB = new Date(b.criado_em || b.created_at || 0).getTime();
+      return tA - tB;
+    });
+
+    const contador: Record<string, number> = {};
+    const mapa: Record<string | number, { ordA: number | null; ordB: number | null; mesA: string; mesB: string }> = {};
+
+    for (const h of ordenado) {
+      if (['troca_militares', 'troca_individual'].includes(h.tipo_alteracao)) {
+        const idKey = h.id;
+        const mesRefA = (h.dia_original_a || h.dia_novo_entrada || h.criado_em || '').substring(0, 7) || mesAtualStr;
+        const mesRefB = (h.dia_original_b || h.dia_original_a || h.criado_em || '').substring(0, 7) || mesAtualStr;
+
+        const milA = Number(h.militar_a_id);
+        const milB = Number(h.militar_b_id);
+
+        let ordA: number | null = null;
+        let ordB: number | null = null;
+
+        if (milA) {
+          const kA = `${milA}_${mesRefA}`;
+          contador[kA] = (contador[kA] || 0) + 1;
+          ordA = contador[kA];
+        }
+
+        if (milB) {
+          const kB = `${milB}_${mesRefB}`;
+          contador[kB] = (contador[kB] || 0) + 1;
+          ordB = contador[kB];
+        }
+
+        mapa[idKey] = { ordA, ordB, mesA: mesRefA, mesB: mesRefB };
+      }
+    }
+    return mapa;
+  }, [historico, mesAtualStr]);
+
+  // Função auxiliar para contar trocas de qualquer militar em um mês com base no histórico local
+  const contarTrocasMilitarNoMes = (militarId: number | '', mesRef: string) => {
+    if (!militarId || !mesRef) return 0;
+    const mid = Number(militarId);
+    return historico.filter(h => {
+      if (!['troca_militares', 'troca_individual'].includes(h.tipo_alteracao)) return false;
+      const dataA = (h.dia_original_a || h.criado_em || '').substring(0, 7);
+      const dataB = (h.dia_original_b || h.dia_original_a || h.criado_em || '').substring(0, 7);
+      const partA = Number(h.militar_a_id) === mid && dataA === mesRef;
+      const partB = Number(h.militar_b_id) === mid && dataB === mesRef;
+      return partA || partB;
+    }).length;
+  };
 
   // Verificar férias/afastamento de um militar em uma data
   const checarAfastamento = (militarId: number, data: string) => {
@@ -383,7 +437,20 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-stone-500">Militar A</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase text-stone-500">Militar A</label>
+                {militarAId && (
+                  (() => {
+                    const mesA = diaA ? diaA.substring(0, 7) : mesAtualStr;
+                    const saldoA = contarTrocasMilitarNoMes(militarAId, mesA);
+                    return (
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${saldoA >= 2 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {saldoA}/2 no mês
+                      </span>
+                    );
+                  })()
+                )}
+              </div>
               <PersonnelSelect
                 personnelList={personnelList}
                 value={militarAId}
@@ -404,7 +471,20 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-stone-500">Militar B</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase text-stone-500">Militar B</label>
+                {militarBId && (
+                  (() => {
+                    const mesB = diaB ? diaB.substring(0, 7) : mesAtualStr;
+                    const saldoB = contarTrocasMilitarNoMes(militarBId, mesB);
+                    return (
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${saldoB >= 2 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {saldoB}/2 no mês
+                      </span>
+                    );
+                  })()
+                )}
+              </div>
               <PersonnelSelect
                 personnelList={personnelList}
                 value={militarBId}
@@ -459,7 +539,20 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-stone-500">Militar</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase text-stone-500">Militar</label>
+                {indMilitarId && (
+                  (() => {
+                    const mes = (indDiaSaida || indDiaEntrada) ? (indDiaSaida || indDiaEntrada).substring(0, 7) : mesAtualStr;
+                    const saldo = contarTrocasMilitarNoMes(indMilitarId, mes);
+                    return (
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${saldo >= 2 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {saldo}/2 no mês
+                      </span>
+                    );
+                  })()
+                )}
+              </div>
               <PersonnelSelect
                 personnelList={personnelList}
                 value={indMilitarId}
@@ -490,7 +583,20 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-stone-500">Militar Substituído (Opcional)</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase text-stone-500">Militar Substituído (Opcional)</label>
+                {indSubstituidoId && (
+                  (() => {
+                    const mes = (indDiaEntrada || indDiaSaida) ? (indDiaEntrada || indDiaSaida).substring(0, 7) : mesAtualStr;
+                    const saldo = contarTrocasMilitarNoMes(indSubstituidoId, mes);
+                    return (
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${saldo >= 2 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {saldo}/2 no mês
+                      </span>
+                    );
+                  })()
+                )}
+              </div>
               <PersonnelSelect
                 personnelList={personnelList}
                 value={indSubstituidoId}
@@ -771,9 +877,21 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
                     badgeClass = 'bg-red-100 text-red-800';
                   }
 
-                  // Extrair indicação do número da troca se constar nos detalhes
+                  // Extrair indicação do número da troca se constar nos detalhes ou calcular retroativamente
                   const tagTrocaMatch = (h.detalhes || '').match(/\[Troca\s+([^\]]+)\]/i);
-                  const tagTroca = tagTrocaMatch ? tagTrocaMatch[1] : null;
+                  let tagTroca = tagTrocaMatch ? tagTrocaMatch[1] : null;
+
+                  // Se não estiver gravado no texto da observação (trocas anteriores), calcula via histórico
+                  if (!tagTroca && ['troca_militares', 'troca_individual'].includes(h.tipo_alteracao)) {
+                    const infoOrdinal = mapOrdinalTrocas[h.id];
+                    if (infoOrdinal) {
+                      if (infoOrdinal.ordA && infoOrdinal.ordB) {
+                        tagTroca = `1º: ${infoOrdinal.ordA}ª / 2º: ${infoOrdinal.ordB}ª de 2`;
+                      } else if (infoOrdinal.ordA) {
+                        tagTroca = `${infoOrdinal.ordA}ª de 2 no mês`;
+                      }
+                    }
+                  }
 
                   return (
                     <tr key={h.id || idx} className="hover:bg-stone-50/50">
