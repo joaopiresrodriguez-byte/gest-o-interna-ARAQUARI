@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Personnel, Vacation, ServiceSwap } from '../../services/types';
+import { Personnel, Vacation, ServiceSwap, Escala } from '../../services/types';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { supabase } from '../../services/supabase';
 import { ScaleAdjustmentService } from '../../services/scaleAdjustmentService';
@@ -14,14 +14,16 @@ interface ExtratoItem {
     periodoOuData: string;
     statusSigrh: 'Pendente' | 'Em Andamento' | 'Concluído';
     observacaoB1?: string;
+    dataOrdenacao: string; // Para ordenar cronologicamente
 }
 
 interface Props {
     personnelList: Personnel[];
     vacations: Vacation[];
+    escalas?: Escala[];
 }
 
-export const ExtratoMensalB1: React.FC<Props> = ({ personnelList, vacations }) => {
+export const ExtratoMensalB1: React.FC<Props> = ({ personnelList, vacations, escalas = [] }) => {
     const today = new Date();
     const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
@@ -29,6 +31,8 @@ export const ExtratoMensalB1: React.FC<Props> = ({ personnelList, vacations }) =
     const [loading, setLoading] = useState<boolean>(false);
     const [swaps, setSwaps] = useState<ServiceSwap[]>([]);
     const [auditLogs, setAuditLogs] = useState<any[]>([]);
+    const [escalaAlteracoes, setEscalaAlteracoes] = useState<any[]>([]);
+    const [guarnicoes, setGuarnicoes] = useState<any[]>([]);
     const [statusMap, setStatusMap] = useState<Record<string, { status: 'Pendente' | 'Em Andamento' | 'Concluído'; obs?: string }>>({});
     const [filtroCategoria, setFiltroCategoria] = useState<string>('TODAS');
     const [filtroStatus, setFiltroStatus] = useState<string>('TODOS');
@@ -55,20 +59,44 @@ export const ExtratoMensalB1: React.FC<Props> = ({ personnelList, vacations }) =
         localStorage.setItem(storageKey, JSON.stringify(newMap));
     };
 
-    // Carregar dados de permutas e logs do mês
+    // Carregar dados de permutas, alterações de escala (escala_alteracoes), guarnições e logs do mês
     const loadMonthData = async () => {
         try {
             setLoading(true);
-            // 1. Permutas / Trocas do Mês
+            const [yearStr, monthNumStr] = monthRef.split('-');
+            const year = Number(yearStr);
+            const monthNum = Number(monthNumStr);
+            const daysInMonth = new Date(year, monthNum, 0).getDate();
+            const startMonthDate = `${monthRef}-01`;
+            const endMonthDate = `${monthRef}-${String(daysInMonth).padStart(2, '0')}`;
+
+            // 1. Permutas / Trocas do Mês da tabela legada de swaps
             const { data: swapsData } = await supabase
                 .from('service_swaps')
                 .select('*')
-                .eq('month_ref', monthRef);
+                .or(`month_ref.eq.${monthRef},original_date.gte.${startMonthDate},new_date.gte.${startMonthDate}`);
 
-            // 2. Logs de ajuste de escala e audit
+            // 2. Histórico Auditável de Alterações de Escala (escala_alteracoes)
+            const { data: alteracoesData, error: altError } = await supabase
+                .from('escala_alteracoes')
+                .select('*')
+                .order('criado_em', { ascending: false });
+
+            if (altError) {
+                console.warn('[ExtratoMensalB1] Aviso ao carregar escala_alteracoes:', altError.message);
+            }
+
+            // 3. Guarnições para exibição de nomes nos casos de transferência
+            const { data: gData } = await supabase
+                .from('guarnicoes')
+                .select('id, nome, cor');
+
+            // 4. Logs de ajuste de escala e audit
             const logs = await ScaleAdjustmentService.getAuditLogs(monthRef);
 
             setSwaps(swapsData || []);
+            setEscalaAlteracoes(alteracoesData || []);
+            setGuarnicoes(gData || []);
             setAuditLogs(logs || []);
         } catch (err) {
             console.error('Erro ao carregar dados do extrato mensal B1:', err);
@@ -88,77 +116,246 @@ export const ExtratoMensalB1: React.FC<Props> = ({ personnelList, vacations }) =
         const [yearStr, monthStr] = monthRef.split('-');
         const year = Number(yearStr);
         const month = Number(monthStr);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const startMonthStr = `${monthRef}-01`;
+        const endMonthStr = `${monthRef}-${String(daysInMonth).padStart(2, '0')}`;
 
-        // A. Férias & Afastamentos / Licenças / Cedidos
+        // Mapa de guarnições para busca rápida por ID
+        const guarnicoesMap = new Map<string, string>();
+        guarnicoes.forEach(g => {
+            if (g.id) guarnicoesMap.set(g.id, g.nome || g.id);
+        });
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // A. FÉRIAS, LICENÇAS, AFASTAMENTOS E CEDIDOS (personnel_vacations)
+        // Cobertura completa: qualquer afastamento/férias que coincida com o mês
+        // (start_date <= endMonthStr && end_date >= startMonthStr)
+        // ─────────────────────────────────────────────────────────────────────────────
         vacations.forEach(v => {
-            if (!v.start_date) return;
-            const sDate = new Date(v.start_date);
-            // Verifica se a licença/férias incide ou inicia no mês de referência
-            if (sDate.getFullYear() === year && (sDate.getMonth() + 1) === month) {
-                const person = personnelList.find(p => p.id === v.personnel_id);
-                const isFerias = v.leave_type === 'ferias' || v.leave_type === 'desconto_ferias';
-                const isCedido = v.leave_type === 'cedido';
+            if (!v.start_date || !v.end_date) return;
+            
+            // Checar se o período de férias/afastamento coincide com o mês selecionado
+            const coincideComMes = v.start_date <= endMonthStr && v.end_date >= startMonthStr;
+            if (!coincideComMes) return;
 
-                const cat: ExtratoItem['categoria'] = isFerias
-                    ? 'Férias'
-                    : (isCedido ? 'Cedido / Transferência' : 'Afastamento / Licença');
+            const person = personnelList.find(p => p.id === v.personnel_id);
+            const isFerias = v.leave_type === 'ferias' || v.leave_type === 'desconto_ferias';
+            const isCedido = v.leave_type === 'cedido';
 
-                const key = `vac_${v.id || v.personnel_id}_${v.start_date}`;
-                const savedState = statusMap[key] || { status: 'Pendente' };
+            let cat: ExtratoItem['categoria'] = isFerias
+                ? 'Férias'
+                : (isCedido ? 'Cedido / Transferência' : 'Afastamento / Licença');
 
+            // Determina se foi cancelado
+            const statusCancelado = v.status === 'cancelado' ? ' [CANCELADO]' : '';
+            const descTipo = (v.leave_type || 'FÉRIAS').toUpperCase().replace('_', ' ');
+
+            const key = `vac_${v.id || v.personnel_id}_${v.start_date}`;
+            const savedState = statusMap[key] || { status: 'Pendente' };
+
+            const militarNome = v.full_name || (person ? `${person.graduation || person.rank || ''} ${person.war_name || person.name}`.trim() : `Militar #${v.personnel_id}`);
+            const militarMatricula = person?.matricula || '-';
+
+            items.push({
+                id: key,
+                categoria: cat,
+                militarNome,
+                militarMatricula,
+                detalhes: `${v.notes ? `${v.notes} | ` : ''}${descTipo}${statusCancelado} (${v.day_count || 30} dias)`,
+                periodoOuData: `${formatLocalDate(v.start_date)} até ${formatLocalDate(v.end_date)}`,
+                statusSigrh: savedState.status,
+                observacaoB1: savedState.obs,
+                dataOrdenacao: v.start_date
+            });
+        });
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // B. HISTÓRICO AUDITÁVEL DE ALTERAÇÕES DE ESCALA (escala_alteracoes)
+        // Trocas Mútuas, Trocas Individuais, Transferências de Guarnição e Desligamentos
+        // ─────────────────────────────────────────────────────────────────────────────
+        escalaAlteracoes.forEach(alt => {
+            const dataRefA = alt.dia_original_a;
+            const dataRefB = alt.dia_original_b;
+            const dataVigencia = alt.data_vigencia;
+            const dataCriacao = alt.criado_em ? alt.criado_em.substring(0, 10) : '';
+
+            // Verificar se alguma das datas envolvidas pertence ao mês selecionado
+            const pertenceAoMes = 
+                (dataRefA && dataRefA.startsWith(monthRef)) ||
+                (dataRefB && dataRefB.startsWith(monthRef)) ||
+                (dataVigencia && dataVigencia.startsWith(monthRef)) ||
+                (dataCriacao && dataCriacao.startsWith(monthRef));
+
+            if (!pertenceAoMes) return;
+
+            const milA = personnelList.find(p => p.id === Number(alt.militar_a_id));
+            const milB = personnelList.find(p => p.id === Number(alt.militar_b_id));
+
+            const nomeA = milA ? `${milA.graduation || milA.rank || ''} ${milA.war_name || milA.name}`.trim() : (alt.militar_a_id ? `Militar #${alt.militar_a_id}` : 'Militar');
+            const matA = milA?.matricula || '-';
+
+            const nomeB = milB ? `${milB.graduation || milB.rank || ''} ${milB.war_name || milB.name}`.trim() : (alt.militar_b_id ? `Militar #${alt.militar_b_id}` : null);
+            const matB = milB?.matricula || '-';
+
+            const key = `alt_escala_${alt.id}`;
+            const savedState = statusMap[key] || { status: 'Pendente' };
+
+            // Classificação por tipo
+            if (alt.tipo_alteracao === 'troca_militares') {
                 items.push({
                     id: key,
-                    categoria: cat,
-                    militarNome: v.full_name || person?.name || `Militar #${v.personnel_id}`,
-                    militarMatricula: person?.matricula || '-',
-                    detalhes: `${v.notes || v.leave_type.toUpperCase()} (${v.day_count} dias)`,
-                    periodoOuData: `${formatLocalDate(v.start_date)} até ${formatLocalDate(v.end_date)}`,
+                    categoria: 'Troca de Serviço',
+                    militarNome: nomeB ? `${nomeA} <-> ${nomeB}` : nomeA,
+                    militarMatricula: nomeB ? `${matA} / ${matB}` : matA,
+                    detalhes: alt.detalhes || `Troca mútua de escala entre ${nomeA} e ${nomeB || 'outro militar'}`,
+                    periodoOuData: `Dia A: ${formatLocalDate(dataRefA)} | Dia B: ${formatLocalDate(dataRefB)}`,
                     statusSigrh: savedState.status,
-                    observacaoB1: savedState.obs
+                    observacaoB1: savedState.obs,
+                    dataOrdenacao: dataRefA || dataRefB || dataCriacao || startMonthStr
+                });
+            } else if (alt.tipo_alteracao === 'troca_individual') {
+                items.push({
+                    id: key,
+                    categoria: 'Troca de Escala',
+                    militarNome: nomeA,
+                    militarMatricula: matA,
+                    detalhes: alt.detalhes || (nomeB ? `Saiu do dia ${formatLocalDate(dataRefA)} e entrou no dia ${formatLocalDate(dataRefB)} (substituindo ${nomeB})` : `Troca individual de dia de serviço`),
+                    periodoOuData: `Saída: ${formatLocalDate(dataRefA)} | Entrada: ${formatLocalDate(dataRefB)}`,
+                    statusSigrh: savedState.status,
+                    observacaoB1: savedState.obs,
+                    dataOrdenacao: dataRefA || dataRefB || dataCriacao || startMonthStr
+                });
+            } else if (alt.tipo_alteracao === 'transferencia_guarnicao') {
+                const destinoNome = guarnicoesMap.get(alt.guarnicao_destino_id) || alt.guarnicao_destino_id || 'Nova Guarnição';
+                items.push({
+                    id: key,
+                    categoria: 'Cedido / Transferência',
+                    militarNome: nomeA,
+                    militarMatricula: matA,
+                    detalhes: alt.detalhes || `Transferência para a ${destinoNome} a partir de ${formatLocalDate(dataVigencia)}`,
+                    periodoOuData: `Vigência: ${formatLocalDate(dataVigencia)}`,
+                    statusSigrh: savedState.status,
+                    observacaoB1: savedState.obs,
+                    dataOrdenacao: dataVigencia || dataCriacao || startMonthStr
+                });
+            } else if (alt.tipo_alteracao === 'desligamento_transferencia') {
+                items.push({
+                    id: key,
+                    categoria: 'Cedido / Transferência',
+                    militarNome: nomeA,
+                    militarMatricula: matA,
+                    detalhes: alt.detalhes || `Desligamento definitivo / transferência de unidade a contar de ${formatLocalDate(dataVigencia)}`,
+                    periodoOuData: `Corte em: ${formatLocalDate(dataVigencia)}`,
+                    statusSigrh: savedState.status,
+                    observacaoB1: savedState.obs,
+                    dataOrdenacao: dataVigencia || dataCriacao || startMonthStr
+                });
+            } else {
+                // Outro tipo genérico de alteração de escala
+                items.push({
+                    id: key,
+                    categoria: 'Troca de Escala',
+                    militarNome: nomeA,
+                    militarMatricula: matA,
+                    detalhes: alt.detalhes || `Alteração de escala registrada`,
+                    periodoOuData: formatLocalDate(dataVigencia || dataRefA || dataCriacao),
+                    statusSigrh: savedState.status,
+                    observacaoB1: savedState.obs,
+                    dataOrdenacao: dataVigencia || dataRefA || dataCriacao || startMonthStr
                 });
             }
         });
 
-        // B. Trocas de Serviço (Service Swaps)
+        // ─────────────────────────────────────────────────────────────────────────────
+        // C. SERVICE SWAPS (tabela de permutas / trocas de serviço)
+        // ─────────────────────────────────────────────────────────────────────────────
         swaps.forEach(s => {
+            const dataOrig = s.original_date;
+            const dataNova = s.new_date;
+            const coincide = s.month_ref === monthRef || (dataOrig && dataOrig.startsWith(monthRef)) || (dataNova && dataNova.startsWith(monthRef));
+            if (!coincide) return;
+
             const pA = personnelList.find(p => p.id === s.personnel_id);
             const pB = personnelList.find(p => p.id === s.swap_with_personnel_id);
 
             const key = `swap_${s.id}`;
+            // Evitar duplicação se já constar em escala_alteracoes
+            if (items.some(item => item.id === key)) return;
+
             const savedState = statusMap[key] || { status: 'Pendente' };
+
+            const nomeA = pA ? `${pA.graduation || pA.rank || ''} ${pA.war_name || pA.name}`.trim() : (s.personnel_name || 'Militar A');
+            const nomeB = pB ? `${pB.graduation || pB.rank || ''} ${pB.war_name || pB.name}`.trim() : (s.swap_with_name || 'Militar B');
 
             items.push({
                 id: key,
                 categoria: 'Troca de Serviço',
-                militarNome: pA ? `${pA.rank} ${pA.war_name || pA.name}` : (s.personnel_name || 'Militar A'),
+                militarNome: `${nomeA} <-> ${nomeB}`,
                 militarMatricula: pA?.matricula || '-',
-                detalhes: `Troca com ${pB ? `${pB.rank} ${pB.war_name || pB.name}` : (s.swap_with_name || 'Militar B')}. Motivo: ${s.reason}`,
+                detalhes: `Troca de serviço com ${nomeB}. Motivo: ${s.reason || 'Particular'}`,
                 periodoOuData: `Original: ${formatLocalDate(s.original_date)} | Nova: ${formatLocalDate(s.new_date)}`,
                 statusSigrh: savedState.status,
-                observacaoB1: savedState.obs
+                observacaoB1: savedState.obs,
+                dataOrdenacao: s.original_date || s.new_date || startMonthStr
             });
         });
 
-        // C. Alterações de Escala Individual (Scale Audit Logs)
-        auditLogs.forEach(log => {
-            const person = personnelList.find(p => p.id === Number(log.personnel_id));
-            const key = `audit_${log.id}`;
+        // ─────────────────────────────────────────────────────────────────────────────
+        // D. ESCALAS COM MANUAL OVERRIDE (Ajustes pontuais manuais na escala diária)
+        // ─────────────────────────────────────────────────────────────────────────────
+        escalas.forEach(esc => {
+            if (!esc.manual_override || !esc.data || !esc.data.startsWith(monthRef)) return;
+            // Se já tivermos uma alteração registrada para esse dia com mesmo motivo, evitamos duplicidade
+            const key = `esc_override_${esc.id || esc.data}`;
+            const jaExiste = items.some(it => it.detalhes?.includes(esc.override_reason || '') || it.periodoOuData?.includes(formatLocalDate(esc.data)));
+            if (jaExiste) return;
+
             const savedState = statusMap[key] || { status: 'Pendente' };
 
             items.push({
                 id: key,
                 categoria: 'Troca de Escala',
-                militarNome: person ? `${person.rank} ${person.war_name || person.name}` : (log.personnel_name || 'Militar'),
+                militarNome: `Guarnição ${esc.turma || esc.equipe || 'Plantão'}`,
+                militarMatricula: '-',
+                detalhes: `Ajuste manual de escala: ${esc.override_reason || 'Alteração manual em plantão'}`,
+                periodoOuData: formatLocalDate(esc.data),
+                statusSigrh: savedState.status,
+                observacaoB1: savedState.obs,
+                dataOrdenacao: esc.data
+            });
+        });
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // E. SCALE AUDIT LOGS (logs de adições e remoções manuais)
+        // ─────────────────────────────────────────────────────────────────────────────
+        auditLogs.forEach(log => {
+            const logData = log.scale_date || log.performed_at;
+            if (!logData || !String(logData).startsWith(monthRef)) return;
+
+            const person = personnelList.find(p => p.id === Number(log.personnel_id));
+            const key = `audit_${log.id}`;
+            if (items.some(it => it.id === key)) return;
+
+            const savedState = statusMap[key] || { status: 'Pendente' };
+
+            items.push({
+                id: key,
+                categoria: 'Troca de Escala',
+                militarNome: person ? `${person.graduation || person.rank || ''} ${person.war_name || person.name}`.trim() : (log.personnel_name || 'Militar'),
                 militarMatricula: person?.matricula || '-',
                 detalhes: `${log.action_type}: ${log.reason || 'Sem motivo registrado'} (por ${log.performed_by || 'B1'})`,
                 periodoOuData: formatLocalDate(log.scale_date),
                 statusSigrh: savedState.status,
-                observacaoB1: savedState.obs
+                observacaoB1: savedState.obs,
+                dataOrdenacao: log.scale_date || startMonthStr
             });
         });
 
+        // Ordenar itens cronologicamente (da data mais antiga para a mais recente do mês)
+        items.sort((a, b) => (a.dataOrdenacao || '').localeCompare(b.dataOrdenacao || ''));
+
         return items;
-    }, [vacations, swaps, auditLogs, personnelList, monthRef, statusMap]);
+    }, [vacations, escalaAlteracoes, swaps, auditLogs, escalas, guarnicoes, personnelList, monthRef, statusMap]);
 
     // Filtragem dos itens
     const itensFiltrados = useMemo(() => {
@@ -186,7 +383,7 @@ export const ExtratoMensalB1: React.FC<Props> = ({ personnelList, vacations }) =
     const handleStatusChange = (id: string, newStatus: 'Pendente' | 'Em Andamento' | 'Concluído') => {
         const updated = {
             ...statusMap,
-            [id]: { ...statusMap[id], status: newStatus }
+            [id]: { ...(statusMap[id] || {}), status: newStatus }
         };
         saveStatusMap(updated);
         toast.success(`Status atualizado para: ${newStatus}`);

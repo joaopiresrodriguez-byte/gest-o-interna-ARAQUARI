@@ -1055,7 +1055,7 @@ const ExportSection: React.FC<Props> = ({
 
             {/* TAB: EXTRATO MENSAL B1 */}
             {activeSubTab === 'extrato_mensal' && (
-                <ExtratoMensalB1 personnelList={personnelList} vacations={vacations} />
+                <ExtratoMensalB1 personnelList={personnelList} vacations={vacations} escalas={escalas} />
             )}
 
             {/* TAB: SIGRH */}
