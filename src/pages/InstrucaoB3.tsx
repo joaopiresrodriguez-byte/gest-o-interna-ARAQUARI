@@ -655,7 +655,7 @@ const InstrucaoB3: React.FC = () => {
                   <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
                     <span className="text-xs font-bold text-stone-300 uppercase">Mês Ref:</span>
                     <input
-                      type=month
+                      type="month"
                       value={filtroMesCronograma === 'todos' ? '' : filtroMesCronograma}
                       onChange={e => setFiltroMesCronograma(e.target.value || 'todos')}
                       className="bg-transparent font-black text-xs text-white focus:outline-none cursor-pointer"
