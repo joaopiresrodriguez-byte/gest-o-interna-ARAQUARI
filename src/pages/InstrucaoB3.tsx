@@ -48,7 +48,14 @@ const InstrucaoB3: React.FC = () => {
   };
 
   // Main Tab State
-  const [mainTab, setMainTab] = useState<'acervo' | 'formacao' | 'whatsapp' | 'solicitacoes'>('acervo');
+  const [mainTab, setMainTab] = useState<'acervo' | 'cadastros' | 'formacao' | 'whatsapp' | 'solicitacoes'>('acervo');
+
+  // Filtro por mês para o Cronograma de Instrução (Padrão: mês atual YYYY-MM ou 'todos')
+  const defaultMonthStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const [filtroMesCronograma, setFiltroMesCronograma] = useState<string>(defaultMonthStr);
 
   // Gestor Check (is_manager || p_instrucao === 'editor')
   const isGestorB3 = !!(profile?.is_manager || profile?.p_instrucao === 'editor');
@@ -485,6 +492,13 @@ const InstrucaoB3: React.FC = () => {
             Acervo e Cronograma
           </button>
           <button 
+            onClick={() => setMainTab('cadastros')} 
+            className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer shrink-0 whitespace-nowrap ${mainTab === 'cadastros' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
+          >
+            <span className="material-symbols-outlined text-base">edit_calendar</span>
+            Cadastros e Agendamentos
+          </button>
+          <button 
             onClick={() => setMainTab('formacao')} 
             className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer shrink-0 whitespace-nowrap ${mainTab === 'formacao' ? 'bg-[#C62828] text-white shadow-lg' : 'text-[#8C8379] hover:bg-[#FAF9F7] hover:text-[#4A443F]'}`}
           >
@@ -538,10 +552,273 @@ const InstrucaoB3: React.FC = () => {
         )}
 
         {mainTab === 'acervo' && (
-          <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-8 xl:grid-cols-12">
+          <div className="mx-auto max-w-[1600px] space-y-8 animate-in fade-in duration-300">
+            <section className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h3 className="text-2xl font-black text-[#2D2926] flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[#C62828] text-3xl">folder_managed</span>
+                  Acervo Técnico
+                </h3>
+                {profile?.p_instrucao === 'editor' && (
+                  <button
+                    onClick={() => setMainTab('cadastros')}
+                    className="flex items-center gap-2 self-start px-4 py-2 bg-[#C62828] text-white text-xs font-black uppercase rounded-xl shadow-md hover:bg-[#A32020] transition-all"
+                  >
+                    <span className="material-symbols-outlined text-base">library_add</span>
+                    Cadastrar Nova Matéria
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {materias.map(m => (
+                  <div key={m.id} className="group flex flex-col rounded-2xl bg-white border border-[#D6CFC7] shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-default">
+                    <div className="p-6 flex flex-col h-full">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex flex-col gap-1">
+                          <span className={`self-start px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${m.level === 'basico' ? 'bg-green-100 text-green-700' :
+                            m.level === 'intermediario' ? 'bg-orange-100 text-orange-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                            {m.level}
+                          </span>
+                          <h4 className="text-xl font-black text-[#2D2926] mt-1 group-hover:text-[#C62828] transition-colors">
+                            {m.tema || m.name}
+                          </h4>
+                          <span className="text-xs font-bold text-[#8C8379] italic">
+                            {m.tema ? `${m.name} • ` : ''}{m.category}
+                          </span>
+                        </div>
+                        <div className="flex gap-4 items-center">
+                          {profile?.p_instrucao === 'editor' && (
+                            <div className="flex items-center gap-1.5">
+                              <ActionButton
+                                variant="alteration"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); abrirEdicaoMateria(m); }}
+                                title="Alterar/Editar Matéria"
+                              />
+                              <ActionButton
+                                variant="delete"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteMateria(m.id!); }}
+                                title="Excluir Matéria"
+                              />
+                            </div>
+                          )}
 
-          {/* Left Column: Cadastro */}
-          <div className="xl:col-span-5 space-y-8">
+                          <div className="flex flex-col items-center">
+                            <span className="text-2xl font-black text-[#C62828]">{m.credit_hours}</span>
+                            <span className="text-[10px] font-bold text-[#8C8379] uppercase">Horas</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-sm text-[#5C564F] mb-6 line-clamp-2 italic">{m.description || "Sem ementa cadastrada."}</p>
+
+                      <div className="mt-auto pt-6 border-t border-[#F2EFE9] flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-1.5 text-[#C62828]">
+                            <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                            <span className="text-xs font-bold">{m.total_presentations || 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[#2E7D32]">
+                            <span className="material-symbols-outlined text-[18px]">movie</span>
+                            <span className="text-xs font-bold">{m.total_videos || 0}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleViewDetails(m)}
+                          className="px-4 py-2 rounded-xl bg-[#2D2926] text-white text-xs font-black uppercase tracking-wider hover:bg-[#C62828] transition-all shadow-md active:scale-90"
+                        >
+                          Explorar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {materias.length === 0 && <div className="col-span-full py-20 text-center text-[#8C8379] font-medium italic border-2 border-dashed border-[#D6CFC7] rounded-3xl">Nenhuma matéria no acervo.</div>}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#D6CFC7] bg-[#2D2926] text-white shadow-xl overflow-hidden">
+              <div className="px-6 py-4 bg-white/5 border-b border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#C62828] text-2xl">schedule</span>
+                  <div>
+                    <h3 className="text-lg font-black leading-tight">Cronograma de Instrução</h3>
+                    <p className="text-xs text-stone-400">Planejamento e histórico das instruções ministradas</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Seletor / Filtro por Mês */}
+                  <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
+                    <span className="text-xs font-bold text-stone-300 uppercase">Mês Ref:</span>
+                    <input
+                      type=month
+                      value={filtroMesCronograma === 'todos' ? '' : filtroMesCronograma}
+                      onChange={e => setFiltroMesCronograma(e.target.value || 'todos')}
+                      className="bg-transparent font-black text-xs text-white focus:outline-none cursor-pointer"
+                    />
+                    {filtroMesCronograma !== 'todos' && (
+                      <button
+                        onClick={() => setFiltroMesCronograma('todos')}
+                        className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 text-white transition-all"
+                        title="Ver todas as instruções"
+                      >
+                        Ver Todas
+                      </button>
+                    )}
+                  </div>
+
+                  {profile?.p_instrucao === 'editor' && (
+                    <button
+                      onClick={() => setMainTab('cadastros')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2E7D32] hover:bg-[#205722] text-white rounded-xl text-xs font-black uppercase transition-all shadow-md"
+                    >
+                      <span className="material-symbols-outlined text-sm">event</span>
+                      Agendar Instrução
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                {(() => {
+                  const filteredTrainings = trainings.filter(t => {
+                    if (filtroMesCronograma === 'todos') return true;
+                    return t.date && t.date.startsWith(filtroMesCronograma);
+                  });
+
+                  if (filteredTrainings.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-stone-400 space-y-2">
+                        <span className="material-symbols-outlined text-4xl text-stone-500">event_busy</span>
+                        <p className="font-bold text-sm">Nenhum treinamento encontrado para {filtroMesCronograma !== 'todos' ?  : 'o cronograma'}.</p>
+                      </div>
+                    );
+                  }
+
+                  return filteredTrainings.map(t => {
+                  const statusInfo = STATUS_INSTRUCAO[t.status] || STATUS_INSTRUCAO.Scheduled;
+                  return (
+                  <div key={t.id} className="flex flex-col bg-white/5 rounded-xl p-4 border border-white/5 hover:bg-white/10 transition-all group gap-3">
+                    <div className="flex items-center gap-4">
+                      <div className="flex flex-col items-center justify-center size-14 bg-white text-[#2D2926] rounded-xl flex-shrink-0">
+                        <span className="text-xs font-bold opacity-60 leading-none">DIA</span>
+                        <span className="text-2xl font-black leading-none">{t.date.split('-')[2]}</span>
+                      </div>
+                      <div className="flex flex-1 flex-col truncate">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h5 className="text-base font-black truncate">
+                            {t.tema || t.materia?.tema || t.materia?.name || "Treinamento"}
+                          </h5>
+                          <span
+                            className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase"
+                            style={{ backgroundColor: statusInfo.fundo, color: statusInfo.cor }}
+                          >
+                            {statusInfo.icone} {statusInfo.label}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm opacity-70">
+                          <span className="flex items-center gap-1 whitespace-nowrap">
+                            <span className="material-symbols-outlined text-[16px]">schedule</span>
+                            {t.time}{t.end_time ? ` — ${t.end_time}` : ''}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">person</span>
+                            {t.instructor}
+                          </span>
+                          {t.completed_by && (
+                            <span className="text-emerald-400 font-bold text-xs flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[14px]">verified</span>
+                              {t.completed_by}
+                            </span>
+                          )}
+                        </div>
+                        {t.observacoes && (
+                          <div className="mt-1 text-xs opacity-80 italic bg-white/5 px-2 py-1 rounded">
+                            <strong>Obs:</strong> {t.observacoes}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {profile?.p_instrucao === 'editor' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setTrainingToEdit(t)}
+                              className="size-8 rounded-lg bg-blue-500/20 hover:bg-blue-500 text-blue-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                              title="Editar Instrução Marcada"
+                            >
+                              <span className="material-symbols-outlined text-sm">edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTrainingResultModal(t);
+                                setResStatus(t.status || 'concluida');
+                                setResObservacoes(t.observacoes || '');
+                              }}
+                              className="size-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                              title="Registrar Resultado / Observação"
+                            >
+                              <span className="material-symbols-outlined text-sm">edit_note</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTraining(t.id!)}
+                              className="size-8 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                              title="Remover Treinamento"
+                            >
+                              <span className="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {t.location && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-white/10 flex-wrap">
+                        <div className="flex items-center gap-1.5 text-xs opacity-70 flex-1 min-w-0">
+                          <span className="material-symbols-outlined text-[15px] flex-shrink-0">location_on</span>
+                          <span className="truncate">{t.location}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.location)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white text-[10px] font-black uppercase transition-all"
+                            title="Abrir no Google Maps"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">map</span>
+                            Maps
+                          </a>
+                          <a
+                            href={`https://waze.com/ul?q=${encodeURIComponent(t.location)}&navigate=yes`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/80 hover:bg-sky-500 text-white text-[10px] font-black uppercase transition-all"
+                            title="Abrir no Waze"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">navigation</span>
+                            Waze
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  );
+                  });
+                })()}
+              </div>
+            </section>
+
+          </div>
+        )}
+
+        {/* TAB: CADASTROS E AGENDAMENTOS */}
+        {mainTab === 'cadastros' && (
+          <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-8 lg:grid-cols-2 animate-in fade-in duration-300">
             <section className="rounded-2xl border border-[#D6CFC7] bg-white shadow-xl overflow-hidden">
               <div className="bg-[#FAF9F7] border-b border-[#E5E1DA] px-6 py-4 flex items-center gap-3">
                 <div className="size-10 rounded-xl bg-[#C62828] flex items-center justify-center text-white">
@@ -750,7 +1027,6 @@ const InstrucaoB3: React.FC = () => {
               )}
             </section>
 
-            {/* Scheduling Section */}
             <section className="rounded-2xl border border-[#D6CFC7] bg-white shadow-xl overflow-hidden">
               <div className="bg-[#FAF9F7] border-b border-[#E5E1DA] px-6 py-4 flex items-center gap-3">
                 <div className="size-10 rounded-xl bg-[#2E7D32] flex items-center justify-center text-white">
@@ -820,214 +1096,9 @@ const InstrucaoB3: React.FC = () => {
                 </div>
               )}
             </section>
+
           </div>
-
-          {/* Right Column: Collection & Grid */}
-          <div className="xl:col-span-7 space-y-8">
-            {/* Materias Grid */}
-            <section className="space-y-4">
-              <h3 className="text-2xl font-black text-[#2D2926] flex items-center gap-3 ml-2">
-                <span className="material-symbols-outlined text-[#C62828] text-3xl">folder_managed</span>
-                Acervo Técnico
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {materias.map(m => (
-                  <div key={m.id} className="group flex flex-col rounded-2xl bg-white border border-[#D6CFC7] shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-default">
-                    <div className="p-6 flex flex-col h-full">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex flex-col gap-1">
-                          <span className={`self-start px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${m.level === 'basico' ? 'bg-green-100 text-green-700' :
-                            m.level === 'intermediario' ? 'bg-orange-100 text-orange-700' :
-                              'bg-red-100 text-red-700'
-                            }`}>
-                            {m.level}
-                          </span>
-                          <h4 className="text-xl font-black text-[#2D2926] mt-1 group-hover:text-[#C62828] transition-colors">
-                            {m.tema || m.name}
-                          </h4>
-                          <span className="text-xs font-bold text-[#8C8379] italic">
-                            {m.tema ? `${m.name} • ` : ''}{m.category}
-                          </span>
-                        </div>
-                        <div className="flex gap-4 items-center">
-                          {profile?.p_instrucao === 'editor' && (
-                            <div className="flex items-center gap-1.5">
-                              <ActionButton
-                                variant="alteration"
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); abrirEdicaoMateria(m); }}
-                                title="Alterar/Editar Matéria"
-                              />
-                              <ActionButton
-                                variant="delete"
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); handleDeleteMateria(m.id!); }}
-                                title="Excluir Matéria"
-                              />
-                            </div>
-                          )}
-
-                          <div className="flex flex-col items-center">
-                            <span className="text-2xl font-black text-[#C62828]">{m.credit_hours}</span>
-                            <span className="text-[10px] font-bold text-[#8C8379] uppercase">Horas</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-sm text-[#5C564F] mb-6 line-clamp-2 italic">{m.description || "Sem ementa cadastrada."}</p>
-
-                      <div className="mt-auto pt-6 border-t border-[#F2EFE9] flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1.5 text-[#C62828]">
-                            <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
-                            <span className="text-xs font-bold">{m.total_presentations || 0}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[#2E7D32]">
-                            <span className="material-symbols-outlined text-[18px]">movie</span>
-                            <span className="text-xs font-bold">{m.total_videos || 0}</span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleViewDetails(m)}
-                          className="px-4 py-2 rounded-xl bg-[#2D2926] text-white text-xs font-black uppercase tracking-wider hover:bg-[#C62828] transition-all shadow-md active:scale-90"
-                        >
-                          Explorar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {materias.length === 0 && <div className="col-span-full py-20 text-center text-[#8C8379] font-medium italic border-2 border-dashed border-[#D6CFC7] rounded-3xl">Nenhuma matéria no acervo.</div>}
-              </div>
-            </section>
-
-            {/* Summary Schedule */}
-            <section className="rounded-2xl border border-[#D6CFC7] bg-[#2D2926] text-white shadow-xl overflow-hidden">
-              <div className="px-6 py-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
-                <h3 className="text-lg font-black flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#C62828]">schedule</span>
-                  Cronograma de Instrução
-                </h3>
-                <span className="text-xs font-bold opacity-60">Próximos 7 dias</span>
-              </div>
-              <div className="p-6 space-y-4">
-                {trainings.map(t => {
-                  const statusInfo = STATUS_INSTRUCAO[t.status] || STATUS_INSTRUCAO.Scheduled;
-                  return (
-                  <div key={t.id} className="flex flex-col bg-white/5 rounded-xl p-4 border border-white/5 hover:bg-white/10 transition-all group gap-3">
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-col items-center justify-center size-14 bg-white text-[#2D2926] rounded-xl flex-shrink-0">
-                        <span className="text-xs font-bold opacity-60 leading-none">DIA</span>
-                        <span className="text-2xl font-black leading-none">{t.date.split('-')[2]}</span>
-                      </div>
-                      <div className="flex flex-1 flex-col truncate">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h5 className="text-base font-black truncate">
-                            {t.tema || t.materia?.tema || t.materia?.name || "Treinamento"}
-                          </h5>
-                          <span
-                            className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase"
-                            style={{ backgroundColor: statusInfo.fundo, color: statusInfo.cor }}
-                          >
-                            {statusInfo.icone} {statusInfo.label}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm opacity-70">
-                          <span className="flex items-center gap-1 whitespace-nowrap">
-                            <span className="material-symbols-outlined text-[16px]">schedule</span>
-                            {t.time}{t.end_time ? ` — ${t.end_time}` : ''}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[16px]">person</span>
-                            {t.instructor}
-                          </span>
-                          {t.completed_by && (
-                            <span className="text-emerald-400 font-bold text-xs flex items-center gap-0.5">
-                              <span className="material-symbols-outlined text-[14px]">verified</span>
-                              {t.completed_by}
-                            </span>
-                          )}
-                        </div>
-                        {t.observacoes && (
-                          <div className="mt-1 text-xs opacity-80 italic bg-white/5 px-2 py-1 rounded">
-                            <strong>Obs:</strong> {t.observacoes}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {profile?.p_instrucao === 'editor' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setTrainingToEdit(t)}
-                              className="size-8 rounded-lg bg-blue-500/20 hover:bg-blue-500 text-blue-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
-                              title="Editar Instrução Marcada"
-                            >
-                              <span className="material-symbols-outlined text-sm">edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTrainingResultModal(t);
-                                setResStatus(t.status || 'concluida');
-                                setResObservacoes(t.observacoes || '');
-                              }}
-                              className="size-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
-                              title="Registrar Resultado / Observação"
-                            >
-                              <span className="material-symbols-outlined text-sm">edit_note</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTraining(t.id!)}
-                              className="size-8 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
-                              title="Remover Treinamento"
-                            >
-                              <span className="material-symbols-outlined text-sm">delete</span>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {t.location && (
-                      <div className="flex items-center gap-2 pt-2 border-t border-white/10 flex-wrap">
-                        <div className="flex items-center gap-1.5 text-xs opacity-70 flex-1 min-w-0">
-                          <span className="material-symbols-outlined text-[15px] flex-shrink-0">location_on</span>
-                          <span className="truncate">{t.location}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.location)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white text-[10px] font-black uppercase transition-all"
-                            title="Abrir no Google Maps"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">map</span>
-                            Maps
-                          </a>
-                          <a
-                            href={`https://waze.com/ul?q=${encodeURIComponent(t.location)}&navigate=yes`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/80 hover:bg-sky-500 text-white text-[10px] font-black uppercase transition-all"
-                            title="Abrir no Waze"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">navigation</span>
-                            Waze
-                          </a>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  );
-                })}
-                {trainings.length === 0 && <p className="text-center opacity-40 italic py-4">Nenhum treinamento agendado.</p>}
-              </div>
-            </section>
-          </div>
-        </div>
-      )}
+        )}
 
         {/* TAB: FORMAÇÃO */}
         {mainTab === 'formacao' && (

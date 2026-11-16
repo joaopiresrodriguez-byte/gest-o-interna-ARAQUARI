@@ -84,6 +84,44 @@ export const ScaleAdjustmentService = {
     // ─── BLOCO 3: 3 MODALIDADES DE ALTERAÇÃO DE ESCALA ─────────────────────────
 
     /**
+     * Obter quantidade de trocas de serviço já realizadas por um militar em determinado mês (YYYY-MM).
+     * Considera trocas mútuas e trocas individuais registradas em escala_alteracoes.
+     */
+    getTrocasMilitaresNoMes: async (militarId: number, monthRef: string): Promise<{ total: number; trocas: any[] }> => {
+        try {
+            const { data, error } = await supabase
+                .from('escala_alteracoes')
+                .select('*')
+                .in('tipo_alteracao', ['troca_militares', 'troca_individual']);
+
+            if (error || !data) return { total: 0, trocas: [] };
+
+            const trocasDoMilitar = data.filter(ea => {
+                const envolviaMilitar = Number(ea.militar_a_id) === Number(militarId) || Number(ea.militar_b_id) === Number(militarId);
+                if (!envolviaMilitar) return false;
+
+                // Verificar se a data original de serviço ou execução pertence ao mês informado (YYYY-MM)
+                const diaA = ea.dia_original_a;
+                const diaB = ea.dia_original_b;
+                const dataVigencia = ea.data_vigencia;
+                const criadoEm = (ea.criado_em || '').substring(0, 7);
+
+                const noMes = (diaA && diaA.startsWith(monthRef)) ||
+                              (diaB && diaB.startsWith(monthRef)) ||
+                              (dataVigencia && dataVigencia.startsWith(monthRef)) ||
+                              (criadoEm === monthRef);
+
+                return noMes;
+            });
+
+            return { total: trocasDoMilitar.length, trocas: trocasDoMilitar };
+        } catch (err) {
+            console.error('Erro ao consultar limite de trocas do militar:', err);
+            return { total: 0, trocas: [] };
+        }
+    },
+
+    /**
      * MODALIDADE 1 — TROCA DE SERVIÇO ENTRE DOIS MILITARES
      * Troca os dias de serviço entre Militar A (dia A) e Militar B (dia B)
      */
@@ -96,6 +134,23 @@ export const ScaleAdjustmentService = {
         detalhes?: string;
     }) => {
         const { militarAId, diaA, militarBId, diaB, usuario, detalhes } = params;
+
+        const mesA = diaA.substring(0, 7);
+        const mesB = diaB.substring(0, 7);
+
+        // 0. Validar Limite de no máximo 2 trocas no mês para cada militar
+        const trocasA = await ScaleAdjustmentService.getTrocasMilitaresNoMes(militarAId, mesA);
+        if (trocasA.total >= 2) {
+            throw new Error(`Limite atingido: O 1º militar já atingiu o limite máximo de 2 trocas no mês ${mesA}.`);
+        }
+
+        const trocasB = await ScaleAdjustmentService.getTrocasMilitaresNoMes(militarBId, mesB);
+        if (trocasB.total >= 2) {
+            throw new Error(`Limite atingido: O 2º militar já atingiu o limite máximo de 2 trocas no mês ${mesB}.`);
+        }
+
+        const numTrocaA = trocasA.total + 1;
+        const numTrocaB = trocasB.total + 1;
 
         // 1. Buscar escalas dos dois dias
         const { data: escA } = await supabase.from('escalas').select('*').eq('data', diaA).single();
@@ -110,14 +165,17 @@ export const ScaleAdjustmentService = {
             await supabase.from('escalas').update({ militares: milsB, updated_at: new Date().toISOString() }).eq('id', escB.id);
         }
 
-        // 2. Registrar no Histórico escala_alteracoes / service_swaps
+        // 2. Registrar no Histórico escala_alteracoes com identificação do número da troca
+        const rotuloTroca = `[Troca ${numTrocaA}ª (Militar 1) / ${numTrocaB}ª (Militar 2) de 2 no mês]`;
         const record = {
             tipo_alteracao: 'troca_militares',
             militar_a_id: militarAId,
             militar_b_id: militarBId,
             dia_original_a: diaA,
             dia_original_b: diaB,
-            detalhes: detalhes || `Troca mútua de serviço: Militar #${militarAId} (Dia ${diaA}) por Militar #${militarBId} (Dia ${diaB})`,
+            detalhes: detalhes 
+                ? `${rotuloTroca} ${detalhes}`
+                : `${rotuloTroca} Troca mútua de serviço: Militar #${militarAId} (Dia ${diaA}) por Militar #${militarBId} (Dia ${diaB})`,
             criado_por: usuario,
             criado_em: new Date().toISOString()
         };
@@ -134,7 +192,7 @@ export const ScaleAdjustmentService = {
                 performed_by: usuario
             });
         }
-        return true;
+        return { numTrocaA, numTrocaB };
     },
 
     /**
@@ -150,6 +208,24 @@ export const ScaleAdjustmentService = {
         detalhes?: string;
     }) => {
         const { militarId, diaSaida, diaEntrada, militarSubstitudoId, usuario, detalhes } = params;
+
+        const mesRef = (diaSaida || diaEntrada).substring(0, 7);
+
+        // 0. Validar Limite de no máximo 2 trocas no mês para o militar solicitante
+        const trocasMil = await ScaleAdjustmentService.getTrocasMilitaresNoMes(militarId, mesRef);
+        if (trocasMil.total >= 2) {
+            throw new Error(`Limite atingido: O militar já atingiu o limite máximo de 2 trocas no mês ${mesRef}.`);
+        }
+
+        // Se houver militar substituído, verificar também se ele não excedeu limite
+        if (militarSubstitudoId) {
+            const trocasSub = await ScaleAdjustmentService.getTrocasMilitaresNoMes(militarSubstitudoId, mesRef);
+            if (trocasSub.total >= 2) {
+                throw new Error(`Limite atingido: O militar substituído (#${militarSubstitudoId}) já atingiu o limite de 2 trocas no mês ${mesRef}.`);
+            }
+        }
+
+        const numTroca = trocasMil.total + 1;
 
         // 1. Remover militar do dia de saída
         if (diaSaida) {
@@ -174,14 +250,17 @@ export const ScaleAdjustmentService = {
             }
         }
 
-        // 3. Registrar no Histórico escala_alteracoes
+        // 3. Registrar no Histórico escala_alteracoes com número da troca
+        const rotuloTroca = `[Troca ${numTroca}ª de 2 no mês]`;
         const record = {
             tipo_alteracao: 'troca_individual',
             militar_a_id: militarId,
             militar_b_id: militarSubstitudoId || null,
             dia_original_a: diaSaida,
             dia_original_b: diaEntrada,
-            detalhes: detalhes || `Troca individual: Militar #${militarId} saiu do dia ${diaSaida} e entrou no dia ${diaEntrada}`,
+            detalhes: detalhes
+                ? `${rotuloTroca} ${detalhes}`
+                : `${rotuloTroca} Troca individual: Militar #${militarId} saiu do dia ${diaSaida} e entrou no dia ${diaEntrada}`,
             criado_por: usuario,
             criado_em: new Date().toISOString()
         };
@@ -197,7 +276,7 @@ export const ScaleAdjustmentService = {
                 performed_by: usuario
             });
         }
-        return true;
+        return { numTroca };
     },
 
     /**

@@ -103,23 +103,42 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
       return;
     }
 
-    // Validar conflito de férias/licença
-    if (checarAfastamento(militarAId, diaB)) {
-      const milA = personnelList.find(p => p.id === militarAId);
-      toast.warning(`⚠️ Alerta: ${milA?.war_name || milA?.name} possui férias/afastamento cadastrado para o dia ${diaB}.`);
-    }
-    if (checarAfastamento(militarBId, diaA)) {
-      const milB = personnelList.find(p => p.id === militarBId);
-      toast.warning(`⚠️ Alerta: ${milB?.war_name || milB?.name} possui férias/afastamento cadastrado para o dia ${diaA}.`);
-    }
+    const mesA = diaA.substring(0, 7);
+    const mesB = diaB.substring(0, 7);
+
+    // Validação preventiva de limite de trocas (2 por mês)
+    const [trocasA, trocasB] = await Promise.all([
+      ScaleAdjustmentService.getTrocasMilitaresNoMes(Number(militarAId), mesA),
+      ScaleAdjustmentService.getTrocasMilitaresNoMes(Number(militarBId), mesB)
+    ]);
 
     const milA = personnelList.find(p => p.id === militarAId);
     const milB = personnelList.find(p => p.id === militarBId);
 
+    if (trocasA.total >= 2) {
+      toast.error(`❌ Limite atingido: ${milA?.war_name || milA?.name} já possui 2 trocas no mês de ${mesA}.`);
+      return;
+    }
+    if (trocasB.total >= 2) {
+      toast.error(`❌ Limite atingido: ${milB?.war_name || milB?.name} já possui 2 trocas no mês de ${mesB}.`);
+      return;
+    }
+
+    // Validar conflito de férias/licença
+    if (checarAfastamento(militarAId, diaB)) {
+      toast.warning(`⚠️ Alerta: ${milA?.war_name || milA?.name} possui férias/afastamento cadastrado para o dia ${diaB}.`);
+    }
+    if (checarAfastamento(militarBId, diaA)) {
+      toast.warning(`⚠️ Alerta: ${milB?.war_name || milB?.name} possui férias/afastamento cadastrado para o dia ${diaA}.`);
+    }
+
+    const numA = trocasA.total + 1;
+    const numB = trocasB.total + 1;
+
     const confirma = confirm(
       `CONFIRMAÇÃO DA TROCA MÚTUA:\n\n` +
-      `• ${milA?.graduation || ''} ${milA?.war_name || milA?.name} (Dia ${diaA}) passará para o dia ${diaB}.\n` +
-      `• ${milB?.graduation || ''} ${milB?.war_name || milB?.name} (Dia ${diaB}) passará para o dia ${diaA}.\n\n` +
+      `• ${milA?.graduation || ''} ${milA?.war_name || milA?.name} (Dia ${diaA}) passará para o dia ${diaB} [Troca nº ${numA}/2 do mês].\n` +
+      `• ${milB?.graduation || ''} ${milB?.war_name || milB?.name} (Dia ${diaB}) passará para o dia ${diaA} [Troca nº ${numB}/2 do mês].\n\n` +
       `Deseja aplicar a alteração na escala publicada?`
     );
 
@@ -136,7 +155,7 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
         detalhes: motivo || `Troca mútua: ${milA?.war_name} (${diaA}) por ${milB?.war_name} (${diaB})`
       });
 
-      toast.success('✅ Troca mútua de serviço realizada com sucesso!');
+      toast.success(`✅ Troca mútua realizada com sucesso! (Militar 1: ${numA}ª troca | Militar 2: ${numB}ª troca)`);
       setMilitarAId(''); setDiaA(''); setMilitarBId(''); setDiaB(''); setMotivo('');
       loadData();
       onReload();
@@ -154,17 +173,34 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
       return;
     }
 
-    if (checarAfastamento(indMilitarId, indDiaEntrada)) {
-      const mil = personnelList.find(p => p.id === indMilitarId);
-      toast.warning(`⚠️ Alerta: ${mil?.war_name || mil?.name} possui férias/afastamento cadastrado no dia ${indDiaEntrada}.`);
-    }
-
+    const mesRef = (indDiaSaida || indDiaEntrada).substring(0, 7);
     const mil = personnelList.find(p => p.id === indMilitarId);
     const sub = indSubstituidoId ? personnelList.find(p => p.id === indSubstituidoId) : null;
 
+    // Validação preventiva de limite de trocas (2 por mês)
+    const trocasMil = await ScaleAdjustmentService.getTrocasMilitaresNoMes(Number(indMilitarId), mesRef);
+    if (trocasMil.total >= 2) {
+      toast.error(`❌ Limite atingido: ${mil?.war_name || mil?.name} já possui 2 trocas no mês de ${mesRef}.`);
+      return;
+    }
+
+    if (indSubstituidoId) {
+      const trocasSub = await ScaleAdjustmentService.getTrocasMilitaresNoMes(Number(indSubstituidoId), mesRef);
+      if (trocasSub.total >= 2) {
+        toast.error(`❌ Limite atingido: ${sub?.war_name || sub?.name} já atingiu o limite de 2 trocas no mês de ${mesRef}.`);
+        return;
+      }
+    }
+
+    if (checarAfastamento(indMilitarId, indDiaEntrada)) {
+      toast.warning(`⚠️ Alerta: ${mil?.war_name || mil?.name} possui férias/afastamento cadastrado no dia ${indDiaEntrada}.`);
+    }
+
+    const numTroca = trocasMil.total + 1;
+
     const mensagem = sub
-      ? `• ${mil?.war_name || mil?.name} sairá do dia ${indDiaSaida} e entrará no dia ${indDiaEntrada} substituindo ${sub.war_name || sub.name}.`
-      : `• ${mil?.war_name || mil?.name} sairá do serviço do dia ${indDiaSaida} e entrará no serviço do dia ${indDiaEntrada}.`;
+      ? `• ${mil?.war_name || mil?.name} sairá do dia ${indDiaSaida} e entrará no dia ${indDiaEntrada} substituindo ${sub.war_name || sub.name} [Troca nº ${numTroca}/2 do mês].`
+      : `• ${mil?.war_name || mil?.name} sairá do serviço do dia ${indDiaSaida} e entrará no serviço do dia ${indDiaEntrada} [Troca nº ${numTroca}/2 do mês].`;
 
     if (!confirm(`CONFIRMAÇÃO DA TROCA INDIVIDUAL:\n\n${mensagem}\n\nConfirmar alteração na escala?`)) return;
 
@@ -179,7 +215,7 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
         detalhes: motivo || `Troca individual: ${mil?.war_name} saiu do dia ${indDiaSaida} e entrou no dia ${indDiaEntrada}`
       });
 
-      toast.success('✅ Troca individual registrada!');
+      toast.success(`✅ Troca individual registrada com sucesso! (${numTroca}ª troca no mês)`);
       setIndMilitarId(''); setIndDiaSaida(''); setIndDiaEntrada(''); setIndSubstituidoId(''); setMotivo('');
       loadData();
       onReload();
@@ -735,15 +771,26 @@ export const SecaoAlteracoesEscala: React.FC<SecaoAlteracoesEscalaProps> = ({
                     badgeClass = 'bg-red-100 text-red-800';
                   }
 
+                  // Extrair indicação do número da troca se constar nos detalhes
+                  const tagTrocaMatch = (h.detalhes || '').match(/\[Troca\s+([^\]]+)\]/i);
+                  const tagTroca = tagTrocaMatch ? tagTrocaMatch[1] : null;
+
                   return (
                     <tr key={h.id || idx} className="hover:bg-stone-50/50">
                       <td className="py-2.5 px-3 font-medium text-stone-500 whitespace-nowrap">
                         {new Date(h.criado_em || h.created_at || Date.now()).toLocaleString('pt-BR')}
                       </td>
                       <td className="py-2.5 px-3 font-bold whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${badgeClass}`}>
-                          {rotuloTipo}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${badgeClass}`}>
+                            {rotuloTipo}
+                          </span>
+                          {tagTroca && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-900 border border-amber-300 font-black text-[8px] uppercase tracking-wider">
+                              🏷️ {tagTroca}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2.5 px-3 font-bold text-stone-800 whitespace-nowrap">
                         {nomeA && nomeB ? (
