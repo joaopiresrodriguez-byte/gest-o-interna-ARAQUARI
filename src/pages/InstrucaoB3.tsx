@@ -693,7 +693,9 @@ const InstrucaoB3: React.FC = () => {
                     return (
                       <div className="text-center py-12 text-stone-400 space-y-2">
                         <span className="material-symbols-outlined text-4xl text-stone-500">event_busy</span>
-                        <p className="font-bold text-sm">Nenhum treinamento encontrado para {filtroMesCronograma !== 'todos' ?  : 'o cronograma'}.</p>
+                        <p className="font-bold text-sm">
+                          Nenhum treinamento encontrado para {filtroMesCronograma !== 'todos' ? `o mês ${filtroMesCronograma}` : 'o cronograma'}.
+                        </p>
                       </div>
                     );
                   }
