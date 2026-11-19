@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { EstoqueAphService } from './estoqueAphService';
 
 // Definição dos status disponíveis:
 export const STATUS_CONFERENCIA = {
@@ -314,6 +315,20 @@ export async function salvarConferencia(
     }
 
     // ROTEAMENTO AUTOMÁTICO:
+    // 0. Caso "Falta com Reposição da Reserva" -> Baixa Automática no Estoque da Sala de APH / Reserva
+    if (dados.reposto_reserva && dados.item_nome) {
+      try {
+        await EstoqueAphService.debitarEstoquePorReposicao({
+          itemNome: dados.item_nome,
+          quantidadeReposta: dados.quantidade_falta || 1,
+          viaturaNome: dados.viatura_nome || 'Viatura Operacional',
+          responsavel: nomeUsuario,
+        });
+      } catch (errDebito) {
+        console.error('Erro na baixa automática do estoque da reserva:', errDebito);
+      }
+    }
+
     // 1. Caso "Sem Conserto, Deverá Baixar" -> Enviar ao submódulo Baixa Patrimônio
     if (dados.sub_tipo_avaria === 'sem_conserto_baixar') {
       try {

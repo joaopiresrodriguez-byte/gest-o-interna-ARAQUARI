@@ -11,6 +11,7 @@ import VisualizacaoViatura from '../components/b4/VisualizacaoViatura';
 import HistoricoConferencias from '../components/b4/HistoricoConferencias';
 import SecaoCautelasB4 from '../components/b4/SecaoCautelasB4';
 import BaixaPatrimonio from '../components/b4/BaixaPatrimonio';
+import { SecaoEstoqueAph } from '../components/b4/SecaoEstoqueAph';
 import { supabase } from '../services/supabase';
 
 import { useEdicao } from '../hooks/useEdicao';
@@ -278,7 +279,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
 const PatrimonioB4: React.FC = () => {
   const { profile } = useAuth();
   const isGestorB4 = Boolean(profile?.is_manager || profile?.p_logistica === 'editor');
-  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'cautelas' | 'compras' | 'missoes' | 'conferencias' | 'relatorios' | 'baixa_patrimonio'>('missoes');
+  const [activeTab, setActiveTab] = useState<'cadastro' | 'listagem' | 'cautelas' | 'compras' | 'missoes' | 'conferencias' | 'relatorios' | 'baixa_patrimonio' | 'estoque_aph'>('missoes');
   const [searchTerm, setSearchTerm] = useState("");
   const [fleet, setFleet] = useState<Vehicle[]>([]);
   const [locais, setLocais] = useState<LocalEquipamento[]>([]);
@@ -899,7 +900,7 @@ const PatrimonioB4: React.FC = () => {
           {/* Tabs */}
           <div className="bg-surface rounded-xl shadow-sm border border-rustic-border overflow-hidden">
             <div className="border-b border-rustic-border bg-stone-50/50 px-3 md:px-6 pt-3 md:pt-4 flex gap-4 md:gap-8 tabs-mobile-scroll">
-              {(['missoes', 'listagem', 'cautelas', 'cadastro', 'compras', 'conferencias', 'baixa_patrimonio', 'relatorios'] as const)
+              {(['missoes', 'listagem', 'estoque_aph', 'cautelas', 'cadastro', 'compras', 'conferencias', 'baixa_patrimonio', 'relatorios'] as const)
                 .filter(tab => {
                   // Abas 'compras', 'conferencias' e 'baixa_patrimonio' acessadas apenas por gestores
                   if ((tab === 'compras' || tab === 'conferencias' || tab === 'baixa_patrimonio') && !isGestorB4) {
@@ -914,9 +915,9 @@ const PatrimonioB4: React.FC = () => {
                   className={`flex flex-col items-center gap-1 pb-3 border-b-[3px] font-bold text-xs uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-rustic-brown/40 hover:text-rustic-brown'}`}
                 >
                   <span className="material-symbols-outlined">
-                    {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'cautelas' ? 'folder_shared' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'baixa_patrimonio' ? 'delete_forever' : tab === 'relatorios' ? 'analytics' : 'checklist'}
+                    {tab === 'missoes' ? 'assignment' : tab === 'listagem' ? 'inventory' : tab === 'estoque_aph' ? 'medical_services' : tab === 'cautelas' ? 'folder_shared' : tab === 'cadastro' ? 'add_box' : tab === 'compras' ? 'shopping_basket' : tab === 'baixa_patrimonio' ? 'delete_forever' : tab === 'relatorios' ? 'analytics' : 'checklist'}
                   </span>
-                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'cautelas' ? 'Cautelas' : tab === 'conferencias' ? 'Conferências' : tab === 'baixa_patrimonio' ? 'Baixa Patrimônio' : tab === 'relatorios' ? 'Relatórios' : tab}
+                  {tab === 'missoes' ? 'Missões Diárias' : tab === 'estoque_aph' ? 'Sala de APH / Estoque' : tab === 'cautelas' ? 'Cautelas' : tab === 'conferencias' ? 'Conferências' : tab === 'baixa_patrimonio' ? 'Baixa Patrimônio' : tab === 'relatorios' ? 'Relatórios' : tab}
                 </button>
               ))}
             </div>
@@ -2129,6 +2130,10 @@ const PatrimonioB4: React.FC = () => {
 
               {activeTab === 'cautelas' && (
                 <SecaoCautelasB4 />
+              )}
+
+              {activeTab === 'estoque_aph' && (
+                <SecaoEstoqueAph />
               )}
 
               {activeTab === 'baixa_patrimonio' && (
