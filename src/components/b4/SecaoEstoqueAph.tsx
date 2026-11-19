@@ -23,6 +23,13 @@ export const SecaoEstoqueAph: React.FC = () => {
   // Modal de Histórico
   const [modalHistAberto, setModalHistAberto] = useState(false);
 
+  // Modal de Limites (Mínimo e Ideal/Máximo)
+  const [modalLimitesAberto, setModalLimitesAberto] = useState(false);
+  const [itemLimites, setItemLimites] = useState<MaterialEstoqueAPH | null>(null);
+  const [novoMinimo, setNovoMinimo] = useState<number>(5);
+  const [novoIdeal, setNovoIdeal] = useState<number>(20);
+  const [salvandoLimites, setSalvandoLimites] = useState(false);
+
   const carregarDados = async () => {
     setLoading(true);
     try {
@@ -50,6 +57,47 @@ export const SecaoEstoqueAph: React.FC = () => {
     setEstMinMov(item.estoque_minimo || 5);
     setEstIdealMov(item.estoque_ideal || 20);
     setModalAberto(true);
+  };
+
+  const abrirModalLimites = (item: MaterialEstoqueAPH) => {
+    setItemLimites(item);
+    setNovoMinimo(Number(item.estoque_minimo) >= 0 ? Number(item.estoque_minimo) : 5);
+    setNovoIdeal(Number(item.estoque_ideal) >= 0 ? Number(item.estoque_ideal) : 20);
+    setModalLimitesAberto(true);
+  };
+
+  const handleSalvarLimites = async () => {
+    if (!itemLimites) return;
+    if (novoMinimo < 0 || novoIdeal < 0) {
+      toast.error('As quantidades mínima e máxima devem ser iguais ou maiores que zero.');
+      return;
+    }
+    if (novoIdeal < novoMinimo) {
+      toast.error('O estoque ideal/máximo não pode ser menor do que o estoque mínimo.');
+      return;
+    }
+
+    setSalvandoLimites(true);
+    try {
+      const ok = await EstoqueAphService.atualizarLimitesEstoque({
+        itemId: itemLimites.id,
+        estoqueMinimo: Number(novoMinimo),
+        estoqueIdeal: Number(novoIdeal),
+        responsavel: 'Gestor B4',
+      });
+
+      if (ok) {
+        toast.success(`Limites atualizados: Mínimo ${novoMinimo} | Ideal ${novoIdeal}`);
+        setModalLimitesAberto(false);
+        carregarDados();
+      } else {
+        toast.error('Não foi possível salvar os limites.');
+      }
+    } catch (e: any) {
+      toast.error('Erro ao atualizar limites: ' + (e?.message || e));
+    } finally {
+      setSalvandoLimites(false);
+    }
   };
 
   const handleSalvarMov = async () => {
@@ -257,7 +305,15 @@ export const SecaoEstoqueAph: React.FC = () => {
                           }`}>
                             {item.quantidade} {item.unidade_medida || 'un'}
                           </span>
-                          <span className="text-[9px] text-stone-400 mt-0.5">Mín: {estMin} | Ideal: {item.estoque_ideal || 20}</span>
+                          <button
+                            type="button"
+                            onClick={() => abrirModalLimites(item)}
+                            className="group/lim mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-amber-50 border border-stone-200 hover:border-amber-300 text-[10px] text-stone-600 hover:text-amber-900 transition-all cursor-pointer shadow-2xs"
+                            title="Clique para alterar Estoque Mínimo e Ideal/Máximo"
+                          >
+                            <span>Mín: <strong>{estMin}</strong> | Ideal: <strong>{item.estoque_ideal || 20}</strong></span>
+                            <span className="material-symbols-outlined text-[12px] text-amber-600 group-hover/lim:scale-110 transition-transform">edit</span>
+                          </button>
                         </div>
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -292,6 +348,15 @@ export const SecaoEstoqueAph: React.FC = () => {
                           >
                             <span className="material-symbols-outlined text-[12px]">add</span>
                             Entrada
+                          </button>
+
+                          <button
+                            onClick={() => abrirModalLimites(item)}
+                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded font-black text-[10px] uppercase border border-amber-300 shadow-xs flex items-center gap-1"
+                            title="Definir estoque mínimo e ideal/máximo"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">tune</span>
+                            Limites
                           </button>
 
                           <button
@@ -474,6 +539,112 @@ export const SecaoEstoqueAph: React.FC = () => {
                 className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-700 font-bold text-xs"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dedicado para Alteração Manual de Limites de Estoque (Mínimo & Ideal/Máximo) */}
+      {modalLimitesAberto && itemLimites && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-rustic-border space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-black">
+                  ⚙️
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-rustic-brown">
+                    Definir Limites de Estoque
+                  </h3>
+                  <p className="text-xs text-stone-500 font-bold">{itemLimites.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setModalLimitesAberto(false)} className="text-stone-400 hover:text-stone-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+              <p className="font-bold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px]">info</span>
+                Parâmetros Personalizados por Insumo
+              </p>
+              <p className="text-[11px] text-amber-800">
+                Defina a quantidade mínima de segurança (que gera alerta crítico e compras automáticas) e a quantidade ideal/máxima para abastecimento da Sala de APH.
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="bg-stone-50 p-3 rounded-lg border border-stone-200">
+                <span className="text-[11px] text-stone-500 font-bold block">Saldo Físico Atual:</span>
+                <span className="text-sm font-black text-stone-800">
+                  {itemLimites.quantidade} {itemLimites.unidade_medida || 'un'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-stone-700 block mb-1">
+                    🚨 Estoque Mínimo
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={novoMinimo}
+                    onChange={e => setNovoMinimo(Number(e.target.value))}
+                    className="w-full h-10 px-3 border border-stone-300 rounded-lg font-black text-sm focus:border-amber-600 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-stone-400 mt-1 block">
+                    Alerta de reposição se saldo &le; {novoMinimo}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="font-bold text-stone-700 block mb-1">
+                    📦 Estoque Ideal / Máx.
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={novoIdeal}
+                    onChange={e => setNovoIdeal(Number(e.target.value))}
+                    className="w-full h-10 px-3 border border-stone-300 rounded-lg font-black text-sm focus:border-amber-600 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-stone-400 mt-1 block">
+                    Capacidade ideal de prateleira
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <button
+                type="button"
+                onClick={() => setModalLimitesAberto(false)}
+                disabled={salvandoLimites}
+                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-700 font-bold text-xs"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSalvarLimites}
+                disabled={salvandoLimites}
+                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-bold text-xs shadow flex items-center gap-1.5"
+              >
+                {salvandoLimites ? (
+                  <>
+                    <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[14px]">save</span>
+                    Salvar Limites
+                  </>
+                )}
               </button>
             </div>
           </div>

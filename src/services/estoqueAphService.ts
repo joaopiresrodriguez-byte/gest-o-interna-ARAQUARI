@@ -307,6 +307,68 @@ export const EstoqueAphService = {
   },
 
   /**
+   * Atualiza diretamente os parâmetros de estoque mínimo e ideal (máximo de segurança) de um material
+   */
+  async atualizarLimitesEstoque(params: {
+    itemId: string;
+    estoqueMinimo: number;
+    estoqueIdeal: number;
+    responsavel?: string;
+  }): Promise<boolean> {
+    try {
+      const { itemId, estoqueMinimo, estoqueIdeal, responsavel = 'Gestor B4' } = params;
+
+      const { data: item } = await supabase
+        .from('fleet')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+
+      if (!item) return false;
+
+      let meta: any = {};
+      if (item.details) {
+        try {
+          meta = typeof item.details === 'string' ? JSON.parse(item.details) : item.details;
+        } catch {
+          meta = { raw: item.details };
+        }
+      }
+
+      const minAnterior = meta.estoque_minimo || 5;
+      const idealAnterior = meta.estoque_ideal || 20;
+
+      meta.estoque_minimo = Number(estoqueMinimo);
+      meta.estoque_ideal = Number(estoqueIdeal);
+
+      const historico: MovimentacaoEstoqueAPH[] = meta.historico_movimentacoes || [];
+      historico.unshift({
+        data: new Date().toISOString(),
+        tipo: 'AJUSTE_INVENTARIO',
+        quantidade: 0,
+        saldo_anterior: Number(item.quantidade) || 0,
+        saldo_novo: Number(item.quantidade) || 0,
+        responsavel,
+        motivo: `Ajuste manual de limites de estoque (Mín: ${minAnterior} ➔ ${estoqueMinimo} | Ideal: ${idealAnterior} ➔ ${estoqueIdeal})`,
+      });
+      meta.historico_movimentacoes = historico.slice(0, 50);
+
+      const { error } = await supabase
+        .from('fleet')
+        .update({
+          details: JSON.stringify(meta),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', itemId);
+
+      return !error;
+    } catch (e) {
+      console.error('Erro ao atualizar limites de estoque:', e);
+      return false;
+    }
+  },
+
+  /**
    * Dispara aviso em pending_notices e gera pedido em purchases quando atinge estoque crítico
    */
   async gerarAvisoEstoqueCritico(dados: {
