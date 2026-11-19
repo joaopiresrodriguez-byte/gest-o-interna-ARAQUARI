@@ -6,6 +6,7 @@ import { supabase } from '../../services/supabase';
 import { PersonnelSelect } from '../shared/PersonnelSelect';
 
 import { ExtratoMensalB1 } from './ExtratoMensalB1';
+import { ExtratoEfetivoB1 } from './ExtratoEfetivoB1';
 
 interface Props {
     personnelList: Personnel[];
@@ -30,7 +31,7 @@ const ExportSection: React.FC<Props> = ({
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
-    const [activeSubTab, setActiveSubTab] = useState<'extrato_mensal' | 'sigrh' | 'sgpe' | 'csv_escalas'>('extrato_mensal');
+    const [activeSubTab, setActiveSubTab] = useState<'extrato_efetivo' | 'extrato_mensal' | 'sigrh' | 'sgpe' | 'csv_escalas'>('extrato_efetivo');
     const [selectedPersonnelId, setSelectedPersonnelId] = useState<string>('');
     const [escalaDate, setEscalaDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [csvMonthBM, setCsvMonthBM] = useState<string>(currentMonth);
@@ -1035,6 +1036,7 @@ const ExportSection: React.FC<Props> = ({
             {/* Navigation Sub-Tabs */}
             <div className="flex gap-2 border-b border-stone-200 pb-3 overflow-x-auto">
                 {[
+                    { id: 'extrato_efetivo', label: 'Extrato do Efetivo (BM / BC)', icon: 'badge' },
                     { id: 'extrato_mensal', label: 'Extrato Mensal B1 (Alterações SIGRH)', icon: 'published_with_changes' },
                     { id: 'sigrh', label: 'SIGRH (Ficha & Extrato Unificado)', icon: 'table_view' },
                     { id: 'sgpe', label: 'SGP-e (Ficha Frequência & Escala 24x72)', icon: 'description' },
@@ -1052,6 +1054,17 @@ const ExportSection: React.FC<Props> = ({
                     </button>
                 ))}
             </div>
+
+            {/* TAB: EXTRATO DO EFETIVO PERSONALIZADO (BM / BC) */}
+            {activeSubTab === 'extrato_efetivo' && (
+                <ExtratoEfetivoB1
+                    personnelList={personnelList}
+                    vacations={vacations}
+                    courses={courses}
+                    rankHistories={rankHistories}
+                    disciplinaryRecords={disciplinaryRecords}
+                />
+            )}
 
             {/* TAB: EXTRATO MENSAL B1 */}
             {activeSubTab === 'extrato_mensal' && (

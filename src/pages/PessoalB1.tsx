@@ -2048,6 +2048,8 @@ const PessoalB1: React.FC = () => {
                   vacations={vacations}
                   escalas={escalas}
                   exports={sigrhExports}
+                  courses={_courses}
+                  disciplinaryRecords={disciplinaryRecords}
                   onAddExport={async (e) => { await PersonnelService.addSigrhExport(e); loadExports(); toast.success('Submissão registrada!'); }}
                 />
               )}
