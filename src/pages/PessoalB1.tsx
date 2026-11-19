@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ATIVIDADES_B4 } from '../config/atividadesB4';
+import { ATIVIDADES_B4, getAtividadeMeta } from '../config/atividadesB4';
 import { toast } from 'sonner';
 import { Personnel, DocumentB1, Vacation, AlertItem, RankHistory, ServiceSwap, DisciplinaryRecord, SigrhExport, Escala, B1Course, EpiDelivery, InternalNotification, BcSelecionado } from '../services/types';
 import { PersonnelService } from '../services/personnelService';
@@ -1456,6 +1456,7 @@ const PessoalB1: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
                       {ATIVIDADES_B4.map(at => {
                         const selected = (formData.atividades_responsavel || []).includes(at);
+                        const meta = getAtividadeMeta(at);
                         return (
                           <button
                             key={at}
@@ -1479,6 +1480,7 @@ const PessoalB1: React.FC = () => {
                             }`}>
                               {selected && <span className="text-red-700 text-[9px] font-black">✓</span>}
                             </span>
+                            <span className="text-[13px] leading-none">{meta.emoji}</span>
                             {at}
                           </button>
                         );

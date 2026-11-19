@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ATIVIDADES_B4 } from '../config/atividadesB4';
+import { ATIVIDADES_B4, getAtividadeMeta } from '../config/atividadesB4';
 import { SupabaseService, Vehicle, PendingNotice, Purchase, DailyMission, Personnel, DailyChecklist, LocalEquipamento, CompartimentoViatura, Training } from '../services/SupabaseService';
 import { toast } from 'sonner';
 import { useRealtimeNotices } from '../hooks/useRealtimeNotices';
@@ -175,11 +175,14 @@ const ItemCard: React.FC<ItemCardProps> = ({
       {/* Atividades badges */}
       {item.atividades && item.atividades.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2 items-center">
-          {item.atividades.slice(0, 2).map((at, idx) => (
-            <span key={idx} className="text-[9px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
-              {at}
-            </span>
-          ))}
+          {item.atividades.slice(0, 2).map((at, idx) => {
+            const meta = getAtividadeMeta(at);
+            return (
+              <span key={idx} className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${meta.color}`}>
+                {meta.emoji} {at}
+              </span>
+            );
+          })}
           {item.atividades.length > 2 && (
             <span className="text-[9px] font-bold bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full border border-stone-200">
               +{item.atividades.length - 2} mais
@@ -1396,13 +1399,14 @@ const PatrimonioB4: React.FC = () => {
                         const isExpanded = expandedGroups[atividade] || false;
                         const visibleItems = isExpanded ? items : items.slice(0, 6);
                         const remainingCount = items.length - 6;
+                        const meta = getAtividadeMeta(atividade);
 
                         return (
                           <div key={atividade}>
                             <div className="flex items-center gap-3 mb-4">
-                              <span className="material-symbols-outlined text-amber-600">local_fire_department</span>
+                              <span className="text-xl leading-none">{meta.emoji}</span>
                               <h3 className="font-black text-sm uppercase tracking-widest text-rustic-brown">{atividade}</h3>
-                              <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{items.length}</span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.color}`}>{items.length}</span>
                               <div className="flex-1 h-px bg-rustic-border/40" />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">

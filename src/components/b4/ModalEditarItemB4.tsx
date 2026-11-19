@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ATIVIDADES_B4 } from '../../config/atividadesB4';
+import { ATIVIDADES_B4, getAtividadeMeta } from '../../config/atividadesB4';
 import { Vehicle, CompartimentoViatura, LocalEquipamento } from '../../services/types';
 import { supabase } from '../../services/supabase';
 import { SupabaseService } from '../../services/SupabaseService';
@@ -334,6 +334,7 @@ export const ModalEditarItemB4: React.FC<ModalEditarItemB4Props> = ({
             <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
               {ATIVIDADES_LIST.map(at => {
                 const selected = atividades.includes(at);
+                const meta = getAtividadeMeta(at);
                 return (
                   <button
                     key={at}
@@ -348,6 +349,7 @@ export const ModalEditarItemB4: React.FC<ModalEditarItemB4Props> = ({
                     <span className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center flex-shrink-0 transition-all ${selected ? 'bg-white border-white' : 'border-stone-400'}`}>
                       {selected && <span className="text-orange-600 text-[9px] font-black">✓</span>}
                     </span>
+                    <span className="text-[13px] leading-none">{meta.emoji}</span>
                     {at}
                   </button>
                 );
