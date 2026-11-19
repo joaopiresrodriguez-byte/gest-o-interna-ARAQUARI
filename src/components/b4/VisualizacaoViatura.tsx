@@ -207,7 +207,13 @@ export const VisualizacaoViatura: React.FC<VisualizacaoViaturaProps> = ({
 
       if (dataChecklist) {
         dataChecklist.forEach((ci: any) => {
-          if (!todosItens.some(i => i.id === ci.id)) {
+          const jaExistePorId = todosItens.some(i => i.id === ci.id);
+          const jaExistePorNomeEComp = todosItens.some(i => 
+            (i.compartimento_id || '') === (ci.compartimento_id || '') && 
+            i.nome.toLowerCase().trim() === (ci.item_name || '').toLowerCase().trim()
+          );
+
+          if (!jaExistePorId && !jaExistePorNomeEComp) {
             todosItens.push({
               id: ci.id,
               nome: ci.item_name || 'Item de Checklist',

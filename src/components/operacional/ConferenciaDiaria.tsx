@@ -73,7 +73,14 @@ async function buscarDados(): Promise<DadosConferencia> {
 
   // Tabela principal do checklist operacional: checklist_items
   if (r7.data) {
+    // Deduplicação defensiva no carregamento para garantir que nunca apareçam itens clones na mesma gaveta
+    const chavesVistas = new Set<string>();
+
     r7.data.forEach((ci: any) => {
+      const chaveItem = `${ci.viatura_id || ''}_${ci.compartimento_id || ''}_${(ci.item_name || '').toLowerCase().trim()}`;
+      if (chavesVistas.has(chaveItem)) return;
+      chavesVistas.add(chaveItem);
+
       const infoCautela = cautelaMap[ci.id] || cautelaMap[(ci.item_name || '').toLowerCase().trim()];
       todosItens.push({
         id: ci.id,
