@@ -14,6 +14,7 @@ import { supabase } from '../services/supabase';
 import { DefesaCivilTicker } from '../components/DefesaCivilTicker';
 import { BirthdayCard } from '../components/BirthdayCard';
 import { CardClimaAraquari } from '../components/CardClimaAraquari';
+import { EstoqueAphService, MaterialEstoqueAPH } from '../services/estoqueAphService';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import { formatLocalDate } from '../utils/dateUtils';
@@ -96,6 +97,7 @@ const DashboardAvisos: React.FC = () => {
   const targetDate = getYesterdayDate(selectedDate);
 
   const [escalaAlteracoes, setEscalaAlteracoes] = useState<any[]>([]);
+  const [alertasEstoqueAph, setAlertasEstoqueAph] = useState<{ vencidos: MaterialEstoqueAPH[]; aVencer: MaterialEstoqueAPH[]; criticos: MaterialEstoqueAPH[] }>({ vencidos: [], aVencer: [], criticos: [] });
 
   const loadData = async () => {
     setLoading(true);
@@ -143,6 +145,22 @@ const DashboardAvisos: React.FC = () => {
       setVacations(vacationsData || []);
       setServiceSwaps(swapsData || []);
       setEscalaAlteracoes(alteracoesRes.data || []);
+
+      // Buscar alertas de estoque APH e validades
+      try {
+        const [validades, materiais] = await Promise.all([
+          EstoqueAphService.verificarValidadesMateriais(),
+          EstoqueAphService.getMateriaisEstoque(),
+        ]);
+        const criticos = materiais.filter(m => m.quantidade <= (m.estoque_minimo || 5));
+        setAlertasEstoqueAph({
+          vencidos: validades.vencidos,
+          aVencer: validades.aVencer,
+          criticos,
+        });
+      } catch (errAph) {
+        console.warn('Erro ao carregar alertas de estoque APH no dashboard:', errAph);
+      }
     } catch (error) {
       console.error("Failed to load data", error);
       toast.error('Erro ao carregar dados do painel.');
@@ -550,6 +568,53 @@ const DashboardAvisos: React.FC = () => {
                 <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-yellow-200 rounded-lg text-yellow-700/50">
                   <span className="material-symbols-outlined text-4xl mb-2">unpublished</span>
                   <p className="font-bold">Nenhum aviso deixado pelo plantão anterior.</p>
+                </div>
+              )}
+
+              {/* ALERTAS OPERACIONAIS: ESTOQUE APH & VALIDADES */}
+              {(alertasEstoqueAph.vencidos.length > 0 || alertasEstoqueAph.aVencer.length > 0 || alertasEstoqueAph.criticos.length > 0) && (
+                <div className="mt-4 pt-4 border-t border-yellow-200/50 space-y-2">
+                  <h3 className="text-xs font-black uppercase text-red-800 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">medical_services</span>
+                    Alertas Críticos de Estoque APH & Validades
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    {alertasEstoqueAph.vencidos.length > 0 && (
+                      <div className="bg-red-100 border border-red-300 p-2.5 rounded-lg text-red-900 text-xs">
+                        <p className="font-black flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">dangerous</span>
+                          {alertasEstoqueAph.vencidos.length} Lote(s) Vencido(s)
+                        </p>
+                        <p className="text-[10px] mt-0.5 truncate">
+                          {alertasEstoqueAph.vencidos.map(m => m.name).join(', ')}
+                        </p>
+                      </div>
+                    )}
+
+                    {alertasEstoqueAph.aVencer.length > 0 && (
+                      <div className="bg-amber-100 border border-amber-300 p-2.5 rounded-lg text-amber-900 text-xs">
+                        <p className="font-black flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">warning</span>
+                          {alertasEstoqueAph.aVencer.length} Lote(s) a Vencer em 30d
+                        </p>
+                        <p className="text-[10px] mt-0.5 truncate">
+                          {alertasEstoqueAph.aVencer.map(m => m.name).join(', ')}
+                        </p>
+                      </div>
+                    )}
+
+                    {alertasEstoqueAph.criticos.length > 0 && (
+                      <div className="bg-orange-100 border border-orange-300 p-2.5 rounded-lg text-orange-900 text-xs">
+                        <p className="font-black flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+                          {alertasEstoqueAph.criticos.length} Material(is) no Mínimo
+                        </p>
+                        <p className="text-[10px] mt-0.5 truncate">
+                          {alertasEstoqueAph.criticos.map(m => `${m.name} (${m.quantidade})`).join(', ')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

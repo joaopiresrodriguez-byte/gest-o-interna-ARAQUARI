@@ -799,7 +799,7 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
                       const checked = e.target.checked;
                       setRepostoReserva(checked);
                       if (checked) {
-                        const textoPadrao = 'Item reposto por material da reserva';
+                        const textoPadrao = 'Item reposto por material da reserva (baixa automática efetuada no estoque)';
                         if (!observacao.includes(textoPadrao)) {
                           setObservacao(observacao ? `${textoPadrao}. ${observacao}` : textoPadrao);
                         }
@@ -807,7 +807,7 @@ function NivelTres({ item, tipo, conferenciaMap, onAtualizar, viaturaCtx, compar
                     }}
                     style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
                   />
-                  <span>Reposto por material da reserva no mesmo dia</span>
+                  <span>🔄 Reposto da Reserva / Sala de APH (dar baixa automática no estoque)</span>
                 </label>
               </div>
 
