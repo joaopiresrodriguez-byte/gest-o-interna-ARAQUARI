@@ -26,6 +26,83 @@ interface ExtrasEfetivo {
   disciplinaryRecords: DisciplinaryRecord[];
 }
 
+// Mapeamento e Pesos Hierárquicos dos Postos e Graduações (CBMSC)
+const RANKS_BM_PESO: Record<string, number> = {
+  'cel': 1,
+  'coronel': 1,
+  'ten cel': 2,
+  'tenente coronel': 2,
+  'maj': 3,
+  'major': 3,
+  'cap': 4,
+  'capitao': 4,
+  'capitão': 4,
+  '1º ten': 5,
+  '1 ten': 5,
+  '1º tenente': 5,
+  '2º ten': 6,
+  '2 ten': 6,
+  '2º tenente': 6,
+  'asp of': 7,
+  'asp': 7,
+  'aspirante': 7,
+  'sub ten': 8,
+  'subten': 8,
+  'subtenente': 8,
+  '1º sgt': 9,
+  '1 sgt': 9,
+  '1º sargento': 9,
+  '2º sgt': 10,
+  '2 sgt': 10,
+  '2º sargento': 10,
+  '3º sgt': 11,
+  '3 sgt': 11,
+  '3º sargento': 11,
+  'sgt': 11,
+  'sargento': 11,
+  'cb': 12,
+  'cabo': 12,
+  'sd': 13,
+  'soldado': 13,
+};
+
+function getRankPeso(p: Partial<Personnel>): number {
+  const isBC = p.type === 'BC' || (p.graduation && p.graduation.toLowerCase().includes('bc')) || (p.rank && p.rank.toLowerCase().includes('bc'));
+
+  if (isBC) {
+    let ordem = typeof p.bc_graduacao_ordem === 'number' && p.bc_graduacao_ordem > 0 ? p.bc_graduacao_ordem : 0;
+    if (!ordem) {
+      const match = (p.graduation || p.rank || '').match(/(\d+)[°º]?\s*Grau/i);
+      if (match) ordem = parseInt(match[1], 10);
+    }
+    // No BC, o 10º Grau (Pleno Classe 1) é o mais alto / mais graduado
+    // e o 1º Grau (Bombeiro Comunitário) é o inicial.
+    // Para ordenar do mais graduado ao menos graduado:
+    // 10º grau => 101, 9º grau => 102, ..., 1º grau => 110
+    const pesoBC = ordem > 0 ? (11 - ordem) : 12;
+    return 100 + pesoBC;
+  }
+
+  const grad = (p.graduation || p.rank || 'Sd')
+    .toLowerCase()
+    .replace(/\s*bm$/i, '')
+    .replace(/(\d+)[°º]\s*sgt/i, '$1º sgt')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (RANKS_BM_PESO[grad] !== undefined) {
+    return RANKS_BM_PESO[grad];
+  }
+
+  for (const [key, peso] of Object.entries(RANKS_BM_PESO)) {
+    if (grad.startsWith(key) || grad.includes(key)) {
+      return peso;
+    }
+  }
+
+  return 50;
+}
+
 export const CAMPOS_DISPONIVEIS: CampoExtrato[] = [
   // 1. Identificação Funcional
   {
@@ -264,6 +341,7 @@ export const ExtratoEfetivoB1: React.FC<ExtratoEfetivoProps> = ({
   const [tipoEfetivo, setTipoEfetivo] = useState<'TODOS' | 'BM' | 'BC'>('TODOS');
   const [statusFiltro, setStatusFiltro] = useState<string>('TODOS');
   const [buscaTexto, setBuscaTexto] = useState<string>('');
+  const [criterioOrdenacao, setCriterioOrdenacao] = useState<'HIERARQUIA' | 'NOME' | 'INCLUSAO' | 'MATRICULA'>('HIERARQUIA');
 
   // Seleção de Militares: 'TODOS_FILTRADOS' ou 'SELECAO_MANUAL'
   const [modoSelecao, setModoSelecao] = useState<'TODOS_FILTRADOS' | 'SELECAO_MANUAL'>('TODOS_FILTRADOS');
@@ -322,9 +400,66 @@ export const ExtratoEfetivoB1: React.FC<ExtratoEfetivoProps> = ({
     }
   }, [camposSelecionados]);
 
-  // Lista de Militares após filtros
+  // Função de ordenação
+  const ordenarLista = (lista: Personnel[]): Personnel[] => {
+    return [...lista].sort((a, b) => {
+      if (criterioOrdenacao === 'HIERARQUIA') {
+        // 1. Posto / Graduação (Hierarquia militar: Cel -> Sd -> BCs)
+        const pesoA = getRankPeso(a);
+        const pesoB = getRankPeso(b);
+        if (pesoA !== pesoB) return pesoA - pesoB;
+
+        // 2. Data da última promoção (mais antiga primeiro = mais antigo no posto)
+        if (a.data_ultima_promocao && b.data_ultima_promocao) {
+          const diff = a.data_ultima_promocao.localeCompare(b.data_ultima_promocao);
+          if (diff !== 0) return diff;
+        } else if (a.data_ultima_promocao) {
+          return -1;
+        } else if (b.data_ultima_promocao) {
+          return 1;
+        }
+
+        // 3. Data de inclusão (mais antiga primeiro = mais tempo de serviço na corporação)
+        if (a.data_inclusao && b.data_inclusao) {
+          const diff = a.data_inclusao.localeCompare(b.data_inclusao);
+          if (diff !== 0) return diff;
+        } else if (a.data_inclusao) {
+          return -1;
+        } else if (b.data_inclusao) {
+          return 1;
+        }
+
+        // 4. Nome alfabético como critério final de desempate
+        const nA = a.war_name || a.name || '';
+        const nB = b.war_name || b.name || '';
+        return nA.localeCompare(nB, 'pt-BR');
+      }
+
+      if (criterioOrdenacao === 'NOME') {
+        const nA = a.name || '';
+        const nB = b.name || '';
+        return nA.localeCompare(nB, 'pt-BR');
+      }
+
+      if (criterioOrdenacao === 'INCLUSAO') {
+        const dtA = a.data_inclusao || '9999-99-99';
+        const dtB = b.data_inclusao || '9999-99-99';
+        return dtA.localeCompare(dtB);
+      }
+
+      if (criterioOrdenacao === 'MATRICULA') {
+        const matA = a.matricula || '';
+        const matB = b.matricula || '';
+        return matA.localeCompare(matB);
+      }
+
+      return 0;
+    });
+  };
+
+  // Lista de Militares após filtros e ordenados
   const militaresFiltrados = useMemo(() => {
-    return personnelList.filter(p => {
+    const filtrados = personnelList.filter(p => {
       // 1. Tipo (BM / BC)
       if (tipoEfetivo === 'BM' && p.type === 'BC') return false;
       if (tipoEfetivo === 'BC' && p.type !== 'BC') return false;
@@ -347,15 +482,18 @@ export const ExtratoEfetivoB1: React.FC<ExtratoEfetivoProps> = ({
 
       return true;
     });
-  }, [personnelList, tipoEfetivo, statusFiltro, buscaTexto]);
+
+    return ordenarLista(filtrados);
+  }, [personnelList, tipoEfetivo, statusFiltro, buscaTexto, criterioOrdenacao]);
 
   // Efetivo final a ser impresso/exportado
   const efetivoFinal = useMemo(() => {
     if (modoSelecao === 'TODOS_FILTRADOS') {
       return militaresFiltrados;
     }
-    return militaresFiltrados.filter(p => p.id && militaresSelecionadosIds.includes(p.id));
-  }, [militaresFiltrados, modoSelecao, militaresSelecionadosIds]);
+    const selecionados = militaresFiltrados.filter(p => p.id && militaresSelecionadosIds.includes(p.id));
+    return ordenarLista(selecionados);
+  }, [militaresFiltrados, modoSelecao, militaresSelecionadosIds, criterioOrdenacao]);
 
   // Toggle campo
   const toggleCampo = (campoId: string) => {
@@ -672,6 +810,7 @@ export const ExtratoEfetivoB1: React.FC<ExtratoEfetivoProps> = ({
     </div>
     <div class="meta-tag">
       <span class="badge-tipo">TOTAL: ${efetivoFinal.length} EFETIVOS</span><br>
+      <b>Ordem:</b> ${criterioOrdenacao === 'HIERARQUIA' ? 'Posto / Graduação' : criterioOrdenacao === 'NOME' ? 'Alfabética' : criterioOrdenacao === 'INCLUSAO' ? 'Data Inclusão' : 'Matrícula'}<br>
       Extraído em: ${dataHoraExtracao}
     </div>
   </div>`;
@@ -798,7 +937,7 @@ export const ExtratoEfetivoB1: React.FC<ExtratoEfetivoProps> = ({
           <span className="text-[10px] text-stone-500">Filtrando entre {personnelList.length} cadastrados</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* Seletor de Tipo de Efetivo */}
           <div>
             <label className="text-[10px] font-black uppercase text-stone-500 block mb-1">
@@ -854,8 +993,25 @@ export const ExtratoEfetivoB1: React.FC<ExtratoEfetivoProps> = ({
             </select>
           </div>
 
+          {/* Seletor de Ordenação */}
+          <div>
+            <label className="text-[10px] font-black uppercase text-stone-500 block mb-1">
+              Ordem dos Dados:
+            </label>
+            <select
+              value={criterioOrdenacao}
+              onChange={e => setCriterioOrdenacao(e.target.value as any)}
+              className="w-full h-10 px-3 rounded-lg border border-amber-300 bg-amber-50/60 text-xs font-black text-amber-900 focus:outline-none focus:border-amber-600 shadow-2xs"
+            >
+              <option value="HIERARQUIA">🎖️ Posto / Graduação</option>
+              <option value="NOME">🔤 Nome Alfabético</option>
+              <option value="INCLUSAO">📅 Data de Inclusão</option>
+              <option value="MATRICULA">🔢 Matrícula</option>
+            </select>
+          </div>
+
           {/* Busca por nome / matricula */}
-          <div className="md:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-2">
             <label className="text-[10px] font-black uppercase text-stone-500 block mb-1">
               Buscar Militar Específico:
             </label>
@@ -1178,7 +1334,7 @@ export const ExtratoEfetivoB1: React.FC<ExtratoEfetivoProps> = ({
         <div className="flex items-center justify-between">
           <span className="text-xs font-black uppercase tracking-wider text-rustic-brown flex items-center gap-1.5">
             <span className="material-symbols-outlined text-base text-primary">visibility</span>
-            Prévia dos Dados Selecionados ({efetivoFinal.length} registros)
+            Prévia dos Dados Selecionados ({efetivoFinal.length} registros — Ordem: {criterioOrdenacao === 'HIERARQUIA' ? 'Posto / Graduação' : criterioOrdenacao === 'NOME' ? 'Alfabética' : criterioOrdenacao === 'INCLUSAO' ? 'Data Inclusão' : 'Matrícula'})
           </span>
           <span className="text-[10px] text-stone-400 italic">
             Exibindo os dados que serão incluídos no documento final
