@@ -6,6 +6,7 @@ import { LoadingFallback } from './components/LoadingFallback';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import NotificationBell from './components/NotificationBell';
 import InstallBanner from './components/shared/InstallBanner';
+import { DEFAULT_TENANT_CONTEXT } from './config/tenant';
 
 // Lazy loading de páginas para code splitting
 const DashboardAvisos = lazy(() => import('./pages/DashboardAvisos'));
@@ -228,7 +229,12 @@ const AppLayout: React.FC = () => {
             style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBhhkhZqDlWCkshTqvj49ObzKfPKSTNrk8jLEZpSAaoyFHhzejl3L6l_g1NZkZ1gen8Ccn-QS-xmIystBvz0nu1WNiaYjR6bzF-KWFnnv8i2Urv0at8T9f6Hg63iDrqbXlk8h3V7o8n_Vmv3XOVphoOEnBGSIDkK--xG2SN7JQLLCSPmxhXDvnN0uylpKXjNigsF67qeaR9VnBDdq5rdbRO6xnEAV-CFm-cpQjJrc9-a2p3GCLfDptK5_wDNtMtVoHgBNvUPuycbYU")' }}
           />
           <div className="flex flex-col flex-1">
-            <h1 className="text-white text-base font-black leading-tight tracking-wide uppercase">Gestão Interna</h1>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-white text-base font-black leading-tight tracking-wide uppercase">Gestão Interna</h1>
+              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                {DEFAULT_TENANT_CONTEXT.planTier}
+              </span>
+            </div>
             <h1 className="text-primary text-sm font-bold leading-tight tracking-wider uppercase">CBMSC Araquari</h1>
           </div>
           {/* NotificationBell shown inside sidebar on desktop; hidden on mobile (moved to header) */}
