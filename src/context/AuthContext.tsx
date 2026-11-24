@@ -2,6 +2,8 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 // accessibility: placeholder / aria-label - This file context does not render HTML forms directly.
 import { supabase } from '../services/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { TenantSettings } from '../services/types';
+import { DEFAULT_TENANT_SETTINGS, resolveTenantId } from '../config/tenant';
 
 export interface UserProfile {
     id: string;
@@ -27,10 +29,12 @@ interface AuthContextType {
     session: Session | null;
     user: User | null;
     profile: UserProfile | null;
+    tenantSettings: TenantSettings;
     profileError: any; // Added for debugging
     loading: boolean;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    refreshTenantSettings: () => Promise<void>;
     isPasswordRecovery: boolean;
     setIsPasswordRecovery: (val: boolean) => void;
 }
@@ -39,10 +43,12 @@ const AuthContext = createContext<AuthContextType>({
     session: null,
     user: null,
     profile: null,
+    tenantSettings: DEFAULT_TENANT_SETTINGS,
     profileError: null,
     loading: true,
     signOut: async () => { },
     refreshProfile: async () => { },
+    refreshTenantSettings: async () => { },
     isPasswordRecovery: false,
     setIsPasswordRecovery: () => { },
 });
@@ -55,6 +61,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [tenantSettings, setTenantSettings] = useState<TenantSettings>(DEFAULT_TENANT_SETTINGS);
     const [profileError, setProfileError] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
@@ -77,6 +84,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return false;
     };
 
+    const fetchTenantSettings = async (orgId?: string | null) => {
+        try {
+            const targetOrgId = resolveTenantId(orgId);
+            const { data, error } = await supabase
+                .from('tenant_settings')
+                .select('*')
+                .eq('organization_id', targetOrgId)
+                .maybeSingle();
+
+            if (!error && data) {
+                setTenantSettings({
+                    ...DEFAULT_TENANT_SETTINGS,
+                    ...data,
+                    logo_url: data.logo_url || DEFAULT_TENANT_SETTINGS.logo_url,
+                });
+            } else {
+                setTenantSettings(DEFAULT_TENANT_SETTINGS);
+            }
+        } catch (err) {
+            console.warn('Erro ao carregar tenant settings, usando padrão:', err);
+            setTenantSettings(DEFAULT_TENANT_SETTINGS);
+        }
+    };
+
     const fetchProfile = async (userId: string) => {
         try {
             const { data, error } = await supabase
@@ -89,13 +120,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 console.error('Error fetching profile:', error);
                 setProfileError(error);
                 setProfile(null);
+                await fetchTenantSettings(null);
             } else {
                 setProfile(data);
                 setProfileError(null);
+                await fetchTenantSettings(data?.organization_id);
             }
         } catch (err) {
             console.error("Unexpected error in fetchProfile:", err);
             setProfileError(err);
+            await fetchTenantSettings(null);
         }
     };
 
@@ -193,13 +227,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (user) await fetchProfile(user.id);
     };
 
+    const refreshTenantSettings = async () => {
+        await fetchTenantSettings(profile?.organization_id);
+    };
+
     const signOut = async () => {
         localStorage.removeItem(SESSION_START_KEY);
         await supabase.auth.signOut();
     };
 
     return (
-        <AuthContext.Provider value={{ session, user, profile, profileError, loading, signOut, refreshProfile, isPasswordRecovery, setIsPasswordRecovery }}>
+        <AuthContext.Provider value={{ session, user, profile, tenantSettings, profileError, loading, signOut, refreshProfile, refreshTenantSettings, isPasswordRecovery, setIsPasswordRecovery }}>
             {children}
         </AuthContext.Provider>
     );

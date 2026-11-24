@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabase';
-import { UserProfile } from '../context/AuthContext';
+import { UserProfile, useAuth } from '../context/AuthContext';
+import { resolveTenantId } from '../config/tenant';
 import { toast } from 'sonner';
 
 // Extended profile with status fields for the admin panel
@@ -45,11 +46,66 @@ const MODULES = [
 ];
 
 const GestaoUsuarios: React.FC = () => {
+    const { profile: loggedProfile, tenantSettings, refreshTenantSettings } = useAuth();
+    const [activeTab, setActiveTab] = useState<'usuarios' | 'empresa'>('usuarios');
     const [profiles, setProfiles] = useState<ProfileWithStatus[]>([]);
     const [pendentes, setPendentes] = useState<ProfileWithStatus[]>([]);
     const [loading, setLoading] = useState(true);
     const [approvalTarget, setApprovalTarget] = useState<ProfileWithStatus | null>(null);
     const [approvalRole, setApprovalRole] = useState<ApprovalRole>(DEFAULT_ROLE);
+
+    // Estado para edição das configurações da empresa/organização
+    const [formSettings, setFormSettings] = useState({
+        unit_name: tenantSettings?.unit_name || '',
+        station_name: tenantSettings?.station_name || '',
+        logo_url: tenantSettings?.logo_url || '',
+        primary_color: tenantSettings?.primary_color || '#b91c1c',
+        secondary_color: tenantSettings?.secondary_color || '#78350f',
+        custom_domain: tenantSettings?.custom_domain || '',
+    });
+    const [salvandoSettings, setSalvandoSettings] = useState(false);
+
+    useEffect(() => {
+        if (tenantSettings) {
+            setFormSettings({
+                unit_name: tenantSettings.unit_name || '',
+                station_name: tenantSettings.station_name || '',
+                logo_url: tenantSettings.logo_url || '',
+                primary_color: tenantSettings.primary_color || '#b91c1c',
+                secondary_color: tenantSettings.secondary_color || '#78350f',
+                custom_domain: tenantSettings.custom_domain || '',
+            });
+        }
+    }, [tenantSettings]);
+
+    const handleSalvarSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSalvandoSettings(true);
+        try {
+            const orgId = resolveTenantId(loggedProfile?.organization_id);
+            const { error } = await supabase
+                .from('tenant_settings')
+                .upsert({
+                    organization_id: orgId,
+                    unit_name: formSettings.unit_name.trim(),
+                    station_name: formSettings.station_name.trim(),
+                    logo_url: formSettings.logo_url.trim() || null,
+                    primary_color: formSettings.primary_color,
+                    secondary_color: formSettings.secondary_color,
+                    custom_domain: formSettings.custom_domain.trim() || null,
+                    updated_at: new Date().toISOString(),
+                }, { onConflict: 'organization_id' });
+
+            if (error) throw error;
+            toast.success('Configurações da empresa salvas com sucesso!');
+            await refreshTenantSettings();
+        } catch (err: any) {
+            console.error('Erro ao salvar configurações da empresa:', err);
+            toast.error(err.message || 'Erro ao salvar configurações');
+        } finally {
+            setSalvandoSettings(false);
+        }
+    };
 
     const fetchProfiles = useCallback(async () => {
         setLoading(true);
@@ -157,18 +213,174 @@ const GestaoUsuarios: React.FC = () => {
             <div className="p-8 md:p-12 max-w-[1600px] mx-auto w-full space-y-8 overflow-y-auto">
 
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-stone-200">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-stone-200">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <span className="material-symbols-outlined text-primary text-3xl">admin_panel_settings</span>
-                            <h1 className="text-4xl font-black text-[#2c1810] tracking-tight">Gestão de Acessos</h1>
+                            <h1 className="text-4xl font-black text-[#2c1810] tracking-tight">Gestão & Configurações</h1>
                         </div>
-                        <p className="text-rustic-brown/70 text-lg">Controle as permissões de cada usuário por módulo do sistema.</p>
+                        <p className="text-rustic-brown/70 text-lg">Gerencie permissões de usuários e personalize a identidade visual da sua organização.</p>
+                    </div>
+
+                    {/* Abas de Navegação */}
+                    <div className="flex items-center gap-2 bg-stone-200/70 p-1.5 rounded-xl self-start md:self-auto">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('usuarios')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${
+                                activeTab === 'usuarios'
+                                    ? 'bg-white text-stone-900 shadow-sm'
+                                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-sm">group</span>
+                            Usuários & Acessos
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('empresa')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${
+                                activeTab === 'empresa'
+                                    ? 'bg-white text-stone-900 shadow-sm'
+                                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-sm">business</span>
+                            Dados da Empresa
+                        </button>
                     </div>
                 </div>
 
-                {/* Pending Users Section */}
-                {pendentes.length > 0 && (
+                {activeTab === 'empresa' ? (
+                    /* Configurações da Empresa / Whitelabel */
+                    <div className="bg-white rounded-2xl border border-stone-200 p-8 shadow-sm max-w-4xl space-y-6">
+                        <div className="flex items-center gap-4 pb-6 border-b border-stone-100">
+                            <div
+                                className="w-16 h-16 rounded-2xl border-2 border-stone-300 bg-stone-100 bg-center bg-cover flex items-center justify-center shadow-inner flex-shrink-0"
+                                style={{ backgroundImage: formSettings.logo_url ? `url("${formSettings.logo_url}")` : undefined }}
+                            >
+                                {!formSettings.logo_url && (
+                                    <span className="material-symbols-outlined text-stone-400 text-3xl">image</span>
+                                )}
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-stone-900">Identidade da Organização / Whitelabel</h2>
+                                <p className="text-xs text-stone-500">Defina o nome da corporação, posto/estação e logomarca exibidos nos relatórios e barra lateral.</p>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleSalvarSettings} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                        Nome da Unidade / Corporação
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Ex: Corpo de Bombeiros Militar de Santa Catarina"
+                                        value={formSettings.unit_name}
+                                        onChange={e => setFormSettings(prev => ({ ...prev, unit_name: e.target.value }))}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                    />
+                                    <span className="text-[10px] text-stone-400 mt-1 block">Nome oficial principal da instituição ou empresa.</span>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                        Estação / Posto / Pelotão
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Ex: Araquari ou 2º Pelotão"
+                                        value={formSettings.station_name}
+                                        onChange={e => setFormSettings(prev => ({ ...prev, station_name: e.target.value }))}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                    />
+                                    <span className="text-[10px] text-stone-400 mt-1 block">Subtítulo exibido diretamente no cabeçalho do sistema.</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                    URL da Logomarca (Brasão ou Logo PNG/JPG)
+                                </label>
+                                <input
+                                    type="url"
+                                    placeholder="https://sua-empresa.com/logo.png"
+                                    value={formSettings.logo_url}
+                                    onChange={e => setFormSettings(prev => ({ ...prev, logo_url: e.target.value }))}
+                                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                />
+                                <span className="text-[10px] text-stone-400 mt-1 block">Link direto da imagem para exibição no topo do menu lateral e cabeçalhos.</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                        Cor Primária
+                                    </label>
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="color"
+                                            value={formSettings.primary_color}
+                                            onChange={e => setFormSettings(prev => ({ ...prev, primary_color: e.target.value }))}
+                                            className="w-12 h-10 p-0.5 rounded-lg border border-stone-300 cursor-pointer"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={formSettings.primary_color}
+                                            onChange={e => setFormSettings(prev => ({ ...prev, primary_color: e.target.value }))}
+                                            className="w-32 px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold font-mono text-stone-800"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                        Domínio Personalizado (Opcional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Ex: portal.suaempresa.com.br"
+                                        value={formSettings.custom_domain}
+                                        onChange={e => setFormSettings(prev => ({ ...prev, custom_domain: e.target.value }))}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                    />
+                                    <span className="text-[10px] text-stone-400 mt-1 block">Para acesso via subdomínio próprio em planos Pro e Enterprise.</span>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-stone-100 flex items-center justify-between">
+                                <span className="text-xs text-stone-400">
+                                    Alterações entram em vigor imediatamente após salvar.
+                                </span>
+                                <button
+                                    type="submit"
+                                    disabled={salvandoSettings}
+                                    className="px-6 py-3 bg-primary hover:brightness-110 text-white text-sm font-black rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {salvandoSettings ? (
+                                        <>
+                                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            Salvando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined text-base">save</span>
+                                            Salvar Alterações
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                ) : (
+                    /* Conteúdo de Usuários & Acessos */
+                    <>
+                        {/* Pending Users Section */}
+                        {pendentes.length > 0 && (
                     <div className="bg-amber-50 rounded-2xl border border-amber-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-amber-200 flex items-center gap-3">
                             <span className="material-symbols-outlined text-amber-500">schedule</span>
@@ -306,6 +518,8 @@ const GestaoUsuarios: React.FC = () => {
                         </table>
                     </div>
                 </div>
+                    </>
+                )}
             </div>
 
             {/* Approval Modal */}

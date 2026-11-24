@@ -126,7 +126,7 @@ const BottomNavItem = React.memo<{
 BottomNavItem.displayName = 'BottomNavItem';
 
 const AppLayout: React.FC = () => {
-  const { signOut, user, profile, profileError } = useAuth();
+  const { signOut, user, profile, tenantSettings, profileError } = useAuth();
   const [isChangePasswordOpen, setIsChangePasswordOpen] = React.useState(false);
   const [sidebarAberta, setSidebarAberta] = React.useState(false);
   const userName = user?.email?.split('@')[0] || 'Usuário';
@@ -226,7 +226,7 @@ const AppLayout: React.FC = () => {
         <div className="p-6 flex items-center gap-3 border-b border-gray-700">
           <div
             className="bg-center bg-no-repeat bg-cover rounded-full size-12 shadow-md border-2 border-[#8B5A2B]"
-            style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBhhkhZqDlWCkshTqvj49ObzKfPKSTNrk8jLEZpSAaoyFHhzejl3L6l_g1NZkZ1gen8Ccn-QS-xmIystBvz0nu1WNiaYjR6bzF-KWFnnv8i2Urv0at8T9f6Hg63iDrqbXlk8h3V7o8n_Vmv3XOVphoOEnBGSIDkK--xG2SN7JQLLCSPmxhXDvnN0uylpKXjNigsF67qeaR9VnBDdq5rdbRO6xnEAV-CFm-cpQjJrc9-a2p3GCLfDptK5_wDNtMtVoHgBNvUPuycbYU")' }}
+            style={{ backgroundImage: `url("${tenantSettings?.logo_url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBhhkhZqDlWCkshTqvj49ObzKfPKSTNrk8jLEZpSAaoyFHhzejl3L6l_g1NZkZ1gen8Ccn-QS-xmIystBvz0nu1WNiaYjR6bzF-KWFnnv8i2Urv0at8T9f6Hg63iDrqbXlk8h3V7o8n_Vmv3XOVphoOEnBGSIDkK--xG2SN7JQLLCSPmxhXDvnN0uylpKXjNigsF67qeaR9VnBDdq5rdbRO6xnEAV-CFm-cpQjJrc9-a2p3GCLfDptK5_wDNtMtVoHgBNvUPuycbYU'}")` }}
           />
           <div className="flex flex-col flex-1">
             <div className="flex items-center gap-1.5">
@@ -235,7 +235,9 @@ const AppLayout: React.FC = () => {
                 {DEFAULT_TENANT_CONTEXT.planTier}
               </span>
             </div>
-            <h1 className="text-primary text-sm font-bold leading-tight tracking-wider uppercase">CBMSC Araquari</h1>
+            <h1 className="text-primary text-sm font-bold leading-tight tracking-wider uppercase truncate" title={`${tenantSettings?.unit_name || 'CBMSC'} - ${tenantSettings?.station_name || 'Araquari'}`}>
+              {tenantSettings?.station_name ? `${tenantSettings.station_name}` : 'CBMSC Araquari'}
+            </h1>
           </div>
           {/* NotificationBell shown inside sidebar on desktop; hidden on mobile (moved to header) */}
           <div className="hidden md:block">
@@ -306,7 +308,9 @@ const AppLayout: React.FC = () => {
             <span className="text-white text-xs font-black leading-tight tracking-wide uppercase transition-all duration-200">
               {currentModuleLabel}
             </span>
-            <span className="text-primary text-[10px] font-bold leading-tight tracking-wider uppercase opacity-70">CBMSC Araquari</span>
+            <span className="text-primary text-[10px] font-bold leading-tight tracking-wider uppercase opacity-70">
+              {tenantSettings?.station_name || 'CBMSC Araquari'}
+            </span>
           </div>
 
           {/* Notifications on mobile header */}
