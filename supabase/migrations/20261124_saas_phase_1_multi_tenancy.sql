@@ -1,7 +1,7 @@
 -- ============================================================
--- MIGRAÇÃO SAAS FASE 1: FUNDAÇÃO MULTI-TENANCY (COMPATÍVEL SUPABASE SQL EDITOR)
+-- MIGRAÇÃO SAAS FASE 1: FUNDAÇÃO MULTI-TENANCY (VERIFICADA COM O BANCO REAL)
 -- Data: 2026-11-24
--- Execução: Direta sem blocos PL/pgSQL aninhados
+-- Execução: Direta no Supabase SQL Editor
 -- ============================================================
 
 -- 1. TABELA DE ORGANIZAÇÕES (TENANTS)
@@ -52,7 +52,7 @@ VALUES (
 )
 ON CONFLICT (organization_id) DO NOTHING;
 
--- 4. ADIÇÃO DIRETA DAS COLUNAS (DDL PURO POSTGRESQL 9.6+)
+-- 4. ADIÇÃO DE ORGANIZATION_ID NAS TABELAS REAIS EXISTENTES
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
 CREATE INDEX IF NOT EXISTS idx_profiles_organization_id ON public.profiles(organization_id);
 
@@ -64,9 +64,6 @@ CREATE INDEX IF NOT EXISTS idx_fleet_organization_id ON public.fleet(organizatio
 
 ALTER TABLE public.cautelas ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
 CREATE INDEX IF NOT EXISTS idx_cautelas_organization_id ON public.cautelas(organization_id);
-
-ALTER TABLE public.conferencia_itens ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
-CREATE INDEX IF NOT EXISTS idx_conferencia_itens_organization_id ON public.conferencia_itens(organization_id);
 
 ALTER TABLE public.daily_missions ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
 CREATE INDEX IF NOT EXISTS idx_daily_missions_organization_id ON public.daily_missions(organization_id);
@@ -89,11 +86,14 @@ CREATE INDEX IF NOT EXISTS idx_baixa_patrimonio_organization_id ON public.baixa_
 ALTER TABLE public.b1_courses ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
 CREATE INDEX IF NOT EXISTS idx_b1_courses_organization_id ON public.b1_courses(organization_id);
 
-ALTER TABLE public.occurrences ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
-CREATE INDEX IF NOT EXISTS idx_occurrences_organization_id ON public.occurrences(organization_id);
-
 ALTER TABLE public.training_schedule ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
 CREATE INDEX IF NOT EXISTS idx_training_schedule_organization_id ON public.training_schedule(organization_id);
+
+ALTER TABLE public.historico_conferencias_b4 ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
+CREATE INDEX IF NOT EXISTS idx_historico_conferencias_b4_organization_id ON public.historico_conferencias_b4(organization_id);
+
+ALTER TABLE public.locais_equipamento ADD COLUMN IF NOT EXISTS organization_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001' REFERENCES public.organizations(id);
+CREATE INDEX IF NOT EXISTS idx_locais_equipamento_organization_id ON public.locais_equipamento(organization_id);
 
 -- 5. SEGURANÇA E POLÍTICAS RLS
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
