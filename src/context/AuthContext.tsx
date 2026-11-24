@@ -5,6 +5,7 @@ import { Session, User } from '@supabase/supabase-js';
 
 export interface UserProfile {
     id: string;
+    organization_id?: string;
     email: string;
     is_manager: boolean;
     p_avisos: 'reader' | 'editor' | null;

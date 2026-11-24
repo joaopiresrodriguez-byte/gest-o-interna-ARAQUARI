@@ -1,7 +1,30 @@
 
 
+export interface Organization {
+    id: string;
+    slug: string;
+    name: string;
+    document?: string;
+    plan_tier: 'starter' | 'pro' | 'enterprise';
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface TenantSettings {
+    id: string;
+    organization_id: string;
+    logo_url?: string;
+    primary_color?: string;
+    secondary_color?: string;
+    unit_name?: string;
+    station_name?: string;
+    custom_domain?: string;
+}
+
 export interface Mission {
     id?: string;
+    organization_id?: string;
     title: string;
     description?: string;
     date: string;
@@ -58,6 +81,7 @@ export interface Cautela {
 
 export interface Vehicle {
     id: string;
+    organization_id?: string;
     name: string;
     type: 'Viatura' | 'Equipamento' | 'Material' | 'Outro';
     status: 'active' | 'down' | 'maintenance' | 'cautelado';
@@ -87,6 +111,7 @@ export interface Vehicle {
 
 export interface Personnel {
     id?: number;
+    organization_id?: string;
     name: string;
     war_name?: string;
     rank: string;
