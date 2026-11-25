@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabase';
+import { DEFAULT_TENANT_ID } from '../config/tenant';
 
 // Maps Supabase error messages to user-friendly Portuguese
 const translateError = (msg: string): string => {
@@ -31,6 +32,10 @@ const Login: React.FC = () => {
     const [success, setSuccess] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('login');
+    const [signupType, setSignupType] = useState<'existing' | 'new_org'>('existing');
+    const [newOrgName, setNewOrgName] = useState('');
+    const [newOrgStation, setNewOrgStation] = useState('');
+    const [fullName, setFullName] = useState('');
     const [otpToken, setOtpToken] = useState('');
     const [showOtpInput, setShowOtpInput] = useState(false);
 
@@ -81,6 +86,11 @@ const Login: React.FC = () => {
         setViewMode(mode);
         setShowOtpInput(false);
         setOtpToken('');
+        // Reset campos de cadastro ao trocar de modo
+        setSignupType('existing');
+        setNewOrgName('');
+        setNewOrgStation('');
+        setFullName('');
     };
 
     const handleAuth = async (e: React.FormEvent) => {
@@ -120,9 +130,101 @@ const Login: React.FC = () => {
                 setShowOtpInput(true);
                 setSuccess(`E-mail de recuperação enviado para ${targetEmail}! Verifique sua caixa de entrada (ou insira abaixo o código de 6 dígitos recebido no e-mail).`);
             } else if (viewMode === 'signup') {
-                const { error } = await supabase.auth.signUp({ email, password });
-                if (error) throw error;
-                setSuccess('Cadastro realizado! Verifique seu email para confirmar a conta.');
+                if (signupType === 'new_org' && !newOrgName.trim()) {
+                    throw new Error('Informe o nome da sua empresa ou corporação.');
+                }
+
+                // 1. Cadastrar usuário no Supabase Auth
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email: email.trim().toLowerCase(),
+                    password,
+                    options: {
+                        data: {
+                            full_name: fullName.trim() || undefined,
+                        }
+                    }
+                });
+                if (authError) throw authError;
+
+                const newUserId = authData.user?.id;
+                if (!newUserId) {
+                    setSuccess('Cadastro realizado! Verifique seu email para confirmar a conta.');
+                    return;
+                }
+
+                if (signupType === 'new_org') {
+                    // 2. Criar Nova Organização
+                    const slug = newOrgName.trim().toLowerCase()
+                        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                        .replace(/[^a-z0-9]/g, '-')
+                        .replace(/-+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
+
+                    const { data: orgData, error: orgError } = await supabase
+                        .from('organizations')
+                        .insert({
+                            name: newOrgName.trim(),
+                            slug,
+                            plan_tier: 'pro',
+                            is_active: true
+                        })
+                        .select('id')
+                        .single();
+
+                    if (orgError) {
+                        console.error('Erro ao criar organization:', orgError);
+                    }
+
+                    const orgId = orgData?.id;
+
+                    if (orgId) {
+                        // 3. Criar tenant_settings
+                        await supabase.from('tenant_settings').insert({
+                            organization_id: orgId,
+                            unit_name: newOrgName.trim(),
+                            station_name: newOrgStation.trim() || 'Central',
+                            primary_color: '#b91c1c',
+                            secondary_color: '#78350f',
+                        });
+
+                        // 4. Criar Profile como GESTOR e ATIVO
+                        await supabase.from('profiles').insert({
+                            id: newUserId,
+                            email: email.trim().toLowerCase(),
+                            full_name: fullName.trim() || null,
+                            organization_id: orgId,
+                            status: 'ativo',
+                            is_manager: true,
+                            p_avisos: 'editor',
+                            p_operacional: 'editor',
+                            p_ssci: 'editor',
+                            p_pessoal: 'editor',
+                            p_instrucao: 'editor',
+                            p_logistica: 'editor',
+                            p_social: 'editor',
+                            provider: 'email',
+                            created_at: new Date().toISOString()
+                        });
+
+                        setSuccess('Sua Organização foi criada com sucesso! Faça login para começar a gerenciar.');
+                        setViewMode('login');
+                        return;
+                    }
+                } else {
+                    // Colaborador de organização existente: vincula ao tenant padrão com status pendente
+                    await supabase.from('profiles').insert({
+                        id: newUserId,
+                        email: email.trim().toLowerCase(),
+                        full_name: fullName.trim() || null,
+                        organization_id: DEFAULT_TENANT_ID,
+                        status: 'pendente',
+                        is_manager: false,
+                        provider: 'email',
+                        created_at: new Date().toISOString()
+                    });
+                }
+
+                setSuccess('Cadastro realizado! Sua solicitação será avaliada pelo gestor da sua unidade.');
+                setViewMode('login');
             } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
@@ -177,8 +279,84 @@ const Login: React.FC = () => {
                         </div>
                     )}
 
+                    {viewMode === 'signup' && (
+                        <div className="bg-stone-100 p-1.5 rounded-xl flex gap-1 border border-stone-200">
+                            <button
+                                type="button"
+                                onClick={() => setSignupType('existing')}
+                                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                                    signupType === 'existing'
+                                        ? 'bg-white text-stone-900 shadow-xs'
+                                        : 'text-stone-500 hover:text-stone-900'
+                                }`}
+                            >
+                                Entrar em Unidade
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSignupType('new_org')}
+                                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                                    signupType === 'new_org'
+                                        ? 'bg-primary text-white shadow-xs'
+                                        : 'text-stone-500 hover:text-stone-900'
+                                }`}
+                            >
+                                Criar Nova Organização
+                            </button>
+                        </div>
+                    )}
+
+                    {viewMode === 'signup' && signupType === 'new_org' && (
+                        <div className="bg-red-50/70 p-3.5 rounded-xl border border-red-200 space-y-3">
+                            <div>
+                                <label className="block text-xs font-black text-red-900 uppercase mb-1">
+                                    Nome da Empresa / Corporação
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Ex: Bombeiros Voluntários de Joinville"
+                                    value={newOrgName}
+                                    onChange={e => setNewOrgName(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white border border-red-200 rounded-lg text-xs font-bold text-stone-800 outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black text-red-900 uppercase mb-1">
+                                    Unidade / Posto (Opcional)
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="Ex: Sede Central ou 1º Pelotão"
+                                    value={newOrgStation}
+                                    onChange={e => setNewOrgStation(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white border border-red-200 rounded-lg text-xs font-bold text-stone-800 outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {viewMode === 'signup' && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Nome Completo</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 material-symbols-outlined">person</span>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-gray-700 placeholder-gray-400"
+                                    placeholder="Seu nome"
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Email Institucional</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">
+                            {signupType === 'new_org' && viewMode === 'signup' ? 'Email do Gestor / Empresa' : 'Email Institucional'}
+                        </label>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 material-symbols-outlined">mail</span>
                             <input

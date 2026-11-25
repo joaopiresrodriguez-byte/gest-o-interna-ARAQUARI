@@ -109,9 +109,11 @@ const GestaoUsuarios: React.FC = () => {
 
     const fetchProfiles = useCallback(async () => {
         setLoading(true);
+        const orgId = resolveTenantId(loggedProfile?.organization_id);
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
+            .eq('organization_id', orgId)
             .order('email');
 
         if (error) {
@@ -122,7 +124,7 @@ const GestaoUsuarios: React.FC = () => {
             setProfiles(all.filter(p => p.status !== 'pendente'));
         }
         setLoading(false);
-    }, []);
+    }, [loggedProfile?.organization_id]);
 
     useEffect(() => {
         const t = setTimeout(fetchProfiles, 0);
