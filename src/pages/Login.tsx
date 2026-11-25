@@ -186,8 +186,8 @@ const Login: React.FC = () => {
                             secondary_color: '#78350f',
                         });
 
-                        // 4. Criar Profile como GESTOR e ATIVO
-                        await supabase.from('profiles').insert({
+                        // 4. Criar ou Atualizar Profile como GESTOR e ATIVO da nova organização
+                        await supabase.from('profiles').upsert({
                             id: newUserId,
                             email: email.trim().toLowerCase(),
                             full_name: fullName.trim() || null,
@@ -203,7 +203,7 @@ const Login: React.FC = () => {
                             p_social: 'editor',
                             provider: 'email',
                             created_at: new Date().toISOString()
-                        });
+                        }, { onConflict: 'id' });
 
                         setSuccess('Sua Organização foi criada com sucesso! Faça login para começar a gerenciar.');
                         setViewMode('login');
@@ -211,7 +211,7 @@ const Login: React.FC = () => {
                     }
                 } else {
                     // Colaborador de organização existente: vincula ao tenant padrão com status pendente
-                    await supabase.from('profiles').insert({
+                    await supabase.from('profiles').upsert({
                         id: newUserId,
                         email: email.trim().toLowerCase(),
                         full_name: fullName.trim() || null,
@@ -220,7 +220,7 @@ const Login: React.FC = () => {
                         is_manager: false,
                         provider: 'email',
                         created_at: new Date().toISOString()
-                    });
+                    }, { onConflict: 'id' });
                 }
 
                 setSuccess('Cadastro realizado! Sua solicitação será avaliada pelo gestor da sua unidade.');
