@@ -159,12 +159,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (currentUser) {
                 await fetchProfile(currentUser.id);
                 // Registrar log de acesso do usuário no banco de dados
+                // Buscar organization_id do perfil para garantir o isolamento tenant
                 try {
-                    await supabase.from('user_access_logs').insert({
-                        user_id: currentUser.id,
-                        user_email: currentUser.email || 'desconhecido@cbm.sc.gov.br',
-                        accessed_at: new Date().toISOString(),
-                    });
+                    const { data: profileData } = await supabase
+                        .from('profiles')
+                        .select('organization_id')
+                        .eq('id', currentUser.id)
+                        .maybeSingle();
+                    if (profileData?.organization_id) {
+                        await supabase.from('user_access_logs').insert({
+                            user_id: currentUser.id,
+                            user_email: currentUser.email || 'desconhecido@cbm.sc.gov.br',
+                            accessed_at: new Date().toISOString(),
+                            organization_id: profileData.organization_id,
+                        });
+                    }
                 } catch (e) {
                     console.warn('Erro ao registrar log de acesso:', e);
                 }

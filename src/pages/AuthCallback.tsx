@@ -98,6 +98,7 @@ const AuthCallback: React.FC = () => {
             }
 
             // PASSO 3: Usuário completamente novo — criar perfil pendente
+            // organization_id padrão (CBMSC Araquari) — gestor pode mover para outra org depois
             setStatusMsg('Registrando solicitação de acesso...');
             await supabase
                 .from('profiles')
@@ -110,6 +111,7 @@ const AuthCallback: React.FC = () => {
                     role: 'pendente',
                     provider: 'google',
                     is_manager: false,
+                    organization_id: '00000000-0000-0000-0000-000000000001',
                     created_at: new Date().toISOString()
                 });
 
