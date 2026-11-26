@@ -24,6 +24,11 @@ const translateError = (msg: string): string => {
 
 type ViewMode = 'login' | 'signup' | 'forgot';
 
+interface OrgOption {
+    id: string;
+    name: string;
+}
+
 const Login: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -35,9 +40,27 @@ const Login: React.FC = () => {
     const [signupType, setSignupType] = useState<'existing' | 'new_org'>('existing');
     const [newOrgName, setNewOrgName] = useState('');
     const [newOrgStation, setNewOrgStation] = useState('');
+    const [selectedOrgId, setSelectedOrgId] = useState<string>(DEFAULT_TENANT_ID);
+    const [availableOrgs, setAvailableOrgs] = useState<OrgOption[]>([]);
     const [fullName, setFullName] = useState('');
     const [otpToken, setOtpToken] = useState('');
     const [showOtpInput, setShowOtpInput] = useState(false);
+
+    React.useEffect(() => {
+        // Carregar organizações disponíveis para novos colaboradores
+        const loadOrgs = async () => {
+            const { data } = await supabase
+                .from('organizations')
+                .select('id, name')
+                .eq('is_active', true)
+                .order('name');
+            if (data && data.length > 0) {
+                setAvailableOrgs(data);
+                setSelectedOrgId(data[0].id);
+            }
+        };
+        loadOrgs();
+    }, []);
 
     React.useEffect(() => {
         const hash = window.location.hash;
@@ -91,6 +114,9 @@ const Login: React.FC = () => {
         setNewOrgName('');
         setNewOrgStation('');
         setFullName('');
+        if (availableOrgs.length > 0) {
+            setSelectedOrgId(availableOrgs[0].id);
+        }
     };
 
     const handleAuth = async (e: React.FormEvent) => {
@@ -134,13 +160,17 @@ const Login: React.FC = () => {
                     throw new Error('Informe o nome da sua empresa ou corporação.');
                 }
 
-                // 1. Cadastrar usuário no Supabase Auth
+                // 1. Cadastrar usuário no Supabase Auth com metadados para a trigger
                 const { data: authData, error: authError } = await supabase.auth.signUp({
                     email: email.trim().toLowerCase(),
                     password,
                     options: {
                         data: {
                             full_name: fullName.trim() || undefined,
+                            is_new_org: signupType === 'new_org',
+                            org_name: signupType === 'new_org' ? newOrgName.trim() : undefined,
+                            org_station: signupType === 'new_org' ? newOrgStation.trim() : undefined,
+                            target_org_id: signupType === 'existing' ? (selectedOrgId || DEFAULT_TENANT_ID) : undefined,
                         }
                     }
                 });
@@ -153,40 +183,46 @@ const Login: React.FC = () => {
                 }
 
                 if (signupType === 'new_org') {
-                    // 2. Criar Nova Organização
-                    const slug = newOrgName.trim().toLowerCase()
-                        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                        .replace(/[^a-z0-9]/g, '-')
-                        .replace(/-+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
-
-                    const { data: orgData, error: orgError } = await supabase
+                    // Garantir que a organização foi criada (se não criada pela trigger, cria aqui)
+                    let orgId: string | null = null;
+                    const { data: existingOrg } = await supabase
                         .from('organizations')
-                        .insert({
-                            name: newOrgName.trim(),
-                            slug,
-                            plan_tier: 'pro',
-                            is_active: true
-                        })
                         .select('id')
-                        .single();
+                        .eq('name', newOrgName.trim())
+                        .maybeSingle();
 
-                    if (orgError) {
-                        console.error('Erro ao criar organization:', orgError);
+                    if (existingOrg) {
+                        orgId = existingOrg.id;
+                    } else {
+                        const slug = newOrgName.trim().toLowerCase()
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                            .replace(/[^a-z0-9]/g, '-')
+                            .replace(/-+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
+
+                        const { data: orgData } = await supabase
+                            .from('organizations')
+                            .insert({
+                                name: newOrgName.trim(),
+                                slug,
+                                plan_tier: 'pro',
+                                is_active: true
+                            })
+                            .select('id')
+                            .single();
+                        orgId = orgData?.id || null;
                     }
 
-                    const orgId = orgData?.id;
-
                     if (orgId) {
-                        // 3. Criar tenant_settings
-                        await supabase.from('tenant_settings').insert({
+                        // Criar ou garantir tenant_settings
+                        await supabase.from('tenant_settings').upsert({
                             organization_id: orgId,
                             unit_name: newOrgName.trim(),
                             station_name: newOrgStation.trim() || 'Central',
                             primary_color: '#b91c1c',
                             secondary_color: '#78350f',
-                        });
+                        }, { onConflict: 'organization_id' });
 
-                        // 4. Criar ou Atualizar Profile como GESTOR e ATIVO da nova organização
+                        // Criar ou Atualizar Profile como GESTOR e ATIVO da nova organização
                         await supabase.from('profiles').upsert({
                             id: newUserId,
                             email: email.trim().toLowerCase(),
@@ -194,6 +230,7 @@ const Login: React.FC = () => {
                             organization_id: orgId,
                             status: 'ativo',
                             is_manager: true,
+                            role: 'gestor',
                             p_avisos: 'editor',
                             p_operacional: 'editor',
                             p_ssci: 'editor',
@@ -210,14 +247,16 @@ const Login: React.FC = () => {
                         return;
                     }
                 } else {
-                    // Colaborador de organização existente: vincula ao tenant padrão com status pendente
+                    // Colaborador de organização existente: vincula ao tenant selecionado com status pendente
+                    const targetOrg = selectedOrgId || DEFAULT_TENANT_ID;
                     await supabase.from('profiles').upsert({
                         id: newUserId,
                         email: email.trim().toLowerCase(),
                         full_name: fullName.trim() || null,
-                        organization_id: DEFAULT_TENANT_ID,
+                        organization_id: targetOrg,
                         status: 'pendente',
                         is_manager: false,
+                        role: 'operador',
                         provider: 'email',
                         created_at: new Date().toISOString()
                     }, { onConflict: 'id' });
@@ -303,6 +342,28 @@ const Login: React.FC = () => {
                             >
                                 Criar Nova Organização
                             </button>
+                        </div>
+                    )}
+
+                    {viewMode === 'signup' && signupType === 'existing' && availableOrgs.length > 0 && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">
+                                Selecione a Organização / Unidade
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 material-symbols-outlined">corporate_fare</span>
+                                <select
+                                    value={selectedOrgId}
+                                    onChange={e => setSelectedOrgId(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-gray-700 text-sm"
+                                >
+                                    {availableOrgs.map(org => (
+                                        <option key={org.id} value={org.id}>
+                                            {org.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     )}
 
