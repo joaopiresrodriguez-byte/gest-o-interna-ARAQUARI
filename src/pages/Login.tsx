@@ -300,7 +300,13 @@ const Login: React.FC = () => {
                         <span className="material-symbols-outlined text-4xl text-white">local_fire_department</span>
                     </div>
                     <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tight text-center">Gestão Interna</h1>
-                    <p className="text-sm font-bold text-primary uppercase tracking-widest">CBMSC Araquari</p>
+                    <p className="text-sm font-bold text-primary uppercase tracking-widest">
+                        {viewMode === 'signup' && signupType === 'existing' && availableOrgs.find(o => o.id === selectedOrgId)?.name
+                            ? availableOrgs.find(o => o.id === selectedOrgId)?.name
+                            : (viewMode === 'signup' && signupType === 'new_org' && newOrgName.trim()
+                                ? newOrgName.trim()
+                                : 'Plataforma Corporativa & Operacional')}
+                    </p>
                 </div>
 
                 <form onSubmit={handleAuth} className="flex flex-col gap-4">
@@ -546,7 +552,7 @@ const Login: React.FC = () => {
                 </div>
 
                 <div className="mt-8 text-center border-t border-gray-100 pt-4">
-                    <p className="text-[10px] text-gray-400">© 2026 Corpo de Bombeiros Militar de Santa Catarina</p>
+                    <p className="text-[10px] text-gray-400">© 2026 Sistema Integrado de Gestão Interna</p>
                 </div>
             </div>
         </div>

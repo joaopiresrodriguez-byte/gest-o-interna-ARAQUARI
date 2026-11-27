@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 interface WeatherData {
   temperature: number;
@@ -10,17 +11,22 @@ interface WeatherData {
 }
 
 export const CardClimaAraquari: React.FC = () => {
+  const { tenantSettings } = useAuth();
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<boolean>(false);
+
+  // Localização dinâmica da organização com fallback seguro para Araquari - SC
+  const cityName = tenantSettings?.city_name || 'Araquari - SC';
+  const lat = tenantSettings?.latitude ?? -26.3731;
+  const lon = tenantSettings?.longitude ?? -48.7239;
 
   const fetchWeather = async () => {
     try {
       setLoading(true);
       setError(false);
-      // Coordinates for Araquari - SC: latitude -26.3731, longitude -48.7239
       const response = await fetch(
-        'https://api.open-meteo.com/v1/forecast?latitude=-26.3731&longitude=-48.7239&current=temperature_2m,relative_humidity_2m,weather_code,uv_index&hourly=precipitation_probability&timezone=America%2FSao_Paulo'
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,uv_index&hourly=precipitation_probability&timezone=America%2FSao_Paulo`
       );
       const data = await response.json();
 
@@ -52,7 +58,7 @@ export const CardClimaAraquari: React.FC = () => {
     fetchWeather();
     const interval = setInterval(fetchWeather, 30 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [lat, lon]);
 
   const getUvInfo = (uv: number) => {
     if (uv <= 2) return { text: 'Baixo', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
@@ -87,7 +93,7 @@ export const CardClimaAraquari: React.FC = () => {
         <div className="flex items-center justify-between">
           <span className="font-bold flex items-center gap-1.5">
             <span className="material-symbols-outlined text-amber-500 text-base">thermostat</span>
-            Clima Araquari - SC
+            Clima {cityName}
           </span>
           <button onClick={fetchWeather} className="text-primary hover:underline font-semibold">Tentar novamente</button>
         </div>
@@ -103,7 +109,7 @@ export const CardClimaAraquari: React.FC = () => {
       <div className="flex items-center justify-between border-b border-blue-700/50 pb-2">
         <div className="flex items-center gap-1.5">
           <span className="material-symbols-outlined text-sky-400 text-lg">location_on</span>
-          <h3 className="font-black text-xs uppercase tracking-wider text-slate-100">Araquari - SC</h3>
+          <h3 className="font-black text-xs uppercase tracking-wider text-slate-100">{cityName}</h3>
         </div>
         <span className="text-[9px] font-bold bg-blue-800/80 px-2 py-0.5 rounded text-sky-200 border border-blue-700">
           Ao Vivo

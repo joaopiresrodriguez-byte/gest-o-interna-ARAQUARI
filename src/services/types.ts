@@ -19,6 +19,9 @@ export interface TenantSettings {
     secondary_color?: string;
     unit_name?: string;
     station_name?: string;
+    city_name?: string;
+    latitude?: number;
+    longitude?: number;
     custom_domain?: string;
 }
 

@@ -235,8 +235,8 @@ const AppLayout: React.FC = () => {
                 {DEFAULT_TENANT_CONTEXT.planTier}
               </span>
             </div>
-            <h1 className="text-primary text-sm font-bold leading-tight tracking-wider uppercase truncate" title={`${tenantSettings?.unit_name || 'CBMSC'} - ${tenantSettings?.station_name || 'Araquari'}`}>
-              {tenantSettings?.station_name ? `${tenantSettings.station_name}` : 'CBMSC Araquari'}
+            <h1 className="text-primary text-sm font-bold leading-tight tracking-wider uppercase truncate" title={`${tenantSettings?.unit_name || 'Gestão'} - ${tenantSettings?.station_name || 'Unidade'}`}>
+              {tenantSettings?.station_name || tenantSettings?.unit_name || 'CBMSC Araquari'}
             </h1>
           </div>
           {/* NotificationBell shown inside sidebar on desktop; hidden on mobile (moved to header) */}

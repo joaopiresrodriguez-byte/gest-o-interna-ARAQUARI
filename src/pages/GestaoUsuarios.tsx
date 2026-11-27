@@ -58,6 +58,9 @@ const GestaoUsuarios: React.FC = () => {
     const [formSettings, setFormSettings] = useState({
         unit_name: tenantSettings?.unit_name || '',
         station_name: tenantSettings?.station_name || '',
+        city_name: tenantSettings?.city_name || 'Araquari - SC',
+        latitude: tenantSettings?.latitude ?? -26.3731,
+        longitude: tenantSettings?.longitude ?? -48.7239,
         logo_url: tenantSettings?.logo_url || '',
         primary_color: tenantSettings?.primary_color || '#b91c1c',
         secondary_color: tenantSettings?.secondary_color || '#78350f',
@@ -70,6 +73,9 @@ const GestaoUsuarios: React.FC = () => {
             setFormSettings({
                 unit_name: tenantSettings.unit_name || '',
                 station_name: tenantSettings.station_name || '',
+                city_name: tenantSettings.city_name || 'Araquari - SC',
+                latitude: tenantSettings.latitude ?? -26.3731,
+                longitude: tenantSettings.longitude ?? -48.7239,
                 logo_url: tenantSettings.logo_url || '',
                 primary_color: tenantSettings.primary_color || '#b91c1c',
                 secondary_color: tenantSettings.secondary_color || '#78350f',
@@ -89,6 +95,9 @@ const GestaoUsuarios: React.FC = () => {
                     organization_id: orgId,
                     unit_name: formSettings.unit_name.trim(),
                     station_name: formSettings.station_name.trim(),
+                    city_name: formSettings.city_name.trim() || 'Araquari - SC',
+                    latitude: Number(formSettings.latitude) || -26.3731,
+                    longitude: Number(formSettings.longitude) || -48.7239,
                     logo_url: formSettings.logo_url.trim() || null,
                     primary_color: formSettings.primary_color,
                     secondary_color: formSettings.secondary_color,
@@ -316,6 +325,50 @@ const GestaoUsuarios: React.FC = () => {
                                     className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                                 />
                                 <span className="text-[10px] text-stone-400 mt-1 block">Link direto da imagem para exibição no topo do menu lateral e cabeçalhos.</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                        Cidade / UF (Exibição Clima)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Ex: Joinville - SC"
+                                        value={formSettings.city_name}
+                                        onChange={e => setFormSettings(prev => ({ ...prev, city_name: e.target.value }))}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                                    />
+                                    <span className="text-[10px] text-stone-400 mt-1 block">Nome do município no card de clima ao vivo.</span>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                        Latitude (Meteorologia)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        placeholder="-26.3731"
+                                        value={formSettings.latitude}
+                                        onChange={e => setFormSettings(prev => ({ ...prev, latitude: Number(e.target.value) }))}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-mono"
+                                    />
+                                    <span className="text-[10px] text-stone-400 mt-1 block">Coordenada para previsão do tempo exata.</span>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black uppercase text-stone-600 mb-1.5">
+                                        Longitude (Meteorologia)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        placeholder="-48.7239"
+                                        value={formSettings.longitude}
+                                        onChange={e => setFormSettings(prev => ({ ...prev, longitude: Number(e.target.value) }))}
+                                        className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-stone-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-mono"
+                                    />
+                                    <span className="text-[10px] text-stone-400 mt-1 block">Coordenada para previsão do tempo exata.</span>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
