@@ -450,32 +450,32 @@ const DashboardAvisos: React.FC = () => {
   const urgentMissions = missions.filter(m => m.priority === 'urgente' || m.priority === 'alta').length;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background-light overflow-hidden">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-surface border-b border-rustic-border shadow-sm z-30">
+    <div className="flex-1 flex flex-col h-full bg-slate-50/70 overflow-hidden font-display">
+      {/* Header — Jony Ive Clean Surface & Translucency */}
+      <header className="flex-shrink-0 bg-white/90 backdrop-blur-md border-b border-black/[0.06] shadow-xs z-30">
         <div className="py-3 px-4 md:py-4 md:px-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
           <div>
-            <h1 className="text-xl md:text-2xl font-black text-[#2e1a16] tracking-tight">Painel de Avisos</h1>
-            <p className="text-rustic-brown/60 text-xs md:text-sm">
+            <h1 className="text-xl md:text-2xl font-black text-stone-900 tracking-tight">Painel de Avisos</h1>
+            <p className="text-stone-500 text-xs md:text-sm font-medium">
               {getDayLabel(selectedDate)}, {formatDateBR(selectedDate)} — Passagem de Plantão
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Quick Stats — desktop only */}
+            {/* Quick Stats — Ive Minimal Badges */}
             <div className="hidden md:flex items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg">
-                <span className="material-symbols-outlined text-[14px]">directions_car</span>
+              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-2xs">
+                <span className="material-symbols-outlined text-[15px]">directions_car</span>
                 {activeFleet} QAP
               </div>
               {downFleet > 0 && (
-                <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-600 text-[10px] font-bold px-2.5 py-1.5 rounded-lg">
-                  <span className="material-symbols-outlined text-[14px]">build</span>
+                <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200/80 text-rose-700 text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-2xs">
+                  <span className="material-symbols-outlined text-[15px]">build</span>
                   {downFleet} Baixada{downFleet > 1 ? 's' : ''}
                 </div>
               )}
               {urgentMissions > 0 && (
-                <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-600 text-[10px] font-bold px-2.5 py-1.5 rounded-lg animate-pulse">
-                  <span className="material-symbols-outlined text-[14px]">priority_high</span>
+                <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200/80 text-amber-700 text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-2xs animate-pulse">
+                  <span className="material-symbols-outlined text-[15px]">priority_high</span>
                   {urgentMissions} Urgente{urgentMissions > 1 ? 's' : ''}
                 </div>
               )}
@@ -549,25 +549,25 @@ const DashboardAvisos: React.FC = () => {
               </section>
             )}
 
-            {/* AVISO DO DIA (Yesterday's Report) */}
-            <section className="bg-yellow-50 rounded-xl border border-yellow-200 shadow-sm p-6 relative overflow-hidden">
+            {/* AVISO DO DIA (Yesterday's Report) — Ive Subtle Tone & Fluid Typography */}
+            <section className="bg-amber-50/60 rounded-2xl border border-amber-200/70 shadow-xs p-6 relative overflow-hidden transition-all">
               <div className="absolute top-0 right-0 p-4 opacity-5">
-                <span className="material-symbols-outlined text-9xl text-yellow-600">campaign</span>
+                <span className="material-symbols-outlined text-9xl text-amber-700">campaign</span>
               </div>
-              <h2 className="font-bold text-[#2c1810] mb-4 flex items-center gap-2 text-base">
+              <h2 className="font-bold text-stone-900 mb-4 flex items-center gap-2 text-base">
                 <span className="material-symbols-outlined text-primary">campaign</span>
                 Aviso do Plantão Anterior ({formatDateBR(targetDate)})
               </h2>
               {avisoDoDia ? (
-                <div className="bg-white/80 p-5 rounded-lg border border-yellow-100 shadow-sm backdrop-blur-sm">
-                  <p className="text-[#2c1810] whitespace-pre-line text-lg font-medium leading-relaxed">
+                <div className="bg-white/90 p-5 rounded-xl border border-amber-200/50 shadow-2xs backdrop-blur-xs">
+                  <p className="text-stone-800 whitespace-pre-line text-base md:text-lg font-medium leading-relaxed">
                     &ldquo;{avisoDoDia.description}&rdquo;
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-yellow-200 rounded-lg text-yellow-700/50">
-                  <span className="material-symbols-outlined text-4xl mb-2">unpublished</span>
-                  <p className="font-bold">Nenhum aviso deixado pelo plantão anterior.</p>
+                <div className="flex flex-col items-center justify-center p-8 border border-dashed border-amber-200 rounded-xl text-amber-800/60 bg-white/40">
+                  <span className="material-symbols-outlined text-4xl mb-2 text-amber-600/70">unpublished</span>
+                  <p className="font-semibold text-sm">Nenhum aviso deixado pelo plantão anterior.</p>
                 </div>
               )}
 
@@ -928,9 +928,9 @@ const DashboardAvisos: React.FC = () => {
             {/* Birthday Card */}
             <BirthdayCard selectedDate={selectedDate} />
 
-            {/* Alteração de Efetivo */}
-            <section className="bg-surface rounded-xl border border-rustic-border shadow-sm p-5 space-y-5">
-              <h2 className="font-bold text-[#2c1810] flex items-center gap-2 text-base border-b border-rustic-border/30 pb-3">
+            {/* Alteração de Efetivo — Linear/Apple Card Clean Style */}
+            <section className="bg-white rounded-2xl border border-black/[0.06] shadow-xs p-5 space-y-5">
+              <h2 className="font-bold text-stone-900 flex items-center gap-2 text-base border-b border-black/[0.05] pb-3">
                 <span className="material-symbols-outlined text-primary">groups</span>
                 Alteração de Efetivo
               </h2>

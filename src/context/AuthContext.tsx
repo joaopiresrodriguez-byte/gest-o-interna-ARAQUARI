@@ -84,6 +84,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return false;
     };
 
+    const updateRootBrandTheme = (primary?: string, secondary?: string) => {
+        if (typeof document === 'undefined') return;
+        const root = document.documentElement;
+        const brandColor = primary && primary.startsWith('#') ? primary : '#d81818';
+        root.style.setProperty('--brand-primary', brandColor);
+        // Gera variações úteis para sombras, bordas e efeitos
+        root.style.setProperty('--brand-primary-light', brandColor + 'dd');
+        root.style.setProperty('--brand-primary-dark', brandColor);
+        if (secondary) {
+            root.style.setProperty('--brand-secondary', secondary);
+        }
+    };
+
     const fetchTenantSettings = async (orgId?: string | null) => {
         try {
             const targetOrgId = resolveTenantId(orgId);
@@ -94,17 +107,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 .maybeSingle();
 
             if (!error && data) {
-                setTenantSettings({
+                const settings = {
                     ...DEFAULT_TENANT_SETTINGS,
                     ...data,
                     logo_url: data.logo_url || DEFAULT_TENANT_SETTINGS.logo_url,
-                });
+                };
+                setTenantSettings(settings);
+                updateRootBrandTheme(settings.primary_color, settings.secondary_color);
             } else {
                 setTenantSettings(DEFAULT_TENANT_SETTINGS);
+                updateRootBrandTheme(DEFAULT_TENANT_SETTINGS.primary_color, DEFAULT_TENANT_SETTINGS.secondary_color);
             }
         } catch (err) {
             console.warn('Erro ao carregar tenant settings, usando padrão:', err);
             setTenantSettings(DEFAULT_TENANT_SETTINGS);
+            updateRootBrandTheme(DEFAULT_TENANT_SETTINGS.primary_color, DEFAULT_TENANT_SETTINGS.secondary_color);
         }
     };
 

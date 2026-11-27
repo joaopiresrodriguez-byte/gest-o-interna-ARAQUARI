@@ -66,15 +66,15 @@ const SidebarLink = React.memo<{
       to={to}
       onMouseEnter={prefetch}
       onClick={onNavigate}
-      className={({ isActive }) => `w-full flex items-center gap-3 px-4 py-3 rounded-lg border-l-4 transition-all group ${isActive
-        ? 'bg-white/10 border-primary text-white shadow-sm'
-        : 'hover:bg-white/5 border-transparent text-gray-400 hover:text-white'
+      className={({ isActive }) => `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 group active:scale-[0.98] ${isActive
+        ? 'bg-white/10 text-white shadow-xs font-bold border-l-3 border-primary backdrop-blur-xs'
+        : 'hover:bg-white/5 border-l-3 border-transparent text-stone-400 hover:text-stone-100 font-medium'
         }`}
     >
       {({ isActive }) => (
         <>
-          <span className={`material-symbols-outlined ${isActive ? 'text-primary' : ''}`}>{icon}</span>
-          <span className={`text-sm font-medium tracking-wide ${isActive ? 'font-bold' : ''}`}>{label}</span>
+          <span className={`material-symbols-outlined text-[20px] transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-primary' : 'text-stone-400 group-hover:text-stone-200'}`}>{icon}</span>
+          <span className="text-xs tracking-wide uppercase truncate">{label}</span>
         </>
       )}
     </NavLink>
@@ -215,27 +215,27 @@ const AppLayout: React.FC = () => {
       {/* ── SIDEBAR ── Fixed gaveta on mobile, relative on desktop */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 w-72 bg-sidebar-bg flex flex-col h-full flex-shrink-0 shadow-xl
-          transition-transform duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-72 bg-stone-900/98 backdrop-blur-xl border-r border-white/5 flex flex-col h-full flex-shrink-0 shadow-2xl
+          transition-transform duration-300 ease-out
           ${sidebarAberta ? 'translate-x-0' : '-translate-x-full'}
           md:relative md:translate-x-0 md:w-64
         `}
         aria-label="Menu de navegação"
       >
-        {/* Sidebar Header */}
-        <div className="p-6 flex items-center gap-3 border-b border-gray-700">
+        {/* Sidebar Header - Ive Squircle & Ambient Glow */}
+        <div className="p-5 flex items-center gap-3 border-b border-white/10 bg-white/[0.02]">
           <div
-            className="bg-center bg-no-repeat bg-cover rounded-full size-12 shadow-md border-2 border-[#8B5A2B]"
+            className="bg-center bg-no-repeat bg-cover rounded-2xl size-11 shadow-sm border border-white/20 transition-transform duration-300 hover:scale-105"
             style={{ backgroundImage: `url("${tenantSettings?.logo_url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBhhkhZqDlWCkshTqvj49ObzKfPKSTNrk8jLEZpSAaoyFHhzejl3L6l_g1NZkZ1gen8Ccn-QS-xmIystBvz0nu1WNiaYjR6bzF-KWFnnv8i2Urv0at8T9f6Hg63iDrqbXlk8h3V7o8n_Vmv3XOVphoOEnBGSIDkK--xG2SN7JQLLCSPmxhXDvnN0uylpKXjNigsF67qeaR9VnBDdq5rdbRO6xnEAV-CFm-cpQjJrc9-a2p3GCLfDptK5_wDNtMtVoHgBNvUPuycbYU'}")` }}
           />
-          <div className="flex flex-col flex-1">
+          <div className="flex flex-col flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h1 className="text-white text-base font-black leading-tight tracking-wide uppercase">Gestão Interna</h1>
-              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+              <h1 className="text-white text-xs font-black leading-tight tracking-wider uppercase">Gestão Interna</h1>
+              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                 {DEFAULT_TENANT_CONTEXT.planTier}
               </span>
             </div>
-            <h1 className="text-primary text-sm font-bold leading-tight tracking-wider uppercase truncate" title={`${tenantSettings?.unit_name || 'Gestão'} - ${tenantSettings?.station_name || 'Unidade'}`}>
+            <h1 className="text-primary text-[11px] font-bold leading-tight tracking-wider uppercase truncate mt-0.5" title={`${tenantSettings?.unit_name || 'Gestão'} - ${tenantSettings?.station_name || 'Unidade'}`}>
               {tenantSettings?.station_name || tenantSettings?.unit_name || 'CBMSC Araquari'}
             </h1>
           </div>
@@ -246,15 +246,15 @@ const AppLayout: React.FC = () => {
           {/* Close button for mobile */}
           <button
             onClick={fecharSidebar}
-            className="md:hidden p-1 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+            className="md:hidden p-1.5 text-stone-400 hover:text-white transition-colors rounded-lg hover:bg-white/10"
             aria-label="Fechar menu"
           >
-            <span className="material-symbols-outlined">close</span>
+            <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
 
         {/* Navigation links */}
-        <nav className="flex-1 overflow-y-auto py-6 flex flex-col gap-2 px-3">
+        <nav className="flex-1 overflow-y-auto py-5 flex flex-col gap-1 px-3">
           {profile?.is_manager && (
             <SidebarLink to="/gestao" icon="admin_panel_settings" label="GESTÃO DE ACESSOS" onNavigate={fecharSidebar} />
           )}
@@ -268,20 +268,20 @@ const AppLayout: React.FC = () => {
         </nav>
 
         {/* Sidebar Footer — user actions */}
-        <div className="p-4 border-t border-gray-700 flex flex-col gap-2">
-          <button onClick={() => setIsChangePasswordOpen(true)} className="w-full flex items-center gap-3 text-gray-400 hover:text-white cursor-pointer transition-colors px-2 py-2 rounded-lg hover:bg-white/5">
-            <span className="material-symbols-outlined text-gray-400">lock</span>
-            <div className="flex flex-col items-start">
-              <span className="text-sm font-bold">Alterar Senha</span>
-              <span className="text-[10px] opacity-50">Segurança da conta</span>
+        <div className="p-3 border-t border-white/10 bg-white/[0.01] flex flex-col gap-1">
+          <button onClick={() => setIsChangePasswordOpen(true)} className="w-full flex items-center gap-3 text-stone-400 hover:text-white cursor-pointer transition-all px-3 py-2 rounded-xl hover:bg-white/5 active:scale-[0.98]">
+            <span className="material-symbols-outlined text-[18px] text-stone-400">lock</span>
+            <div className="flex flex-col items-start min-w-0">
+              <span className="text-xs font-bold">Alterar Senha</span>
+              <span className="text-[9px] text-stone-500 truncate">Segurança da conta</span>
             </div>
           </button>
 
-          <button onClick={signOut} className="w-full flex items-center gap-3 text-gray-400 hover:text-white cursor-pointer transition-colors px-2 py-2 rounded-lg hover:bg-white/5">
-            <span className="material-symbols-outlined">logout</span>
-            <div className="flex flex-col items-start">
-              <span className="text-sm font-bold">Sair do Sistema</span>
-              <span className="text-[10px] opacity-50">{userName}</span>
+          <button onClick={signOut} className="w-full flex items-center gap-3 text-stone-400 hover:text-red-400 cursor-pointer transition-all px-3 py-2 rounded-xl hover:bg-red-500/10 active:scale-[0.98]">
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+            <div className="flex flex-col items-start min-w-0">
+              <span className="text-xs font-bold">Sair do Sistema</span>
+              <span className="text-[9px] text-stone-500 truncate">{userName}</span>
             </div>
           </button>
         </div>
@@ -290,26 +290,26 @@ const AppLayout: React.FC = () => {
       {/* ── MAIN CONTENT AREA ── */}
       <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
 
-        {/* ── MOBILE HEADER ── Only visible on mobile (md:hidden) */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-sidebar-bg border-b border-gray-700 sticky top-0 z-30 flex-shrink-0">
+        {/* ── MOBILE HEADER ── Glassmorphism & High-contrast typography */}
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-stone-900/95 backdrop-blur-md border-b border-white/10 sticky top-0 z-30 flex-shrink-0">
           {/* Hambúrguer */}
           <button
             id="btn-abrir-menu-mobile"
             onClick={abrirSidebar}
-            className="p-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors active:bg-white/20"
+            className="p-2 text-stone-300 hover:text-white rounded-xl hover:bg-white/10 transition-colors active:scale-95"
             aria-label="Abrir menu de navegação"
             aria-expanded={sidebarAberta}
           >
-            <span className="material-symbols-outlined text-[26px]">menu</span>
+            <span className="material-symbols-outlined text-[24px]">menu</span>
           </button>
 
           {/* Logo / Title — mostra módulo ativo (Apple HIG: Navigation Bar contextual) */}
           <div className="flex flex-col items-center">
-            <span className="text-white text-xs font-black leading-tight tracking-wide uppercase transition-all duration-200">
+            <span className="text-white text-xs font-black leading-tight tracking-wider uppercase transition-all duration-200">
               {currentModuleLabel}
             </span>
-            <span className="text-primary text-[10px] font-bold leading-tight tracking-wider uppercase opacity-70">
-              {tenantSettings?.station_name || 'CBMSC Araquari'}
+            <span className="text-primary text-[10px] font-bold leading-tight tracking-wider uppercase opacity-90 truncate max-w-[200px]">
+              {tenantSettings?.station_name || tenantSettings?.unit_name || 'CBMSC Araquari'}
             </span>
           </div>
 
@@ -340,9 +340,9 @@ const AppLayout: React.FC = () => {
           </RouteErrorBoundary>
         </main>
 
-        {/* ── BOTTOM NAVIGATION (mobile only) ── */}
+        {/* ── BOTTOM NAVIGATION (mobile only) ── Glassmorphism */}
         <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-stretch bg-sidebar-bg border-t border-gray-700 safe-area-bottom"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-stretch bg-stone-900/95 backdrop-blur-lg border-t border-white/10 safe-area-bottom shadow-lg"
           aria-label="Navegação rápida"
         >
           {profile?.p_avisos && (
